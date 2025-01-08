@@ -1,0 +1,11 @@
+apis:
+    grpcAddr: :8081
+    httpAddr: :8080
+    metricsAddr: :9090
+    logBody: true
+log:
+    level: "debug"
+dependencies:
+    demoHTTP: "http://127.0.0.1:8080?log=true"
+service:
+    test: test

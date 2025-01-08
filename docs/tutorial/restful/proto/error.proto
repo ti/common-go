@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pb";
+
+// ErrorCode error code enumeration type
+// General error, reference: https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
+enum ErrorCode {
+  OK = 0;
+  //If the task does not exist, the grpcmux framework will automatically output the error code of ResourceNotFound.TaskNotFound to the user.
+  CustomNotFound = 4404;
+}

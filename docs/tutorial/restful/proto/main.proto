@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pb";
+
+import "validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// Test the Say service
+service Say {
+    rpc Hello (Request) returns (Response) {
+        option (google.api.http) = {
+            get: "/v1/hello/{name}"
+        };
+    }
+    rpc HelloStream (Request) returns (stream Response) {
+        option (google.api.http) = {
+            post: "/v1/stream"
+        };
+    }
+}
+
+// Hello request
+message Request {
+    string name = 1 [(validate.rules).string = { max_bytes: 32 }];
+    google.protobuf.Timestamp created_at = 7;
+}
+
+// Hello response
+message Response {
+    // Reply message
+    string msg = 1;
+}
+

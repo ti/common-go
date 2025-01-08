@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Output with Fetch API</title>
+</head>
+<body>
+
+<pre id="output"></pre>
+
+<script>
+    // 生成随机的请求ID
+    function generateRequestId() {
+        return Math.random().toString(36).substring(2);
+    }
+
+    async function fetchData() {
+        try {
+            // {\"app_id\":\"xapp\", \"biz_type\":\"chat\"}
+            const postData = { app_id: "xapp", biz_type: "chat" };
+            const requestId = generateRequestId();
+            // 使用 fetch
+            const response = await fetch('http://censorship-policy-helm.srv.ixiaochuan.cn/cms/v1/check/config/text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Request-Id': requestId,
+                },
+                body: JSON.stringify(postData),
+            });
+
+            // 检查响应是否成功
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            // 获取Response Body Reader
+            const reader = response.body.getReader();
+            // 定义一个递归函数来读取并输出数据
+            async function readAndOutput() {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    // 数据读取完成，关闭Reader
+                    reader.releaseLock();
+                } else {
+                    // 输出数据到页面的pre标签
+                    document.getElementById('output').innerText += '\n' + new TextDecoder().decode(value) + '\n';
+                    // 递归调用读取下一块数据
+                    readAndOutput();
+                }
+            }
+
+            // 调用递归函数开始读取并输出数据
+            readAndOutput();
+        } catch (error) {
+            // 请求失败，输出错误信息
+            console.error('Fetch error:', error);
+        }
+    }
+
+    // 页面加载完成后开始发起请求
+    window.onload = function() {
+        fetchData();
+    };
+</script>
+
+</body>
+</html>

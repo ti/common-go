@@ -1,0 +1,23 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+.DS_Store
+# Test binary, build with `go test -c`
+*.test
+go.sum
+go.mod
+*.out
+*.iml
+tmp
+vendor
+.idea
+.vscode
+.history
+id_rsa
+id_rsa.pub
+.kube/
+.kube
+_root/
