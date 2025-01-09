@@ -24,20 +24,20 @@ import (
 )
 
 // Suppress "imported and not used" errors
-var (
-	_ codes.Code
-	_ io.Reader
-	_ status.Status
-	_ = runtime.String
-	_ = utilities.NewDoubleArray
-	_ = metadata.Join
-)
-
-var filter_Say_Hello_0 = &utilities.DoubleArray{Encoding: map[string]int{"name": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+var _ codes.Code
+var _ io.Reader
+var _ status.Status
+var _ = runtime.String
+var _ = utilities.NewDoubleArray
+var _ = metadata.Join
 
 func request_Say_Hello_0(ctx context.Context, marshaler runtime.Marshaler, client SayClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq Request
 	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 
 	var (
 		val string
@@ -56,21 +56,19 @@ func request_Say_Hello_0(ctx context.Context, marshaler runtime.Marshaler, clien
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Say_Hello_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-
 	msg, err := client.Hello(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
+
 }
 
 func local_request_Say_Hello_0(ctx context.Context, marshaler runtime.Marshaler, server SayServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq Request
 	var metadata runtime.ServerMetadata
 
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
 	var (
 		val string
 		ok  bool
@@ -88,18 +86,14 @@ func local_request_Say_Hello_0(ctx context.Context, marshaler runtime.Marshaler,
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Say_Hello_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-
 	msg, err := server.Hello(ctx, &protoReq)
 	return msg, metadata, err
+
 }
 
-var filter_Say_HelloStream_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+var (
+	filter_Say_HelloStream_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+)
 
 func request_Say_HelloStream_0(ctx context.Context, marshaler runtime.Marshaler, client SayClient, req *http.Request, pathParams map[string]string) (Say_HelloStreamClient, runtime.ServerMetadata, error) {
 	var protoReq Request
@@ -122,6 +116,7 @@ func request_Say_HelloStream_0(ctx context.Context, marshaler runtime.Marshaler,
 	}
 	metadata.HeaderMD = header
 	return stream, metadata, nil
+
 }
 
 // RegisterSayHandlerServer registers the http handlers for service Say to "mux".
@@ -129,7 +124,8 @@ func request_Say_HelloStream_0(ctx context.Context, marshaler runtime.Marshaler,
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterSayHandlerFromEndpoint instead.
 func RegisterSayHandlerServer(ctx context.Context, mux *runtime.ServeMux, server SayServer) error {
-	mux.Handle("GET", pattern_Say_Hello_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+
+	mux.Handle("POST", pattern_Say_Hello_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -151,6 +147,7 @@ func RegisterSayHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		}
 
 		forward_Say_Hello_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
 	})
 
 	mux.Handle("POST", pattern_Say_HelloStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -166,21 +163,21 @@ func RegisterSayHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 // RegisterSayHandlerFromEndpoint is same as RegisterSayHandler but
 // automatically dials to "endpoint" and closes the connection when "ctx" gets done.
 func RegisterSayHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
-	conn, err := grpc.DialContext(ctx, endpoint, opts...)
+	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
 			if cerr := conn.Close(); cerr != nil {
-				grpclog.Infof("Failed to close conn to %s: %v", endpoint, cerr)
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
 			}
 			return
 		}
 		go func() {
 			<-ctx.Done()
 			if cerr := conn.Close(); cerr != nil {
-				grpclog.Infof("Failed to close conn to %s: %v", endpoint, cerr)
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
 			}
 		}()
 	}()
@@ -200,7 +197,8 @@ func RegisterSayHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.C
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
 // "SayClient" to call the correct interceptors.
 func RegisterSayHandlerClient(ctx context.Context, mux *runtime.ServeMux, client SayClient) error {
-	mux.Handle("GET", pattern_Say_Hello_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+
+	mux.Handle("POST", pattern_Say_Hello_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
@@ -219,6 +217,7 @@ func RegisterSayHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		}
 
 		forward_Say_Hello_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
 	})
 
 	mux.Handle("POST", pattern_Say_HelloStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -240,6 +239,7 @@ func RegisterSayHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		}
 
 		forward_Say_HelloStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+
 	})
 
 	return nil

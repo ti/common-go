@@ -123,7 +123,7 @@ func enableCORS(w http.ResponseWriter, r *http.Request) bool {
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 				w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, PATCH, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type,Accept, "+
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+
 					"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp")
 				w.Header().Set("Vary", "Origin, Accept-Encoding")
 				w.Header().Set("Access-Control-Max-Age", "86400")
