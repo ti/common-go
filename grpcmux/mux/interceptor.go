@@ -121,7 +121,7 @@ func enableCORS(w http.ResponseWriter, r *http.Request) bool {
 		if uri, err := url.Parse(origin); err == nil {
 			if uri.Host != r.Host {
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, PATCH, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+
 					"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp")
