@@ -53,12 +53,7 @@ func NewServeMux(opts ...Option) *ServeMux {
 	muxOpts = append(muxOpts, mux.opts.runTimeOpts...)
 	mux.serveMux = runtime.NewServeMux(muxOpts...)
 	middleWares := append([]func(http.Handler) http.Handler{defaultInterceptor(o)}, o.middleWares...)
-	mux.handler = handlerWithMiddleWares(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// remove http headers for incoming already set
-		r.Header = map[string][]string{}
-		mux.serveMux.ServeHTTP(w, r)
-	}), middleWares...)
-
+	mux.handler = handlerWithMiddleWares(mux.serveMux, middleWares...)
 	return mux
 }
 
