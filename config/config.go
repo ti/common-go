@@ -50,12 +50,13 @@ func Init(ctx context.Context, configURI string, configPtr any, opts ...dependen
 
 var binder *objectbind.Binder
 
-// Binder get the binder for add the hook for some config field.
-func Binder() *objectbind.Binder {
+// Binder returns the global Binder instance for adding hooks to config fields.
+// Returns an error if the config has not been initialized.
+func Binder() (*objectbind.Binder, error) {
 	if binder == nil {
-		panic("the config may not init")
+		return nil, fmt.Errorf("config not initialized, please call config.Init() first")
 	}
-	return binder
+	return binder, nil
 }
 
 func initDeps(ctx context.Context, configURI string, configPtr any,
