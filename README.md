@@ -456,42 +456,58 @@ import (
 func main() {
     ctx := context.Background()
     
-    // 初始化配置（自动注入依赖）
-    var cfg Config
+    // 1. 初始化配置
     if err := config.Init(ctx, "file://config.yaml", &cfg); err != nil {
-        log.Action("Init").Fatal("Failed to init", "err", err)
+        log.Action("Init").Fatal("Failed to init config", "err", err)
     }
     
-    log.Action("Init").Info("Config loaded",
-        "dbType", "MySQL",
-        "serverAddr", cfg.Server.Addr)
+    // 2. 初始化依赖
+    var dep Dependencies
+    if err := dependencies.Init(ctx, &dep, cfg.Dependencies); err != nil {
+        log.Action("Init").Fatal("Failed to init dependencies", "err", err)
+    }
     
-    // 创建服务
-    userRepo := repository.NewUserRepository(cfg.Database)
+    log.Action("Init").Info("Service initialized",
+        "grpcAddr", cfg.Apis.GrpcAddr,
+        "httpAddr", cfg.Apis.HTTPAddr)
+    
+    // 3. 创建服务
+    userRepo := repository.NewUserRepository(dep.DB)
     userService := service.NewUserService(userRepo)
     
-    // 启动服务器
+    // 4. 启动服务器
     server := grpcmux.NewServer(
-        grpcmux.WithAddr(cfg.Server.Addr),
-        grpcmux.WithMetrics(true),
+        grpcmux.WithConfig(&cfg.Apis),
     )
     
     pb.RegisterUserServiceServer(server, userService)
     pb.RegisterUserServiceHandlerServer(ctx, server.ServeMux(), userService)
     
-    log.Action("Start").Info("Server starting", "addr", cfg.Server.Addr)
+    log.Action("Start").Info("Server starting")
     server.Start()
 }
 
-// Config 配置结构（支持 YAML/JSON）
-type Config struct {
-    Server   ServerConfig       `json:"server"`
-    Database *dependencies.SQL  `json:"database" uri:"mysql://user:pass@localhost:3306/mydb?charset=utf8mb4&parseTime=true"`
-    Redis    *dependencies.Redis `json:"redis" uri:"redis://localhost:6379/0"`
+// Config 配置结构
+var cfg = Config{
+    Apis: grpcmux.Config{
+        GrpcAddr:    ":8081",
+        HTTPAddr:    ":8080",
+        MetricsAddr: ":9090",
+        LogBody:     false,
+    },
+    Dependencies: map[string]string{},
 }
 
-type ServerConfig struct {
-    Addr string `json:"addr" default:":8080"`
+type Config struct {
+    Apis         grpcmux.Config    `json:"apis"`
+    Dependencies map[string]string `json:"dependencies"`
+}
+
+// Dependencies 依赖结构（通过 dependencies.Init 初始化）
+type Dependencies struct {
+    DB    *dependencies.Database `dependency:"db"`
+    Redis *dependencies.Redis    `dependency:"redis"`
+    Cache *dependencies.Lru      `dependency:"cache"`
 }
 ```
 
@@ -499,21 +515,28 @@ type ServerConfig struct {
 
 ```yaml
 # config.yaml
-server:
-  addr: ":8080"
+apis:
+  grpcAddr: :8081      # gRPC 端口
+  httpAddr: :8080      # HTTP 端口
+  metricsAddr: :9090   # Metrics 端口
+  logBody: false       # 是否记录请求体
 
-database:
-  # 自动通过 uri 标签初始化 MySQL 连接
-  # 支持: mysql://, postgres://, mongodb://
-  
-redis:
-  # 自动通过 uri 标签初始化 Redis 连接
+dependencies:
+  db: mongodb://user:pass@localhost:27017/mydb?authSource=admin
+  redis: redis://:pass@localhost:6379/0
+  cache: memory://
+  # 支持的协议:
+  # - mysql://user:pass@host:3306/db?charset=utf8mb4
+  # - postgres://user:pass@host:5432/db?sslmode=disable
+  # - mongodb://user:pass@host:27017/db
+  # - redis://[:pass]@host:6379/db
 ```
 
-**说明**：
-- 数据库 URI 在代码中通过 `uri` 标签定义
-- 支持通过环境变量覆盖：`DATABASE_URI=mysql://...`
-- 自动连接池管理和健康检查
+**配置说明**：
+- `apis`: 服务端口配置
+- `dependencies`: 依赖的 URI 配置（键值对形式）
+- 依赖会通过 `dependencies.Init()` 自动解析和初始化
+- 支持环境变量覆盖，如：`DB_URI=mysql://...`
 
 ### 测试 API
 
@@ -589,29 +612,50 @@ resp, _ := sql.PageQuery[User](ctx, db, "users", &database.PageQueryRequest{
 ### 依赖配置
 
 ```go
-// 通过 uri 标签自动初始化依赖
+// 1. 定义配置结构
 type Config struct {
-    // MySQL
-    DB *dependencies.SQL `uri:"mysql://user:pass@localhost:3306/db?charset=utf8mb4"`
-    
-    // PostgreSQL
-    // DB *dependencies.SQL `uri:"postgres://user:pass@localhost:5432/db?sslmode=disable"`
-    
-    // MongoDB
-    // DB *dependencies.Mongo `uri:"mongodb://localhost:27017/db"`
-    
-    // Redis
-    Cache *dependencies.Redis `uri:"redis://localhost:6379/0"`
-    
-    // Kafka
-    MQ *dependencies.Broker `uri:"kafka://broker1:9092,broker2:9092"`
+    Apis         grpcmux.Config    `json:"apis"`
+    Dependencies map[string]string `json:"dependencies"` // 依赖 URI 映射
 }
 
-// 初始化
-var cfg Config
-config.Init(ctx, "file://config.yaml", &cfg)
-// cfg.DB 已自动连接并可使用
+// 2. 定义依赖结构
+type Dependencies struct {
+    DB    *dependencies.Database `dependency:"db"`    // 数据库
+    Redis *dependencies.Redis    `dependency:"redis"` // 缓存
+    MQ    *dependencies.Broker   `dependency:"mq"`    // 消息队列
+}
+
+// 3. 初始化流程
+func main() {
+    var cfg Config
+    
+    // 步骤1: 加载配置文件
+    config.Init(ctx, "file://config.yaml", &cfg)
+    // cfg.Dependencies = map[string]string{
+    //     "db": "mongodb://localhost:27017/mydb",
+    //     "redis": "redis://localhost:6379/0",
+    // }
+    
+    // 步骤2: 初始化依赖（根据 map 中的 URI）
+    var dep Dependencies
+    dependencies.Init(ctx, &dep, cfg.Dependencies)
+    // dep.DB, dep.Redis 已自动连接并可使用
+    
+    // 步骤3: 使用依赖
+    userRepo := repository.NewUserRepository(dep.DB)
+}
 ```
+
+**支持的依赖类型**：
+
+| 键名 | URI 格式 | 说明 |
+|------|----------|------|
+| `db` | `mysql://user:pass@host:3306/db` | MySQL |
+| `db` | `postgres://user:pass@host:5432/db` | PostgreSQL |
+| `db` | `mongodb://user:pass@host:27017/db` | MongoDB |
+| `redis` | `redis://[:pass]@host:6379/db` | Redis |
+| `mq` | `kafka://broker1:9092,broker2:9092` | Kafka |
+| `http` | `http://api.example.com` | HTTP 客户端 |
 
 ### 日志
 
@@ -628,13 +672,60 @@ log.Extract(ctx).Action("ProcessOrder").Warn("Low inventory")
 
 ## 🎨 最佳实践
 
-### 1. Proto-First 模式
+### 1. 配置和依赖初始化
+
+```go
+// ✅ 推荐的初始化流程
+func main() {
+    ctx := context.Background()
+    
+    // 步骤1: 加载配置
+    var cfg Config
+    if err := config.Init(ctx, "file://config.yaml", &cfg); err != nil {
+        log.Fatal("Config init failed", "err", err)
+    }
+    
+    // 步骤2: 初始化依赖
+    var dep Dependencies
+    if err := dependencies.Init(ctx, &dep, cfg.Dependencies); err != nil {
+        log.Fatal("Dependencies init failed", "err", err)
+    }
+    
+    // 步骤3: 创建服务
+    service := NewService(&dep)
+    
+    // 步骤4: 启动服务器
+    server := grpcmux.NewServer(grpcmux.WithConfig(&cfg.Apis))
+    server.Start()
+}
+```
+
+### 2. 配置结构设计
+
+```go
+// ✅ 使用 map[string]string 管理依赖 URI
+type Config struct {
+    Apis         grpcmux.Config    `json:"apis"`
+    Dependencies map[string]string `json:"dependencies"`
+}
+
+// ✅ 依赖结构使用 dependency 标签
+type Dependencies struct {
+    DB    *dependencies.Database `dependency:"db"`
+    Redis *dependencies.Redis    `dependency:"redis"`
+}
+
+// ❌ 避免在 Config 中直接定义依赖实例
+// 原因：依赖需要通过 dependencies.Init() 统一初始化
+```
+
+### 3. Proto-First 开发流程
 
 ```
-Proto 定义 → 代码生成 → 数据库映射 → API 实现
+Proto 定义 → 代码生成 → 数据库映射 → Repository → Service → API
 ```
 
-### 2. 优先使用流式查询
+### 4. 优先使用流式查询
 
 ```go
 // ✅ 推荐：流式查询（大数据量）
@@ -655,7 +746,7 @@ resp, _ := sql.PageQuery[User](ctx, db, "users", pageReq)
 - **流式查询**：数据导出、批量处理、报表生成、大数据量查询（推荐）
 - **分页查询**：API 列表接口、小数据量展示（<1000 条）
 
-### 3. Repository 模式
+### 5. Repository 模式
 
 ```go
 type UserRepository struct {
@@ -667,7 +758,7 @@ func (r *UserRepository) Create(ctx, user) error {
 }
 ```
 
-### 4. 统一错误处理
+### 6. 统一错误处理
 
 ```go
 if err != nil {
@@ -678,7 +769,7 @@ if err != nil {
 }
 ```
 
-### 5. 上下文传播
+### 7. 上下文传播
 
 ```go
 ctx = log.NewContext(ctx, map[string]any{"action": "CreateUser"})
