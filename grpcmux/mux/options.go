@@ -62,6 +62,7 @@ type options struct {
 	bodyReWriter      func(contentType, requestID string, orgErrorBody []byte) (body []byte)
 	httpAuthFunc      func(context.Context, *http.Request) (context.Context, error)
 	withoutHTTPStatus bool
+	useCamelCase      bool
 }
 
 // Option the Options for this module
@@ -174,6 +175,40 @@ func WithMiddleWares(middleWares ...func(http.Handler) http.Handler) Option {
 func WithRunTimeOpts(opts ...runtime.ServeMuxOption) Option {
 	return func(o *options) {
 		o.runTimeOpts = opts
+	}
+}
+
+// WithUseCamelCase enable camelCase format for JSON response (default is snake_case)
+func WithUseCamelCase() Option {
+	return func(o *options) {
+		o.useCamelCase = true
+		// Update marshal options to use camelCase
+		o.marshalOptions = protojson.MarshalOptions{
+			Multiline:       false,
+			Indent:          "",
+			AllowPartial:    false,
+			UseProtoNames:   false, // false means use JSON names (camelCase)
+			UseEnumNumbers:  false,
+			EmitUnpopulated: false,
+		}
+		// Update body marshaler
+		o.bodyMarshaler = &runtime.HTTPBodyMarshaler{
+			Marshaler: &runtime.JSONPb{
+				MarshalOptions: o.marshalOptions,
+				UnmarshalOptions: protojson.UnmarshalOptions{
+					DiscardUnknown: true,
+				},
+			},
+		}
+		// Update error marshaler (for consistent error response format)
+		o.errorMarshaler = &runtime.HTTPBodyMarshaler{
+			Marshaler: &runtime.JSONPb{
+				MarshalOptions: o.marshalOptions,
+				UnmarshalOptions: protojson.UnmarshalOptions{
+					DiscardUnknown: true,
+				},
+			},
+		}
 	}
 }
 

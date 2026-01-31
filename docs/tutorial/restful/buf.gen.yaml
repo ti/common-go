@@ -1,41 +1,33 @@
 version: v2
 managed:
-  enabled: true
-  override:
-    - file_option: go_package_prefix
-      value: github.com/ti/common-go/docs/tutorial/restful/pkg/go
+  enabled: false
 plugins:
   # Go protobuf
   - remote: buf.build/protocolbuffers/go
-    out: pkg/go
+    out: pkg/go/proto
     opt:
       - paths=source_relative
   # Go gRPC service stubs
   - remote: buf.build/grpc/go
-    out: pkg/go
+    out: pkg/go/proto
     opt:
       - paths=source_relative
   # gRPC Gateway (HTTP reverse proxy)
   - remote: buf.build/grpc-ecosystem/gateway
-    out: pkg/go
+    out: pkg/go/proto
     opt:
       - paths=source_relative
       - generate_unbound_methods=true
   # Validation
   - remote: buf.build/bufbuild/validate-go
-    out: pkg/go
+    out: pkg/go/proto
     opt:
       - paths=source_relative
-      - lang=go
   # Python
   - remote: buf.build/protocolbuffers/python
     out: pkg/python
-    opt:
-      - paths=source_relative
   - remote: buf.build/grpc/python
     out: pkg/python
-    opt:
-      - paths=source_relative
   # OpenAPI v2 (Swagger) - descriptor equivalent
   - remote: buf.build/grpc-ecosystem/openapiv2
     out: pkg/descriptor

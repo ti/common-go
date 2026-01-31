@@ -37,6 +37,7 @@ type options struct {
 	autoHTTP                     bool
 	tracing                      bool
 	logBody                      bool
+	useCamelCase                 bool
 }
 
 func evaluateOptions(opts []Option) *options {
@@ -103,11 +104,12 @@ func WithMetaTags(tags []string) Option {
 
 // Config the config exporter.
 type Config struct {
-	GrpcAddr    string `yaml:"grpcAddr"`
-	HTTPAddr    string `yaml:"httpAddr"`
-	MetricsAddr string `yaml:"metricsAddr"`
-	LogBody     bool   `yaml:"logBody"`
-	Tracing     bool   `yaml:"tracing"`
+	GrpcAddr     string `yaml:"grpcAddr"`
+	HTTPAddr     string `yaml:"httpAddr"`
+	MetricsAddr  string `yaml:"metricsAddr"`
+	LogBody      bool   `yaml:"logBody"`
+	Tracing      bool   `yaml:"tracing"`
+	UseCamelCase bool   `yaml:"useCamelCase"`
 }
 
 // WithConfig init with config
@@ -134,6 +136,9 @@ func WithConfig(c *Config) Option {
 		}
 		if c.Tracing {
 			o.tracing = c.Tracing
+		}
+		if c.UseCamelCase {
+			o.useCamelCase = true
 		}
 	}
 }
@@ -198,6 +203,13 @@ func WithGRPCStreamServerInterceptors(i ...grpc.StreamServerInterceptor) Option 
 func WithHTTPMiddleWares(middleWares ...func(http.Handler) http.Handler) Option {
 	return func(o *options) {
 		o.httpMiddleWares = middleWares
+	}
+}
+
+// WithUseCamelCase enable camelCase format for JSON response (default is snake_case)
+func WithUseCamelCase() Option {
+	return func(o *options) {
+		o.useCamelCase = true
 	}
 }
 

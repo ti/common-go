@@ -2,8 +2,8 @@
 version: v2
 deps:
   - name: buf.build/envoyproxy/protoc-gen-validate
-    commit: 5c4c7e6fbf854ba5b761dea511aa1fd8
-    digest: b5:a72aefdd2d9675a3483d58b5df92e1c53e0f09a8eca744f0ee89e6b1a2a95e13fa6aa0df3e6d1b97c0c0f0f7ae76f24e7a948f26e1f48c19e9b0e7c834f1e20a
+    commit: daf171c6cdb54629b5f51e345a79e4dd
+    digest: b5:c745e1521879f43740230b1df673d0729f55704efefdcfc489d4a0a2d40c92a26cacfeab62813403040a8b180142d53b398c7ca784a065e43823605ee49681de
   - name: buf.build/googleapis/googleapis
-    commit: 3426d8c9f8e64a639dc8c07848c0b0ed
-    digest: b5:0b7bb0f5d8e13be8e0c62e6c84f9e6b2737d2e3c0b0d0f5e3b3e0d3e8e8c7e6e0d3e8e8c7e6e0d3e8e8c7e6e0d3e8e8c7e6e0d3e8e8c7e6e0d3e8e8c7e6e0d3e
+    commit: 004180b77378443887d3b55cabc00384
+    digest: b5:e8f475fe3330f31f5fd86ac689093bcd274e19611a09db91f41d637cb9197881ce89882b94d13a58738e53c91c6e4bae7dc1feba85f590164c975a89e25115dc

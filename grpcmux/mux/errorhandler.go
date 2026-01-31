@@ -17,7 +17,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const fallback = `{"error": "internal","error_description":"failed to marshal error message"}`
+const (
+	fallbackSnakeCase = `{"error": "internal","error_description":"failed to marshal error message"}`
+	fallbackCamelCase = `{"error": "internal","errorDescription":"failed to marshal error message"}`
+)
+
+func getFallback(useCamelCase bool) string {
+	if useCamelCase {
+		return fallbackCamelCase
+	}
+	return fallbackSnakeCase
+}
 
 func convertErrorToStatus(err error) *status.Status {
 	if err == nil {
@@ -40,7 +50,7 @@ func httpErrorHandler(opts *options) runtime.ErrorHandlerFunc {
 		if errBytes != nil {
 			grpclog.Infof("Failed to marshal error message %q: %v", s, errBytes)
 			w.WriteHeader(http.StatusInternalServerError)
-			if _, err := io.WriteString(w, fallback); err != nil {
+			if _, err := io.WriteString(w, getFallback(opts.useCamelCase)); err != nil {
 				grpclog.Infof("Failed to write response: %v", err)
 			}
 			return
@@ -88,7 +98,7 @@ func routingErrorHandler(opts *options) runtime.RoutingErrorHandlerFunc {
 			if errBytes != nil {
 				grpclog.Infof("Failed to marshal error message %q: %v", s, errBytes)
 				w.WriteHeader(http.StatusInternalServerError)
-				if _, err := io.WriteString(w, fallback); err != nil {
+				if _, err := io.WriteString(w, getFallback(opts.useCamelCase)); err != nil {
 					grpclog.Infof("Failed to write response: %v", err)
 				}
 				return

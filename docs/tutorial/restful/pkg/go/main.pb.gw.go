@@ -2,11 +2,11 @@
 // source: main.proto
 
 /*
-Package pb is a reverse proxy.
+Package _go is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package pb
+package _go
 
 import (
 	"context"

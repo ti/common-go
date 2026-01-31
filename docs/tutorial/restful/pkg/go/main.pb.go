@@ -4,11 +4,11 @@
 // 	protoc        (unknown)
 // source: main.proto
 
-package pb
+package _go
 
 import (
-	_ "github.com/envoyproxy/protoc-gen-validate/validate"
-	_ "google.golang.org/genproto/googleapis/api/annotations"
+	_ "github.com/ti/common-go/docs/tutorial/restful/pkg/go/google/api"
+	_ "github.com/ti/common-go/docs/tutorial/restful/pkg/go/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -722,7 +722,8 @@ const file_main_proto_rawDesc = "" +
 	"UpdateUser\x12\x15.pb.UpdateUserRequest\x1a\x10.pb.UserResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/v1/users/{user_id}\x12X\n" +
 	"\n" +
 	"DeleteUser\x12\x15.pb.DeleteUserRequest\x1a\x16.pb.DeleteUserResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/v1/users/{user_id}\x12K\n" +
-	"\tListUsers\x12\x14.pb.ListUsersRequest\x1a\x15.pb.ListUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/usersB?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3"
+	"\tListUsers\x12\x14.pb.ListUsersRequest\x1a\x15.pb.ListUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/usersBq\n" +
+	"\x06com.pbB\tMainProtoP\x01Z4github.com/ti/common-go/docs/tutorial/restful/pkg/go\xa2\x02\x03PXX\xaa\x02\x02Pb\xca\x02\x02Pb\xe2\x02\x0ePb\\GPBMetadata\xea\x02\x02Pbb\x06proto3"
 
 var (
 	file_main_proto_rawDescOnce sync.Once

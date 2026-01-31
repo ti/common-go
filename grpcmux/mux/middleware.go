@@ -31,7 +31,7 @@ func WriteHTTPErrorResponseWithMarshaler(w http.ResponseWriter, err error, marsh
 	buf, merr := newErrorBytes(s, marshaler, newErrorBody)
 	if merr != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		if _, err := io.WriteString(w, fallback); err != nil {
+		if _, err := io.WriteString(w, getFallback(false)); err != nil {
 			grpclog.Infof("Failed to write response: %v", err)
 		}
 		return

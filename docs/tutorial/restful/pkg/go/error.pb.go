@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: error.proto
 
-package pb
+package _go
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -77,7 +77,9 @@ const file_error_proto_rawDesc = "" +
 	"\verror.proto\x12\x02pb*(\n" +
 	"\tErrorCode\x12\x06\n" +
 	"\x02OK\x10\x00\x12\x13\n" +
-	"\x0eCustomNotFound\x10\xb4\"B?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3"
+	"\x0eCustomNotFound\x10\xb4\"Br\n" +
+	"\x06com.pbB\n" +
+	"ErrorProtoP\x01Z4github.com/ti/common-go/docs/tutorial/restful/pkg/go\xa2\x02\x03PXX\xaa\x02\x02Pb\xca\x02\x02Pb\xe2\x02\x0ePb\\GPBMetadata\xea\x02\x02Pbb\x06proto3"
 
 var (
 	file_error_proto_rawDescOnce sync.Once

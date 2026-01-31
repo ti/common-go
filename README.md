@@ -520,6 +520,7 @@ apis:
   httpAddr: :8080      # HTTP 端口
   metricsAddr: :9090   # Metrics 端口
   logBody: false       # 是否记录请求体
+  useCamelCase: false  # JSON 格式：false=下划线(默认), true=驼峰
 
 dependencies:
   db: mongodb://user:pass@localhost:27017/mydb?authSource=admin
@@ -534,6 +535,7 @@ dependencies:
 
 **配置说明**：
 - `apis`: 服务端口配置
+  - `useCamelCase`: 控制 HTTP JSON 格式（false=下划线格式如 `user_id`，true=驼峰格式如 `userId`）
 - `dependencies`: 依赖的 URI 配置（键值对形式）
 - 依赖会通过 `dependencies.Init()` 自动解析和初始化
 - 支持环境变量覆盖，如：`DB_URI=mysql://...`
@@ -780,6 +782,7 @@ log.Extract(ctx).Info("Processing...")
 
 ## 📚 更多文档
 
+- [JSON 格式配置](docs/JSON_FORMAT.md) - HTTP JSON 响应格式配置（下划线/驼峰）
 - [Buf 编译指南](docs/BUF_GUIDE.md) - Proto 编译工具
 - [数据库接口](dependencies/database/README.md) - Database 接口详解
 - [SQL 适配器](dependencies/sql/README.md) - MySQL/PostgreSQL 使用

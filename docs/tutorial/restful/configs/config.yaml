@@ -6,6 +6,24 @@ apis:
 log:
     level: "debug"
 dependencies:
+    # Database configuration examples:
+    #
+    # Mock Database (for testing):
+    db: "mock://local/restful_tutorial"
+    #
+    # MongoDB examples:
+    # db: "mongodb://localhost:27017/myapp?timeout=5s"
+    # db: "mongodb://username:password@localhost:27017/myapp?authSource=admin&timeout=5s"
+    # db: "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/myapp?replicaSet=rs0&timeout=5s"
+    #
+    # MySQL examples:
+    # db: "mysql://username:password@tcp(localhost:3306)/myapp?charset=utf8mb4&parseTime=True&loc=Local"
+    # db: "mysql://root:password@tcp(127.0.0.1:3306)/testdb?timeout=5s"
+    #
+    # PostgreSQL examples:
+    # db: "postgres://username:password@localhost:5432/myapp?sslmode=disable"
+    # db: "postgres://user:pass@localhost:5432/dbname?sslmode=require&connect_timeout=5"
+    #
     demoHTTP: "http://127.0.0.1:8080?log=true"
 service:
     test: test

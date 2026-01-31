@@ -79,6 +79,9 @@ func NewServer(opts ...Option) *Server {
 	if noRecovery {
 		muxOpts = append(muxOpts, mux.WithoutRecovery())
 	}
+	if o.useCamelCase {
+		muxOpts = append(muxOpts, mux.WithUseCamelCase())
+	}
 	if svc.useMemConn {
 		muxOpts = append(muxOpts, mux.WithOutLog())
 	} else {
