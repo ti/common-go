@@ -267,7 +267,7 @@ import (
 )
 
 type UserRepository struct {
-    db database.Database
+    db *database.DB
 }
 
 // Create 创建用户
@@ -750,7 +750,7 @@ resp, _ := sql.PageQuery[User](ctx, db, "users", pageReq)
 
 ```go
 type UserRepository struct {
-    db database.Database
+    db *database.DB
 }
 
 func (r *UserRepository) Create(ctx, user) error {
