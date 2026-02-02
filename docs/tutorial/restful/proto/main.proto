@@ -7,23 +7,10 @@ option go_package = "github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;
 import "validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 
-// Test the Say service
-service Say {
-    rpc Hello (Request) returns (Response) {
-        option (google.api.http) = {
-            post: "/v1/hello/{name}"
-            body: "*"
-        };
-    }
-    rpc HelloStream (Request) returns (stream Response) {
-        option (google.api.http) = {
-            post: "/v1/stream"
-        };
-    }
-}
-
-// User service - CRUD operations
+// User service - Comprehensive CRUD operations demonstrating all protobuf types
+// This service demonstrates proper proto definition without using 'any' or 'struct' types
 service UserService {
     // Create a new user
     rpc CreateUser (CreateUserRequest) returns (UserResponse) {
@@ -55,41 +42,100 @@ service UserService {
         };
     }
 
-    // List users with pagination
-    rpc ListUsers (ListUsersRequest) returns (ListUsersResponse) {
+    // List users with page-based pagination
+    rpc ListUsers (PageQueryRequest) returns (PageUsersResponse) {
         option (google.api.http) = {
             get: "/v1/users"
         };
     }
+
+    // Stream users with cursor-based pagination
+    rpc StreamUsers (StreamQueryRequest) returns (StreamUsersResponse) {
+        option (google.api.http) = {
+            get: "/v1/users/stream"
+        };
+    }
 }
 
-// Hello request
-message Request {
-    string name = 1 [(validate.rules).string = { max_bytes: 32 }];
-    google.protobuf.Timestamp created_at = 7;
-}
-
-// Hello response
-message Response {
-    // Reply message
-    string msg = 1;
-}
-
-// User message
+// User message - Demonstrates all protobuf types supported by codecs.go
+// IMPORTANT: This proto uses explicit types instead of 'any' or 'struct' for type safety
 message User {
+    // Core fields - using primitive types
     int64 user_id = 1;
     string name = 2 [(validate.rules).string = { min_bytes: 1, max_bytes: 100 }];
     string email = 3 [(validate.rules).string = { email: true, max_bytes: 255 }];
-    int32 age = 4 [(validate.rules).int32 = { gte: 0, lte: 150 }];
-    google.protobuf.Timestamp created_at = 5;
-    google.protobuf.Timestamp updated_at = 6;
+
+    // Timestamp fields - supported by timestampCodec in codecs.go
+    google.protobuf.Timestamp created_at = 4;
+    google.protobuf.Timestamp updated_at = 5;
+
+    // Optional fields using protobuf wrappers - supported by wrapperValueCodec in codecs.go
+    // These allow distinguishing between "not set" and "set to zero value"
+
+    // Int32Value - for optional age (could be unset for privacy)
+    google.protobuf.Int32Value age = 6 [(validate.rules).message = {
+        required: false
+    }];
+
+    // BoolValue - for optional flags
+    google.protobuf.BoolValue is_active = 7; // Account active status
+    google.protobuf.BoolValue is_verified = 8; // Email verified status
+    google.protobuf.BoolValue is_premium = 9; // Premium membership status
+
+    // StringValue - for optional text fields
+    google.protobuf.StringValue phone_number = 10 [(validate.rules).message = {
+        required: false
+    }];
+    google.protobuf.StringValue address = 11;
+    google.protobuf.StringValue bio = 12 [(validate.rules).message = {
+        required: false
+    }];
+
+    // Int64Value - for optional numeric IDs or counts
+    google.protobuf.Int64Value referrer_id = 13; // Who referred this user
+    google.protobuf.Int64Value login_count = 14; // Number of logins
+
+    // DoubleValue - for optional floating point values
+    google.protobuf.DoubleValue account_balance = 15; // Account balance in dollars
+    google.protobuf.DoubleValue rating = 16 [(validate.rules).message = {
+        required: false
+    }]; // User rating (0.0 to 5.0)
+
+    // FloatValue - for optional single precision floats
+    google.protobuf.FloatValue discount_rate = 17; // Discount percentage (0.0 to 1.0)
+
+    // UInt32Value - for optional unsigned 32-bit integers
+    google.protobuf.UInt32Value failed_login_attempts = 18; // Security tracking
+
+    // UInt64Value - for optional unsigned 64-bit integers
+    google.protobuf.UInt64Value total_spent = 19; // Total money spent (in cents)
+
+    // BytesValue - for optional binary data
+    google.protobuf.BytesValue profile_picture = 20; // User avatar image data
+    google.protobuf.BytesValue public_key = 21; // Cryptographic public key
+
+    // Timestamp - for optional time fields
+    google.protobuf.Timestamp last_login_at = 22;
+    google.protobuf.Timestamp email_verified_at = 23;
+    google.protobuf.Timestamp premium_expires_at = 24;
 }
 
-// CreateUserRequest
+// CreateUserRequest - Required fields for creating a new user
 message CreateUserRequest {
+    // Required fields
     string name = 1 [(validate.rules).string = { min_bytes: 1, max_bytes: 100 }];
     string email = 2 [(validate.rules).string = { email: true, max_bytes: 255 }];
-    int32 age = 3 [(validate.rules).int32 = { gte: 0, lte: 150 }];
+
+    // Optional fields
+    google.protobuf.Int32Value age = 3;
+    google.protobuf.BoolValue is_premium = 4;
+    google.protobuf.StringValue phone_number = 5;
+    google.protobuf.StringValue address = 6;
+    google.protobuf.StringValue bio = 7;
+    google.protobuf.Int64Value referrer_id = 8;
+    google.protobuf.DoubleValue account_balance = 9;
+    google.protobuf.FloatValue discount_rate = 10;
+    google.protobuf.BytesValue profile_picture = 11;
 }
 
 // GetUserRequest
@@ -97,12 +143,25 @@ message GetUserRequest {
     int64 user_id = 1 [(validate.rules).int64 = { gt: 0 }];
 }
 
-// UpdateUserRequest
+// UpdateUserRequest - All fields are optional except user_id
 message UpdateUserRequest {
     int64 user_id = 1 [(validate.rules).int64 = { gt: 0 }];
-    string name = 2 [(validate.rules).string = { min_bytes: 1, max_bytes: 100 }];
-    string email = 3 [(validate.rules).string = { email: true, max_bytes: 255 }];
-    int32 age = 4 [(validate.rules).int32 = { gte: 0, lte: 150 }];
+
+    // Optional fields - only include fields you want to update
+    google.protobuf.StringValue name = 2;
+    google.protobuf.StringValue email = 3;
+    google.protobuf.Int32Value age = 4;
+    google.protobuf.BoolValue is_active = 5;
+    google.protobuf.BoolValue is_verified = 6;
+    google.protobuf.BoolValue is_premium = 7;
+    google.protobuf.StringValue phone_number = 8;
+    google.protobuf.StringValue address = 9;
+    google.protobuf.StringValue bio = 10;
+    google.protobuf.Int64Value referrer_id = 11;
+    google.protobuf.DoubleValue account_balance = 12;
+    google.protobuf.DoubleValue rating = 13;
+    google.protobuf.FloatValue discount_rate = 14;
+    google.protobuf.BytesValue profile_picture = 15;
 }
 
 // DeleteUserRequest
@@ -121,18 +180,33 @@ message DeleteUserResponse {
     string message = 2;
 }
 
-// ListUsersRequest
-message ListUsersRequest {
-    int32 page = 1 [(validate.rules).int32 = { gte: 1 }];
-    int32 page_size = 2 [(validate.rules).int32 = { gte: 1, lte: 100 }];
-    string sort_by = 3; // e.g., "name", "-age" (- for descending)
+// PageQueryRequest for page-based pagination
+message PageQueryRequest {
+    int32 page = 1;      // Page number
+    int32 limit = 2;     // Items per page
+    repeated string select = 3;  // Fields to return
+    repeated string sort = 4;    // Sort fields (prefix with - for descending)
+    // Note: filter field is not included as it requires complex type mapping
 }
 
-// ListUsersResponse
-message ListUsersResponse {
-    repeated User users = 1;
+// PageUsersResponse for page-based pagination
+message PageUsersResponse {
+    repeated User data = 1;
     int64 total = 2;
-    int32 page = 3;
-    int32 page_size = 4;
 }
 
+// StreamQueryRequest for cursor-based pagination
+message StreamQueryRequest {
+    string page_token = 1;  // Cursor for pagination
+    int32 limit = 2;        // Items per page
+    repeated string select = 3;  // Fields to return
+    bool ascending = 4;     // Sort direction (true for ascending, false for descending)
+    // Note: page_field and filter fields are handled server-side
+}
+
+// StreamUsersResponse for cursor-based pagination
+message StreamUsersResponse {
+    string page_token = 1;  // Token for next page
+    repeated User data = 2;
+    int64 total = 3;
+}

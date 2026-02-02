@@ -12,6 +12,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -24,121 +25,53 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Hello request
-type Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Request) Reset() {
-	*x = Request{}
-	mi := &file_main_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Request) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Request) ProtoMessage() {}
-
-func (x *Request) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Request.ProtoReflect.Descriptor instead.
-func (*Request) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Request) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Request) GetCreatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return nil
-}
-
-// Hello response
-type Response struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Reply message
-	Msg           string `protobuf:"bytes,1,opt,name=msg,proto3" json:"msg,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Response) Reset() {
-	*x = Response{}
-	mi := &file_main_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Response) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Response) ProtoMessage() {}
-
-func (x *Response) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Response.ProtoReflect.Descriptor instead.
-func (*Response) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Response) GetMsg() string {
-	if x != nil {
-		return x.Msg
-	}
-	return ""
-}
-
-// User message
+// User message - Demonstrates all protobuf types supported by codecs.go
+// IMPORTANT: This proto uses explicit types instead of 'any' or 'struct' for type safety
 type User struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	Age           int32                  `protobuf:"varint,4,opt,name=age,proto3" json:"age,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Core fields - using primitive types
+	UserId int64  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Name   string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Email  string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// Timestamp fields - supported by timestampCodec in codecs.go
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Int32Value - for optional age (could be unset for privacy)
+	Age *wrapperspb.Int32Value `protobuf:"bytes,6,opt,name=age,proto3" json:"age,omitempty"`
+	// BoolValue - for optional flags
+	IsActive   *wrapperspb.BoolValue `protobuf:"bytes,7,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`       // Account active status
+	IsVerified *wrapperspb.BoolValue `protobuf:"bytes,8,opt,name=is_verified,json=isVerified,proto3" json:"is_verified,omitempty"` // Email verified status
+	IsPremium  *wrapperspb.BoolValue `protobuf:"bytes,9,opt,name=is_premium,json=isPremium,proto3" json:"is_premium,omitempty"`    // Premium membership status
+	// StringValue - for optional text fields
+	PhoneNumber *wrapperspb.StringValue `protobuf:"bytes,10,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	Address     *wrapperspb.StringValue `protobuf:"bytes,11,opt,name=address,proto3" json:"address,omitempty"`
+	Bio         *wrapperspb.StringValue `protobuf:"bytes,12,opt,name=bio,proto3" json:"bio,omitempty"`
+	// Int64Value - for optional numeric IDs or counts
+	ReferrerId *wrapperspb.Int64Value `protobuf:"bytes,13,opt,name=referrer_id,json=referrerId,proto3" json:"referrer_id,omitempty"` // Who referred this user
+	LoginCount *wrapperspb.Int64Value `protobuf:"bytes,14,opt,name=login_count,json=loginCount,proto3" json:"login_count,omitempty"` // Number of logins
+	// DoubleValue - for optional floating point values
+	AccountBalance *wrapperspb.DoubleValue `protobuf:"bytes,15,opt,name=account_balance,json=accountBalance,proto3" json:"account_balance,omitempty"` // Account balance in dollars
+	Rating         *wrapperspb.DoubleValue `protobuf:"bytes,16,opt,name=rating,proto3" json:"rating,omitempty"`                                       // User rating (0.0 to 5.0)
+	// FloatValue - for optional single precision floats
+	DiscountRate *wrapperspb.FloatValue `protobuf:"bytes,17,opt,name=discount_rate,json=discountRate,proto3" json:"discount_rate,omitempty"` // Discount percentage (0.0 to 1.0)
+	// UInt32Value - for optional unsigned 32-bit integers
+	FailedLoginAttempts *wrapperspb.UInt32Value `protobuf:"bytes,18,opt,name=failed_login_attempts,json=failedLoginAttempts,proto3" json:"failed_login_attempts,omitempty"` // Security tracking
+	// UInt64Value - for optional unsigned 64-bit integers
+	TotalSpent *wrapperspb.UInt64Value `protobuf:"bytes,19,opt,name=total_spent,json=totalSpent,proto3" json:"total_spent,omitempty"` // Total money spent (in cents)
+	// BytesValue - for optional binary data
+	ProfilePicture *wrapperspb.BytesValue `protobuf:"bytes,20,opt,name=profile_picture,json=profilePicture,proto3" json:"profile_picture,omitempty"` // User avatar image data
+	PublicKey      *wrapperspb.BytesValue `protobuf:"bytes,21,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`                // Cryptographic public key
+	// Timestamp - for optional time fields
+	LastLoginAt      *timestamppb.Timestamp `protobuf:"bytes,22,opt,name=last_login_at,json=lastLoginAt,proto3" json:"last_login_at,omitempty"`
+	EmailVerifiedAt  *timestamppb.Timestamp `protobuf:"bytes,23,opt,name=email_verified_at,json=emailVerifiedAt,proto3" json:"email_verified_at,omitempty"`
+	PremiumExpiresAt *timestamppb.Timestamp `protobuf:"bytes,24,opt,name=premium_expires_at,json=premiumExpiresAt,proto3" json:"premium_expires_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *User) Reset() {
 	*x = User{}
-	mi := &file_main_proto_msgTypes[2]
+	mi := &file_main_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -150,7 +83,7 @@ func (x *User) String() string {
 func (*User) ProtoMessage() {}
 
 func (x *User) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[2]
+	mi := &file_main_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -163,7 +96,7 @@ func (x *User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use User.ProtoReflect.Descriptor instead.
 func (*User) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{2}
+	return file_main_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *User) GetUserId() int64 {
@@ -187,13 +120,6 @@ func (x *User) GetEmail() string {
 	return ""
 }
 
-func (x *User) GetAge() int32 {
-	if x != nil {
-		return x.Age
-	}
-	return 0
-}
-
 func (x *User) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
@@ -208,19 +134,162 @@ func (x *User) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// CreateUserRequest
+func (x *User) GetAge() *wrapperspb.Int32Value {
+	if x != nil {
+		return x.Age
+	}
+	return nil
+}
+
+func (x *User) GetIsActive() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsActive
+	}
+	return nil
+}
+
+func (x *User) GetIsVerified() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsVerified
+	}
+	return nil
+}
+
+func (x *User) GetIsPremium() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsPremium
+	}
+	return nil
+}
+
+func (x *User) GetPhoneNumber() *wrapperspb.StringValue {
+	if x != nil {
+		return x.PhoneNumber
+	}
+	return nil
+}
+
+func (x *User) GetAddress() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *User) GetBio() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Bio
+	}
+	return nil
+}
+
+func (x *User) GetReferrerId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.ReferrerId
+	}
+	return nil
+}
+
+func (x *User) GetLoginCount() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.LoginCount
+	}
+	return nil
+}
+
+func (x *User) GetAccountBalance() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.AccountBalance
+	}
+	return nil
+}
+
+func (x *User) GetRating() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.Rating
+	}
+	return nil
+}
+
+func (x *User) GetDiscountRate() *wrapperspb.FloatValue {
+	if x != nil {
+		return x.DiscountRate
+	}
+	return nil
+}
+
+func (x *User) GetFailedLoginAttempts() *wrapperspb.UInt32Value {
+	if x != nil {
+		return x.FailedLoginAttempts
+	}
+	return nil
+}
+
+func (x *User) GetTotalSpent() *wrapperspb.UInt64Value {
+	if x != nil {
+		return x.TotalSpent
+	}
+	return nil
+}
+
+func (x *User) GetProfilePicture() *wrapperspb.BytesValue {
+	if x != nil {
+		return x.ProfilePicture
+	}
+	return nil
+}
+
+func (x *User) GetPublicKey() *wrapperspb.BytesValue {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *User) GetLastLoginAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastLoginAt
+	}
+	return nil
+}
+
+func (x *User) GetEmailVerifiedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EmailVerifiedAt
+	}
+	return nil
+}
+
+func (x *User) GetPremiumExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PremiumExpiresAt
+	}
+	return nil
+}
+
+// CreateUserRequest - Required fields for creating a new user
 type CreateUserRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
-	Age           int32                  `protobuf:"varint,3,opt,name=age,proto3" json:"age,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Required fields
+	Name  string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Email string `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	// Optional fields
+	Age            *wrapperspb.Int32Value  `protobuf:"bytes,3,opt,name=age,proto3" json:"age,omitempty"`
+	IsPremium      *wrapperspb.BoolValue   `protobuf:"bytes,4,opt,name=is_premium,json=isPremium,proto3" json:"is_premium,omitempty"`
+	PhoneNumber    *wrapperspb.StringValue `protobuf:"bytes,5,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	Address        *wrapperspb.StringValue `protobuf:"bytes,6,opt,name=address,proto3" json:"address,omitempty"`
+	Bio            *wrapperspb.StringValue `protobuf:"bytes,7,opt,name=bio,proto3" json:"bio,omitempty"`
+	ReferrerId     *wrapperspb.Int64Value  `protobuf:"bytes,8,opt,name=referrer_id,json=referrerId,proto3" json:"referrer_id,omitempty"`
+	AccountBalance *wrapperspb.DoubleValue `protobuf:"bytes,9,opt,name=account_balance,json=accountBalance,proto3" json:"account_balance,omitempty"`
+	DiscountRate   *wrapperspb.FloatValue  `protobuf:"bytes,10,opt,name=discount_rate,json=discountRate,proto3" json:"discount_rate,omitempty"`
+	ProfilePicture *wrapperspb.BytesValue  `protobuf:"bytes,11,opt,name=profile_picture,json=profilePicture,proto3" json:"profile_picture,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateUserRequest) Reset() {
 	*x = CreateUserRequest{}
-	mi := &file_main_proto_msgTypes[3]
+	mi := &file_main_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -232,7 +301,7 @@ func (x *CreateUserRequest) String() string {
 func (*CreateUserRequest) ProtoMessage() {}
 
 func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[3]
+	mi := &file_main_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -245,7 +314,7 @@ func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateUserRequest.ProtoReflect.Descriptor instead.
 func (*CreateUserRequest) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{3}
+	return file_main_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CreateUserRequest) GetName() string {
@@ -262,11 +331,67 @@ func (x *CreateUserRequest) GetEmail() string {
 	return ""
 }
 
-func (x *CreateUserRequest) GetAge() int32 {
+func (x *CreateUserRequest) GetAge() *wrapperspb.Int32Value {
 	if x != nil {
 		return x.Age
 	}
-	return 0
+	return nil
+}
+
+func (x *CreateUserRequest) GetIsPremium() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsPremium
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetPhoneNumber() *wrapperspb.StringValue {
+	if x != nil {
+		return x.PhoneNumber
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetAddress() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetBio() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Bio
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetReferrerId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.ReferrerId
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetAccountBalance() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.AccountBalance
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetDiscountRate() *wrapperspb.FloatValue {
+	if x != nil {
+		return x.DiscountRate
+	}
+	return nil
+}
+
+func (x *CreateUserRequest) GetProfilePicture() *wrapperspb.BytesValue {
+	if x != nil {
+		return x.ProfilePicture
+	}
+	return nil
 }
 
 // GetUserRequest
@@ -279,7 +404,7 @@ type GetUserRequest struct {
 
 func (x *GetUserRequest) Reset() {
 	*x = GetUserRequest{}
-	mi := &file_main_proto_msgTypes[4]
+	mi := &file_main_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -291,7 +416,7 @@ func (x *GetUserRequest) String() string {
 func (*GetUserRequest) ProtoMessage() {}
 
 func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[4]
+	mi := &file_main_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -304,7 +429,7 @@ func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserRequest.ProtoReflect.Descriptor instead.
 func (*GetUserRequest) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{4}
+	return file_main_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetUserRequest) GetUserId() int64 {
@@ -314,20 +439,32 @@ func (x *GetUserRequest) GetUserId() int64 {
 	return 0
 }
 
-// UpdateUserRequest
+// UpdateUserRequest - All fields are optional except user_id
 type UpdateUserRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	Age           int32                  `protobuf:"varint,4,opt,name=age,proto3" json:"age,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// Optional fields - only include fields you want to update
+	Name           *wrapperspb.StringValue `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Email          *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	Age            *wrapperspb.Int32Value  `protobuf:"bytes,4,opt,name=age,proto3" json:"age,omitempty"`
+	IsActive       *wrapperspb.BoolValue   `protobuf:"bytes,5,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`
+	IsVerified     *wrapperspb.BoolValue   `protobuf:"bytes,6,opt,name=is_verified,json=isVerified,proto3" json:"is_verified,omitempty"`
+	IsPremium      *wrapperspb.BoolValue   `protobuf:"bytes,7,opt,name=is_premium,json=isPremium,proto3" json:"is_premium,omitempty"`
+	PhoneNumber    *wrapperspb.StringValue `protobuf:"bytes,8,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	Address        *wrapperspb.StringValue `protobuf:"bytes,9,opt,name=address,proto3" json:"address,omitempty"`
+	Bio            *wrapperspb.StringValue `protobuf:"bytes,10,opt,name=bio,proto3" json:"bio,omitempty"`
+	ReferrerId     *wrapperspb.Int64Value  `protobuf:"bytes,11,opt,name=referrer_id,json=referrerId,proto3" json:"referrer_id,omitempty"`
+	AccountBalance *wrapperspb.DoubleValue `protobuf:"bytes,12,opt,name=account_balance,json=accountBalance,proto3" json:"account_balance,omitempty"`
+	Rating         *wrapperspb.DoubleValue `protobuf:"bytes,13,opt,name=rating,proto3" json:"rating,omitempty"`
+	DiscountRate   *wrapperspb.FloatValue  `protobuf:"bytes,14,opt,name=discount_rate,json=discountRate,proto3" json:"discount_rate,omitempty"`
+	ProfilePicture *wrapperspb.BytesValue  `protobuf:"bytes,15,opt,name=profile_picture,json=profilePicture,proto3" json:"profile_picture,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *UpdateUserRequest) Reset() {
 	*x = UpdateUserRequest{}
-	mi := &file_main_proto_msgTypes[5]
+	mi := &file_main_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +476,7 @@ func (x *UpdateUserRequest) String() string {
 func (*UpdateUserRequest) ProtoMessage() {}
 
 func (x *UpdateUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[5]
+	mi := &file_main_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +489,7 @@ func (x *UpdateUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUserRequest.ProtoReflect.Descriptor instead.
 func (*UpdateUserRequest) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{5}
+	return file_main_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *UpdateUserRequest) GetUserId() int64 {
@@ -362,25 +499,102 @@ func (x *UpdateUserRequest) GetUserId() int64 {
 	return 0
 }
 
-func (x *UpdateUserRequest) GetName() string {
+func (x *UpdateUserRequest) GetName() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Name
 	}
-	return ""
+	return nil
 }
 
-func (x *UpdateUserRequest) GetEmail() string {
+func (x *UpdateUserRequest) GetEmail() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Email
 	}
-	return ""
+	return nil
 }
 
-func (x *UpdateUserRequest) GetAge() int32 {
+func (x *UpdateUserRequest) GetAge() *wrapperspb.Int32Value {
 	if x != nil {
 		return x.Age
 	}
-	return 0
+	return nil
+}
+
+func (x *UpdateUserRequest) GetIsActive() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsActive
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetIsVerified() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsVerified
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetIsPremium() *wrapperspb.BoolValue {
+	if x != nil {
+		return x.IsPremium
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetPhoneNumber() *wrapperspb.StringValue {
+	if x != nil {
+		return x.PhoneNumber
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetAddress() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetBio() *wrapperspb.StringValue {
+	if x != nil {
+		return x.Bio
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetReferrerId() *wrapperspb.Int64Value {
+	if x != nil {
+		return x.ReferrerId
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetAccountBalance() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.AccountBalance
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetRating() *wrapperspb.DoubleValue {
+	if x != nil {
+		return x.Rating
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetDiscountRate() *wrapperspb.FloatValue {
+	if x != nil {
+		return x.DiscountRate
+	}
+	return nil
+}
+
+func (x *UpdateUserRequest) GetProfilePicture() *wrapperspb.BytesValue {
+	if x != nil {
+		return x.ProfilePicture
+	}
+	return nil
 }
 
 // DeleteUserRequest
@@ -393,7 +607,7 @@ type DeleteUserRequest struct {
 
 func (x *DeleteUserRequest) Reset() {
 	*x = DeleteUserRequest{}
-	mi := &file_main_proto_msgTypes[6]
+	mi := &file_main_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -405,7 +619,7 @@ func (x *DeleteUserRequest) String() string {
 func (*DeleteUserRequest) ProtoMessage() {}
 
 func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[6]
+	mi := &file_main_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -418,7 +632,7 @@ func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{6}
+	return file_main_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeleteUserRequest) GetUserId() int64 {
@@ -438,7 +652,7 @@ type UserResponse struct {
 
 func (x *UserResponse) Reset() {
 	*x = UserResponse{}
-	mi := &file_main_proto_msgTypes[7]
+	mi := &file_main_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +664,7 @@ func (x *UserResponse) String() string {
 func (*UserResponse) ProtoMessage() {}
 
 func (x *UserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[7]
+	mi := &file_main_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +677,7 @@ func (x *UserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserResponse.ProtoReflect.Descriptor instead.
 func (*UserResponse) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{7}
+	return file_main_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *UserResponse) GetUser() *User {
@@ -484,7 +698,7 @@ type DeleteUserResponse struct {
 
 func (x *DeleteUserResponse) Reset() {
 	*x = DeleteUserResponse{}
-	mi := &file_main_proto_msgTypes[8]
+	mi := &file_main_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -496,7 +710,7 @@ func (x *DeleteUserResponse) String() string {
 func (*DeleteUserResponse) ProtoMessage() {}
 
 func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[8]
+	mi := &file_main_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -509,7 +723,7 @@ func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserResponse.ProtoReflect.Descriptor instead.
 func (*DeleteUserResponse) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{8}
+	return file_main_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DeleteUserResponse) GetSuccess() bool {
@@ -526,31 +740,32 @@ func (x *DeleteUserResponse) GetMessage() string {
 	return ""
 }
 
-// ListUsersRequest
-type ListUsersRequest struct {
+// PageQueryRequest for page-based pagination
+type PageQueryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	SortBy        string                 `protobuf:"bytes,3,opt,name=sort_by,json=sortBy,proto3" json:"sort_by,omitempty"` // e.g., "name", "-age" (- for descending)
+	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`    // Page number
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`  // Items per page
+	Select        []string               `protobuf:"bytes,3,rep,name=select,proto3" json:"select,omitempty"` // Fields to return
+	Sort          []string               `protobuf:"bytes,4,rep,name=sort,proto3" json:"sort,omitempty"`     // Sort fields (prefix with - for descending)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListUsersRequest) Reset() {
-	*x = ListUsersRequest{}
-	mi := &file_main_proto_msgTypes[9]
+func (x *PageQueryRequest) Reset() {
+	*x = PageQueryRequest{}
+	mi := &file_main_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListUsersRequest) String() string {
+func (x *PageQueryRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListUsersRequest) ProtoMessage() {}
+func (*PageQueryRequest) ProtoMessage() {}
 
-func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[9]
+func (x *PageQueryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_main_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -561,58 +776,63 @@ func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListUsersRequest.ProtoReflect.Descriptor instead.
-func (*ListUsersRequest) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{9}
+// Deprecated: Use PageQueryRequest.ProtoReflect.Descriptor instead.
+func (*PageQueryRequest) Descriptor() ([]byte, []int) {
+	return file_main_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *ListUsersRequest) GetPage() int32 {
+func (x *PageQueryRequest) GetPage() int32 {
 	if x != nil {
 		return x.Page
 	}
 	return 0
 }
 
-func (x *ListUsersRequest) GetPageSize() int32 {
+func (x *PageQueryRequest) GetLimit() int32 {
 	if x != nil {
-		return x.PageSize
+		return x.Limit
 	}
 	return 0
 }
 
-func (x *ListUsersRequest) GetSortBy() string {
+func (x *PageQueryRequest) GetSelect() []string {
 	if x != nil {
-		return x.SortBy
+		return x.Select
 	}
-	return ""
+	return nil
 }
 
-// ListUsersResponse
-type ListUsersResponse struct {
+func (x *PageQueryRequest) GetSort() []string {
+	if x != nil {
+		return x.Sort
+	}
+	return nil
+}
+
+// PageUsersResponse for page-based pagination
+type PageUsersResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Users         []*User                `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
+	Data          []*User                `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
 	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Page          int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty"`
-	PageSize      int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListUsersResponse) Reset() {
-	*x = ListUsersResponse{}
-	mi := &file_main_proto_msgTypes[10]
+func (x *PageUsersResponse) Reset() {
+	*x = PageUsersResponse{}
+	mi := &file_main_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListUsersResponse) String() string {
+func (x *PageUsersResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListUsersResponse) ProtoMessage() {}
+func (*PageUsersResponse) ProtoMessage() {}
 
-func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_main_proto_msgTypes[10]
+func (x *PageUsersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_main_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,35 +843,151 @@ func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListUsersResponse.ProtoReflect.Descriptor instead.
-func (*ListUsersResponse) Descriptor() ([]byte, []int) {
-	return file_main_proto_rawDescGZIP(), []int{10}
+// Deprecated: Use PageUsersResponse.ProtoReflect.Descriptor instead.
+func (*PageUsersResponse) Descriptor() ([]byte, []int) {
+	return file_main_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ListUsersResponse) GetUsers() []*User {
+func (x *PageUsersResponse) GetData() []*User {
 	if x != nil {
-		return x.Users
+		return x.Data
 	}
 	return nil
 }
 
-func (x *ListUsersResponse) GetTotal() int64 {
+func (x *PageUsersResponse) GetTotal() int64 {
 	if x != nil {
 		return x.Total
 	}
 	return 0
 }
 
-func (x *ListUsersResponse) GetPage() int32 {
+// StreamQueryRequest for cursor-based pagination
+type StreamQueryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageToken     string                 `protobuf:"bytes,1,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Cursor for pagination
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                         // Items per page
+	Select        []string               `protobuf:"bytes,3,rep,name=select,proto3" json:"select,omitempty"`                        // Fields to return
+	Ascending     bool                   `protobuf:"varint,4,opt,name=ascending,proto3" json:"ascending,omitempty"`                 // Sort direction (true for ascending, false for descending)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamQueryRequest) Reset() {
+	*x = StreamQueryRequest{}
+	mi := &file_main_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamQueryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamQueryRequest) ProtoMessage() {}
+
+func (x *StreamQueryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_main_proto_msgTypes[9]
 	if x != nil {
-		return x.Page
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamQueryRequest.ProtoReflect.Descriptor instead.
+func (*StreamQueryRequest) Descriptor() ([]byte, []int) {
+	return file_main_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *StreamQueryRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+func (x *StreamQueryRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
 	}
 	return 0
 }
 
-func (x *ListUsersResponse) GetPageSize() int32 {
+func (x *StreamQueryRequest) GetSelect() []string {
 	if x != nil {
-		return x.PageSize
+		return x.Select
+	}
+	return nil
+}
+
+func (x *StreamQueryRequest) GetAscending() bool {
+	if x != nil {
+		return x.Ascending
+	}
+	return false
+}
+
+// StreamUsersResponse for cursor-based pagination
+type StreamUsersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageToken     string                 `protobuf:"bytes,1,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Token for next page
+	Data          []*User                `protobuf:"bytes,2,rep,name=data,proto3" json:"data,omitempty"`
+	Total         int64                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamUsersResponse) Reset() {
+	*x = StreamUsersResponse{}
+	mi := &file_main_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamUsersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamUsersResponse) ProtoMessage() {}
+
+func (x *StreamUsersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_main_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamUsersResponse.ProtoReflect.Descriptor instead.
+func (*StreamUsersResponse) Descriptor() ([]byte, []int) {
+	return file_main_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *StreamUsersResponse) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+func (x *StreamUsersResponse) GetData() []*User {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *StreamUsersResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
 	}
 	return 0
 }
@@ -661,59 +997,106 @@ var File_main_proto protoreflect.FileDescriptor
 const file_main_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"main.proto\x12\x02pb\x1a\x17validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"a\n" +
-	"\aRequest\x12\x1b\n" +
-	"\x04name\x18\x01 \x01(\tB\a\xfaB\x04r\x02( R\x04name\x129\n" +
-	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1c\n" +
-	"\bResponse\x12\x10\n" +
-	"\x03msg\x18\x01 \x01(\tR\x03msg\"\xf4\x01\n" +
+	"main.proto\x12\x02pb\x1a\x17validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\xa7\v\n" +
 	"\x04User\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n" +
 	"\x04name\x18\x02 \x01(\tB\t\xfaB\x06r\x04 \x01(dR\x04name\x12 \n" +
 	"\x05email\x18\x03 \x01(\tB\n" +
-	"\xfaB\ar\x05(\xff\x01`\x01R\x05email\x12\x1c\n" +
-	"\x03age\x18\x04 \x01(\x05B\n" +
-	"\xfaB\a\x1a\x05\x18\x96\x01(\x00R\x03age\x129\n" +
+	"\xfaB\ar\x05(\xff\x01`\x01R\x05email\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"r\n" +
+	"updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x127\n" +
+	"\x03age\x18\x06 \x01(\v2\x1b.google.protobuf.Int32ValueB\b\xfaB\x05\x8a\x01\x02\x10\x00R\x03age\x127\n" +
+	"\tis_active\x18\a \x01(\v2\x1a.google.protobuf.BoolValueR\bisActive\x12;\n" +
+	"\vis_verified\x18\b \x01(\v2\x1a.google.protobuf.BoolValueR\n" +
+	"isVerified\x129\n" +
+	"\n" +
+	"is_premium\x18\t \x01(\v2\x1a.google.protobuf.BoolValueR\tisPremium\x12I\n" +
+	"\fphone_number\x18\n" +
+	" \x01(\v2\x1c.google.protobuf.StringValueB\b\xfaB\x05\x8a\x01\x02\x10\x00R\vphoneNumber\x126\n" +
+	"\aaddress\x18\v \x01(\v2\x1c.google.protobuf.StringValueR\aaddress\x128\n" +
+	"\x03bio\x18\f \x01(\v2\x1c.google.protobuf.StringValueB\b\xfaB\x05\x8a\x01\x02\x10\x00R\x03bio\x12<\n" +
+	"\vreferrer_id\x18\r \x01(\v2\x1b.google.protobuf.Int64ValueR\n" +
+	"referrerId\x12<\n" +
+	"\vlogin_count\x18\x0e \x01(\v2\x1b.google.protobuf.Int64ValueR\n" +
+	"loginCount\x12E\n" +
+	"\x0faccount_balance\x18\x0f \x01(\v2\x1c.google.protobuf.DoubleValueR\x0eaccountBalance\x12>\n" +
+	"\x06rating\x18\x10 \x01(\v2\x1c.google.protobuf.DoubleValueB\b\xfaB\x05\x8a\x01\x02\x10\x00R\x06rating\x12@\n" +
+	"\rdiscount_rate\x18\x11 \x01(\v2\x1b.google.protobuf.FloatValueR\fdiscountRate\x12P\n" +
+	"\x15failed_login_attempts\x18\x12 \x01(\v2\x1c.google.protobuf.UInt32ValueR\x13failedLoginAttempts\x12=\n" +
+	"\vtotal_spent\x18\x13 \x01(\v2\x1c.google.protobuf.UInt64ValueR\n" +
+	"totalSpent\x12D\n" +
+	"\x0fprofile_picture\x18\x14 \x01(\v2\x1b.google.protobuf.BytesValueR\x0eprofilePicture\x12:\n" +
+	"\n" +
+	"public_key\x18\x15 \x01(\v2\x1b.google.protobuf.BytesValueR\tpublicKey\x12>\n" +
+	"\rlast_login_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\vlastLoginAt\x12F\n" +
+	"\x11email_verified_at\x18\x17 \x01(\v2\x1a.google.protobuf.TimestampR\x0femailVerifiedAt\x12H\n" +
+	"\x12premium_expires_at\x18\x18 \x01(\v2\x1a.google.protobuf.TimestampR\x10premiumExpiresAt\"\xf4\x04\n" +
 	"\x11CreateUserRequest\x12\x1d\n" +
 	"\x04name\x18\x01 \x01(\tB\t\xfaB\x06r\x04 \x01(dR\x04name\x12 \n" +
 	"\x05email\x18\x02 \x01(\tB\n" +
-	"\xfaB\ar\x05(\xff\x01`\x01R\x05email\x12\x1c\n" +
-	"\x03age\x18\x03 \x01(\x05B\n" +
-	"\xfaB\a\x1a\x05\x18\x96\x01(\x00R\x03age\"2\n" +
+	"\xfaB\ar\x05(\xff\x01`\x01R\x05email\x12-\n" +
+	"\x03age\x18\x03 \x01(\v2\x1b.google.protobuf.Int32ValueR\x03age\x129\n" +
+	"\n" +
+	"is_premium\x18\x04 \x01(\v2\x1a.google.protobuf.BoolValueR\tisPremium\x12?\n" +
+	"\fphone_number\x18\x05 \x01(\v2\x1c.google.protobuf.StringValueR\vphoneNumber\x126\n" +
+	"\aaddress\x18\x06 \x01(\v2\x1c.google.protobuf.StringValueR\aaddress\x12.\n" +
+	"\x03bio\x18\a \x01(\v2\x1c.google.protobuf.StringValueR\x03bio\x12<\n" +
+	"\vreferrer_id\x18\b \x01(\v2\x1b.google.protobuf.Int64ValueR\n" +
+	"referrerId\x12E\n" +
+	"\x0faccount_balance\x18\t \x01(\v2\x1c.google.protobuf.DoubleValueR\x0eaccountBalance\x12@\n" +
+	"\rdiscount_rate\x18\n" +
+	" \x01(\v2\x1b.google.protobuf.FloatValueR\fdiscountRate\x12D\n" +
+	"\x0fprofile_picture\x18\v \x01(\v2\x1b.google.protobuf.BytesValueR\x0eprofilePicture\"2\n" +
 	"\x0eGetUserRequest\x12 \n" +
-	"\auser_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x06userId\"\x94\x01\n" +
+	"\auser_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x06userId\"\xe7\x06\n" +
 	"\x11UpdateUserRequest\x12 \n" +
-	"\auser_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x06userId\x12\x1d\n" +
-	"\x04name\x18\x02 \x01(\tB\t\xfaB\x06r\x04 \x01(dR\x04name\x12 \n" +
-	"\x05email\x18\x03 \x01(\tB\n" +
-	"\xfaB\ar\x05(\xff\x01`\x01R\x05email\x12\x1c\n" +
-	"\x03age\x18\x04 \x01(\x05B\n" +
-	"\xfaB\a\x1a\x05\x18\x96\x01(\x00R\x03age\"5\n" +
+	"\auser_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x06userId\x120\n" +
+	"\x04name\x18\x02 \x01(\v2\x1c.google.protobuf.StringValueR\x04name\x122\n" +
+	"\x05email\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x05email\x12-\n" +
+	"\x03age\x18\x04 \x01(\v2\x1b.google.protobuf.Int32ValueR\x03age\x127\n" +
+	"\tis_active\x18\x05 \x01(\v2\x1a.google.protobuf.BoolValueR\bisActive\x12;\n" +
+	"\vis_verified\x18\x06 \x01(\v2\x1a.google.protobuf.BoolValueR\n" +
+	"isVerified\x129\n" +
+	"\n" +
+	"is_premium\x18\a \x01(\v2\x1a.google.protobuf.BoolValueR\tisPremium\x12?\n" +
+	"\fphone_number\x18\b \x01(\v2\x1c.google.protobuf.StringValueR\vphoneNumber\x126\n" +
+	"\aaddress\x18\t \x01(\v2\x1c.google.protobuf.StringValueR\aaddress\x12.\n" +
+	"\x03bio\x18\n" +
+	" \x01(\v2\x1c.google.protobuf.StringValueR\x03bio\x12<\n" +
+	"\vreferrer_id\x18\v \x01(\v2\x1b.google.protobuf.Int64ValueR\n" +
+	"referrerId\x12E\n" +
+	"\x0faccount_balance\x18\f \x01(\v2\x1c.google.protobuf.DoubleValueR\x0eaccountBalance\x124\n" +
+	"\x06rating\x18\r \x01(\v2\x1c.google.protobuf.DoubleValueR\x06rating\x12@\n" +
+	"\rdiscount_rate\x18\x0e \x01(\v2\x1b.google.protobuf.FloatValueR\fdiscountRate\x12D\n" +
+	"\x0fprofile_picture\x18\x0f \x01(\v2\x1b.google.protobuf.BytesValueR\x0eprofilePicture\"5\n" +
 	"\x11DeleteUserRequest\x12 \n" +
 	"\auser_id\x18\x01 \x01(\x03B\a\xfaB\x04\"\x02 \x00R\x06userId\",\n" +
 	"\fUserResponse\x12\x1c\n" +
 	"\x04user\x18\x01 \x01(\v2\b.pb.UserR\x04user\"H\n" +
 	"\x12DeleteUserResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"p\n" +
-	"\x10ListUsersRequest\x12\x1b\n" +
-	"\x04page\x18\x01 \x01(\x05B\a\xfaB\x04\x1a\x02(\x01R\x04page\x12&\n" +
-	"\tpage_size\x18\x02 \x01(\x05B\t\xfaB\x06\x1a\x04\x18d(\x01R\bpageSize\x12\x17\n" +
-	"\asort_by\x18\x03 \x01(\tR\x06sortBy\"z\n" +
-	"\x11ListUsersResponse\x12\x1e\n" +
-	"\x05users\x18\x01 \x03(\v2\b.pb.UserR\x05users\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x12\n" +
-	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x04 \x01(\x05R\bpageSize2\x86\x01\n" +
-	"\x03Say\x12?\n" +
-	"\x05Hello\x12\v.pb.Request\x1a\f.pb.Response\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/hello/{name}\x12>\n" +
-	"\vHelloStream\x12\v.pb.Request\x1a\f.pb.Response\"\x12\x82\xd3\xe4\x93\x02\f\"\n" +
-	"/v1/stream0\x012\xa6\x03\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"h\n" +
+	"\x10PageQueryRequest\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06select\x18\x03 \x03(\tR\x06select\x12\x12\n" +
+	"\x04sort\x18\x04 \x03(\tR\x04sort\"G\n" +
+	"\x11PageUsersResponse\x12\x1c\n" +
+	"\x04data\x18\x01 \x03(\v2\b.pb.UserR\x04data\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\"\x7f\n" +
+	"\x12StreamQueryRequest\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x01 \x01(\tR\tpageToken\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06select\x18\x03 \x03(\tR\x06select\x12\x1c\n" +
+	"\tascending\x18\x04 \x01(\bR\tascending\"h\n" +
+	"\x13StreamUsersResponse\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x01 \x01(\tR\tpageToken\x12\x1c\n" +
+	"\x04data\x18\x02 \x03(\v2\b.pb.UserR\x04data\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x03R\x05total2\x80\x04\n" +
 	"\vUserService\x12K\n" +
 	"\n" +
 	"CreateUser\x12\x15.pb.CreateUserRequest\x1a\x10.pb.UserResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/users\x12L\n" +
@@ -722,7 +1105,8 @@ const file_main_proto_rawDesc = "" +
 	"UpdateUser\x12\x15.pb.UpdateUserRequest\x1a\x10.pb.UserResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/v1/users/{user_id}\x12X\n" +
 	"\n" +
 	"DeleteUser\x12\x15.pb.DeleteUserRequest\x1a\x16.pb.DeleteUserResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/v1/users/{user_id}\x12K\n" +
-	"\tListUsers\x12\x14.pb.ListUsersRequest\x1a\x15.pb.ListUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/usersB?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3"
+	"\tListUsers\x12\x14.pb.PageQueryRequest\x1a\x15.pb.PageUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/users\x12X\n" +
+	"\vStreamUsers\x12\x16.pb.StreamQueryRequest\x1a\x17.pb.StreamUsersResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/users/streamB?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3"
 
 var (
 	file_main_proto_rawDescOnce sync.Once
@@ -738,44 +1122,93 @@ func file_main_proto_rawDescGZIP() []byte {
 
 var file_main_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_main_proto_goTypes = []any{
-	(*Request)(nil),               // 0: pb.Request
-	(*Response)(nil),              // 1: pb.Response
-	(*User)(nil),                  // 2: pb.User
-	(*CreateUserRequest)(nil),     // 3: pb.CreateUserRequest
-	(*GetUserRequest)(nil),        // 4: pb.GetUserRequest
-	(*UpdateUserRequest)(nil),     // 5: pb.UpdateUserRequest
-	(*DeleteUserRequest)(nil),     // 6: pb.DeleteUserRequest
-	(*UserResponse)(nil),          // 7: pb.UserResponse
-	(*DeleteUserResponse)(nil),    // 8: pb.DeleteUserResponse
-	(*ListUsersRequest)(nil),      // 9: pb.ListUsersRequest
-	(*ListUsersResponse)(nil),     // 10: pb.ListUsersResponse
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*User)(nil),                   // 0: pb.User
+	(*CreateUserRequest)(nil),      // 1: pb.CreateUserRequest
+	(*GetUserRequest)(nil),         // 2: pb.GetUserRequest
+	(*UpdateUserRequest)(nil),      // 3: pb.UpdateUserRequest
+	(*DeleteUserRequest)(nil),      // 4: pb.DeleteUserRequest
+	(*UserResponse)(nil),           // 5: pb.UserResponse
+	(*DeleteUserResponse)(nil),     // 6: pb.DeleteUserResponse
+	(*PageQueryRequest)(nil),       // 7: pb.PageQueryRequest
+	(*PageUsersResponse)(nil),      // 8: pb.PageUsersResponse
+	(*StreamQueryRequest)(nil),     // 9: pb.StreamQueryRequest
+	(*StreamUsersResponse)(nil),    // 10: pb.StreamUsersResponse
+	(*timestamppb.Timestamp)(nil),  // 11: google.protobuf.Timestamp
+	(*wrapperspb.Int32Value)(nil),  // 12: google.protobuf.Int32Value
+	(*wrapperspb.BoolValue)(nil),   // 13: google.protobuf.BoolValue
+	(*wrapperspb.StringValue)(nil), // 14: google.protobuf.StringValue
+	(*wrapperspb.Int64Value)(nil),  // 15: google.protobuf.Int64Value
+	(*wrapperspb.DoubleValue)(nil), // 16: google.protobuf.DoubleValue
+	(*wrapperspb.FloatValue)(nil),  // 17: google.protobuf.FloatValue
+	(*wrapperspb.UInt32Value)(nil), // 18: google.protobuf.UInt32Value
+	(*wrapperspb.UInt64Value)(nil), // 19: google.protobuf.UInt64Value
+	(*wrapperspb.BytesValue)(nil),  // 20: google.protobuf.BytesValue
 }
 var file_main_proto_depIdxs = []int32{
-	11, // 0: pb.Request.created_at:type_name -> google.protobuf.Timestamp
-	11, // 1: pb.User.created_at:type_name -> google.protobuf.Timestamp
-	11, // 2: pb.User.updated_at:type_name -> google.protobuf.Timestamp
-	2,  // 3: pb.UserResponse.user:type_name -> pb.User
-	2,  // 4: pb.ListUsersResponse.users:type_name -> pb.User
-	0,  // 5: pb.Say.Hello:input_type -> pb.Request
-	0,  // 6: pb.Say.HelloStream:input_type -> pb.Request
-	3,  // 7: pb.UserService.CreateUser:input_type -> pb.CreateUserRequest
-	4,  // 8: pb.UserService.GetUser:input_type -> pb.GetUserRequest
-	5,  // 9: pb.UserService.UpdateUser:input_type -> pb.UpdateUserRequest
-	6,  // 10: pb.UserService.DeleteUser:input_type -> pb.DeleteUserRequest
-	9,  // 11: pb.UserService.ListUsers:input_type -> pb.ListUsersRequest
-	1,  // 12: pb.Say.Hello:output_type -> pb.Response
-	1,  // 13: pb.Say.HelloStream:output_type -> pb.Response
-	7,  // 14: pb.UserService.CreateUser:output_type -> pb.UserResponse
-	7,  // 15: pb.UserService.GetUser:output_type -> pb.UserResponse
-	7,  // 16: pb.UserService.UpdateUser:output_type -> pb.UserResponse
-	8,  // 17: pb.UserService.DeleteUser:output_type -> pb.DeleteUserResponse
-	10, // 18: pb.UserService.ListUsers:output_type -> pb.ListUsersResponse
-	12, // [12:19] is the sub-list for method output_type
-	5,  // [5:12] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	11, // 0: pb.User.created_at:type_name -> google.protobuf.Timestamp
+	11, // 1: pb.User.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 2: pb.User.age:type_name -> google.protobuf.Int32Value
+	13, // 3: pb.User.is_active:type_name -> google.protobuf.BoolValue
+	13, // 4: pb.User.is_verified:type_name -> google.protobuf.BoolValue
+	13, // 5: pb.User.is_premium:type_name -> google.protobuf.BoolValue
+	14, // 6: pb.User.phone_number:type_name -> google.protobuf.StringValue
+	14, // 7: pb.User.address:type_name -> google.protobuf.StringValue
+	14, // 8: pb.User.bio:type_name -> google.protobuf.StringValue
+	15, // 9: pb.User.referrer_id:type_name -> google.protobuf.Int64Value
+	15, // 10: pb.User.login_count:type_name -> google.protobuf.Int64Value
+	16, // 11: pb.User.account_balance:type_name -> google.protobuf.DoubleValue
+	16, // 12: pb.User.rating:type_name -> google.protobuf.DoubleValue
+	17, // 13: pb.User.discount_rate:type_name -> google.protobuf.FloatValue
+	18, // 14: pb.User.failed_login_attempts:type_name -> google.protobuf.UInt32Value
+	19, // 15: pb.User.total_spent:type_name -> google.protobuf.UInt64Value
+	20, // 16: pb.User.profile_picture:type_name -> google.protobuf.BytesValue
+	20, // 17: pb.User.public_key:type_name -> google.protobuf.BytesValue
+	11, // 18: pb.User.last_login_at:type_name -> google.protobuf.Timestamp
+	11, // 19: pb.User.email_verified_at:type_name -> google.protobuf.Timestamp
+	11, // 20: pb.User.premium_expires_at:type_name -> google.protobuf.Timestamp
+	12, // 21: pb.CreateUserRequest.age:type_name -> google.protobuf.Int32Value
+	13, // 22: pb.CreateUserRequest.is_premium:type_name -> google.protobuf.BoolValue
+	14, // 23: pb.CreateUserRequest.phone_number:type_name -> google.protobuf.StringValue
+	14, // 24: pb.CreateUserRequest.address:type_name -> google.protobuf.StringValue
+	14, // 25: pb.CreateUserRequest.bio:type_name -> google.protobuf.StringValue
+	15, // 26: pb.CreateUserRequest.referrer_id:type_name -> google.protobuf.Int64Value
+	16, // 27: pb.CreateUserRequest.account_balance:type_name -> google.protobuf.DoubleValue
+	17, // 28: pb.CreateUserRequest.discount_rate:type_name -> google.protobuf.FloatValue
+	20, // 29: pb.CreateUserRequest.profile_picture:type_name -> google.protobuf.BytesValue
+	14, // 30: pb.UpdateUserRequest.name:type_name -> google.protobuf.StringValue
+	14, // 31: pb.UpdateUserRequest.email:type_name -> google.protobuf.StringValue
+	12, // 32: pb.UpdateUserRequest.age:type_name -> google.protobuf.Int32Value
+	13, // 33: pb.UpdateUserRequest.is_active:type_name -> google.protobuf.BoolValue
+	13, // 34: pb.UpdateUserRequest.is_verified:type_name -> google.protobuf.BoolValue
+	13, // 35: pb.UpdateUserRequest.is_premium:type_name -> google.protobuf.BoolValue
+	14, // 36: pb.UpdateUserRequest.phone_number:type_name -> google.protobuf.StringValue
+	14, // 37: pb.UpdateUserRequest.address:type_name -> google.protobuf.StringValue
+	14, // 38: pb.UpdateUserRequest.bio:type_name -> google.protobuf.StringValue
+	15, // 39: pb.UpdateUserRequest.referrer_id:type_name -> google.protobuf.Int64Value
+	16, // 40: pb.UpdateUserRequest.account_balance:type_name -> google.protobuf.DoubleValue
+	16, // 41: pb.UpdateUserRequest.rating:type_name -> google.protobuf.DoubleValue
+	17, // 42: pb.UpdateUserRequest.discount_rate:type_name -> google.protobuf.FloatValue
+	20, // 43: pb.UpdateUserRequest.profile_picture:type_name -> google.protobuf.BytesValue
+	0,  // 44: pb.UserResponse.user:type_name -> pb.User
+	0,  // 45: pb.PageUsersResponse.data:type_name -> pb.User
+	0,  // 46: pb.StreamUsersResponse.data:type_name -> pb.User
+	1,  // 47: pb.UserService.CreateUser:input_type -> pb.CreateUserRequest
+	2,  // 48: pb.UserService.GetUser:input_type -> pb.GetUserRequest
+	3,  // 49: pb.UserService.UpdateUser:input_type -> pb.UpdateUserRequest
+	4,  // 50: pb.UserService.DeleteUser:input_type -> pb.DeleteUserRequest
+	7,  // 51: pb.UserService.ListUsers:input_type -> pb.PageQueryRequest
+	9,  // 52: pb.UserService.StreamUsers:input_type -> pb.StreamQueryRequest
+	5,  // 53: pb.UserService.CreateUser:output_type -> pb.UserResponse
+	5,  // 54: pb.UserService.GetUser:output_type -> pb.UserResponse
+	5,  // 55: pb.UserService.UpdateUser:output_type -> pb.UserResponse
+	6,  // 56: pb.UserService.DeleteUser:output_type -> pb.DeleteUserResponse
+	8,  // 57: pb.UserService.ListUsers:output_type -> pb.PageUsersResponse
+	10, // 58: pb.UserService.StreamUsers:output_type -> pb.StreamUsersResponse
+	53, // [53:59] is the sub-list for method output_type
+	47, // [47:53] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_main_proto_init() }
@@ -791,7 +1224,7 @@ func file_main_proto_init() {
 			NumEnums:      0,
 			NumMessages:   11,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   1,
 		},
 		GoTypes:           file_main_proto_goTypes,
 		DependencyIndexes: file_main_proto_depIdxs,

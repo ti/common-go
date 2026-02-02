@@ -25,9 +25,10 @@ _sym_db = _symbol_database.Default()
 from validate import validate_pb2 as validate_dot_validate__pb2
 from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
+from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nmain.proto\x12\x02pb\x1a\x17validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"a\n\x07Request\x12\x1b\n\x04name\x18\x01 \x01(\tB\x07\xfa\x42\x04r\x02( R\x04name\x12\x39\n\ncreated_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1c\n\x08Response\x12\x10\n\x03msg\x18\x01 \x01(\tR\x03msg\"\xf4\x01\n\x04User\x12\x17\n\x07user_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n\x04name\x18\x02 \x01(\tB\t\xfa\x42\x06r\x04 \x01(dR\x04name\x12 \n\x05\x65mail\x18\x03 \x01(\tB\n\xfa\x42\x07r\x05(\xff\x01`\x01R\x05\x65mail\x12\x1c\n\x03\x61ge\x18\x04 \x01(\x05\x42\n\xfa\x42\x07\x1a\x05\x18\x96\x01(\x00R\x03\x61ge\x12\x39\n\ncreated_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x39\n\nupdated_at\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tupdatedAt\"r\n\x11\x43reateUserRequest\x12\x1d\n\x04name\x18\x01 \x01(\tB\t\xfa\x42\x06r\x04 \x01(dR\x04name\x12 \n\x05\x65mail\x18\x02 \x01(\tB\n\xfa\x42\x07r\x05(\xff\x01`\x01R\x05\x65mail\x12\x1c\n\x03\x61ge\x18\x03 \x01(\x05\x42\n\xfa\x42\x07\x1a\x05\x18\x96\x01(\x00R\x03\x61ge\"2\n\x0eGetUserRequest\x12 \n\x07user_id\x18\x01 \x01(\x03\x42\x07\xfa\x42\x04\"\x02 \x00R\x06userId\"\x94\x01\n\x11UpdateUserRequest\x12 \n\x07user_id\x18\x01 \x01(\x03\x42\x07\xfa\x42\x04\"\x02 \x00R\x06userId\x12\x1d\n\x04name\x18\x02 \x01(\tB\t\xfa\x42\x06r\x04 \x01(dR\x04name\x12 \n\x05\x65mail\x18\x03 \x01(\tB\n\xfa\x42\x07r\x05(\xff\x01`\x01R\x05\x65mail\x12\x1c\n\x03\x61ge\x18\x04 \x01(\x05\x42\n\xfa\x42\x07\x1a\x05\x18\x96\x01(\x00R\x03\x61ge\"5\n\x11\x44\x65leteUserRequest\x12 \n\x07user_id\x18\x01 \x01(\x03\x42\x07\xfa\x42\x04\"\x02 \x00R\x06userId\",\n\x0cUserResponse\x12\x1c\n\x04user\x18\x01 \x01(\x0b\x32\x08.pb.UserR\x04user\"H\n\x12\x44\x65leteUserResponse\x12\x18\n\x07success\x18\x01 \x01(\x08R\x07success\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message\"p\n\x10ListUsersRequest\x12\x1b\n\x04page\x18\x01 \x01(\x05\x42\x07\xfa\x42\x04\x1a\x02(\x01R\x04page\x12&\n\tpage_size\x18\x02 \x01(\x05\x42\t\xfa\x42\x06\x1a\x04\x18\x64(\x01R\x08pageSize\x12\x17\n\x07sort_by\x18\x03 \x01(\tR\x06sortBy\"z\n\x11ListUsersResponse\x12\x1e\n\x05users\x18\x01 \x03(\x0b\x32\x08.pb.UserR\x05users\x12\x14\n\x05total\x18\x02 \x01(\x03R\x05total\x12\x12\n\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n\tpage_size\x18\x04 \x01(\x05R\x08pageSize2\x86\x01\n\x03Say\x12?\n\x05Hello\x12\x0b.pb.Request\x1a\x0c.pb.Response\"\x1b\x82\xd3\xe4\x93\x02\x15\"\x10/v1/hello/{name}:\x01*\x12>\n\x0bHelloStream\x12\x0b.pb.Request\x1a\x0c.pb.Response\"\x12\x82\xd3\xe4\x93\x02\x0c\"\n/v1/stream0\x01\x32\xa6\x03\n\x0bUserService\x12K\n\nCreateUser\x12\x15.pb.CreateUserRequest\x1a\x10.pb.UserResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\"\t/v1/users:\x01*\x12L\n\x07GetUser\x12\x12.pb.GetUserRequest\x1a\x10.pb.UserResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/users/{user_id}\x12U\n\nUpdateUser\x12\x15.pb.UpdateUserRequest\x1a\x10.pb.UserResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x1a\x13/v1/users/{user_id}:\x01*\x12X\n\nDeleteUser\x12\x15.pb.DeleteUserRequest\x1a\x16.pb.DeleteUserResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/v1/users/{user_id}\x12K\n\tListUsers\x12\x14.pb.ListUsersRequest\x1a\x15.pb.ListUsersResponse\"\x11\x82\xd3\xe4\x93\x02\x0b\x12\t/v1/usersB?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nmain.proto\x12\x02pb\x1a\x17validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\xa7\x0b\n\x04User\x12\x17\n\x07user_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n\x04name\x18\x02 \x01(\tB\t\xfa\x42\x06r\x04 \x01(dR\x04name\x12 \n\x05\x65mail\x18\x03 \x01(\tB\n\xfa\x42\x07r\x05(\xff\x01`\x01R\x05\x65mail\x12\x39\n\ncreated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x39\n\nupdated_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x37\n\x03\x61ge\x18\x06 \x01(\x0b\x32\x1b.google.protobuf.Int32ValueB\x08\xfa\x42\x05\x8a\x01\x02\x10\x00R\x03\x61ge\x12\x37\n\tis_active\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\x08isActive\x12;\n\x0bis_verified\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\nisVerified\x12\x39\n\nis_premium\x18\t \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\tisPremium\x12I\n\x0cphone_number\x18\n \x01(\x0b\x32\x1c.google.protobuf.StringValueB\x08\xfa\x42\x05\x8a\x01\x02\x10\x00R\x0bphoneNumber\x12\x36\n\x07\x61\x64\x64ress\x18\x0b \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x07\x61\x64\x64ress\x12\x38\n\x03\x62io\x18\x0c \x01(\x0b\x32\x1c.google.protobuf.StringValueB\x08\xfa\x42\x05\x8a\x01\x02\x10\x00R\x03\x62io\x12<\n\x0breferrer_id\x18\r \x01(\x0b\x32\x1b.google.protobuf.Int64ValueR\nreferrerId\x12<\n\x0blogin_count\x18\x0e \x01(\x0b\x32\x1b.google.protobuf.Int64ValueR\nloginCount\x12\x45\n\x0f\x61\x63\x63ount_balance\x18\x0f \x01(\x0b\x32\x1c.google.protobuf.DoubleValueR\x0e\x61\x63\x63ountBalance\x12>\n\x06rating\x18\x10 \x01(\x0b\x32\x1c.google.protobuf.DoubleValueB\x08\xfa\x42\x05\x8a\x01\x02\x10\x00R\x06rating\x12@\n\rdiscount_rate\x18\x11 \x01(\x0b\x32\x1b.google.protobuf.FloatValueR\x0c\x64iscountRate\x12P\n\x15\x66\x61iled_login_attempts\x18\x12 \x01(\x0b\x32\x1c.google.protobuf.UInt32ValueR\x13\x66\x61iledLoginAttempts\x12=\n\x0btotal_spent\x18\x13 \x01(\x0b\x32\x1c.google.protobuf.UInt64ValueR\ntotalSpent\x12\x44\n\x0fprofile_picture\x18\x14 \x01(\x0b\x32\x1b.google.protobuf.BytesValueR\x0eprofilePicture\x12:\n\npublic_key\x18\x15 \x01(\x0b\x32\x1b.google.protobuf.BytesValueR\tpublicKey\x12>\n\rlast_login_at\x18\x16 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x0blastLoginAt\x12\x46\n\x11\x65mail_verified_at\x18\x17 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x0f\x65mailVerifiedAt\x12H\n\x12premium_expires_at\x18\x18 \x01(\x0b\x32\x1a.google.protobuf.TimestampR\x10premiumExpiresAt\"\xf4\x04\n\x11\x43reateUserRequest\x12\x1d\n\x04name\x18\x01 \x01(\tB\t\xfa\x42\x06r\x04 \x01(dR\x04name\x12 \n\x05\x65mail\x18\x02 \x01(\tB\n\xfa\x42\x07r\x05(\xff\x01`\x01R\x05\x65mail\x12-\n\x03\x61ge\x18\x03 \x01(\x0b\x32\x1b.google.protobuf.Int32ValueR\x03\x61ge\x12\x39\n\nis_premium\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\tisPremium\x12?\n\x0cphone_number\x18\x05 \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x0bphoneNumber\x12\x36\n\x07\x61\x64\x64ress\x18\x06 \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x07\x61\x64\x64ress\x12.\n\x03\x62io\x18\x07 \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x03\x62io\x12<\n\x0breferrer_id\x18\x08 \x01(\x0b\x32\x1b.google.protobuf.Int64ValueR\nreferrerId\x12\x45\n\x0f\x61\x63\x63ount_balance\x18\t \x01(\x0b\x32\x1c.google.protobuf.DoubleValueR\x0e\x61\x63\x63ountBalance\x12@\n\rdiscount_rate\x18\n \x01(\x0b\x32\x1b.google.protobuf.FloatValueR\x0c\x64iscountRate\x12\x44\n\x0fprofile_picture\x18\x0b \x01(\x0b\x32\x1b.google.protobuf.BytesValueR\x0eprofilePicture\"2\n\x0eGetUserRequest\x12 \n\x07user_id\x18\x01 \x01(\x03\x42\x07\xfa\x42\x04\"\x02 \x00R\x06userId\"\xe7\x06\n\x11UpdateUserRequest\x12 \n\x07user_id\x18\x01 \x01(\x03\x42\x07\xfa\x42\x04\"\x02 \x00R\x06userId\x12\x30\n\x04name\x18\x02 \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x04name\x12\x32\n\x05\x65mail\x18\x03 \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x05\x65mail\x12-\n\x03\x61ge\x18\x04 \x01(\x0b\x32\x1b.google.protobuf.Int32ValueR\x03\x61ge\x12\x37\n\tis_active\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\x08isActive\x12;\n\x0bis_verified\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\nisVerified\x12\x39\n\nis_premium\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.BoolValueR\tisPremium\x12?\n\x0cphone_number\x18\x08 \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x0bphoneNumber\x12\x36\n\x07\x61\x64\x64ress\x18\t \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x07\x61\x64\x64ress\x12.\n\x03\x62io\x18\n \x01(\x0b\x32\x1c.google.protobuf.StringValueR\x03\x62io\x12<\n\x0breferrer_id\x18\x0b \x01(\x0b\x32\x1b.google.protobuf.Int64ValueR\nreferrerId\x12\x45\n\x0f\x61\x63\x63ount_balance\x18\x0c \x01(\x0b\x32\x1c.google.protobuf.DoubleValueR\x0e\x61\x63\x63ountBalance\x12\x34\n\x06rating\x18\r \x01(\x0b\x32\x1c.google.protobuf.DoubleValueR\x06rating\x12@\n\rdiscount_rate\x18\x0e \x01(\x0b\x32\x1b.google.protobuf.FloatValueR\x0c\x64iscountRate\x12\x44\n\x0fprofile_picture\x18\x0f \x01(\x0b\x32\x1b.google.protobuf.BytesValueR\x0eprofilePicture\"5\n\x11\x44\x65leteUserRequest\x12 \n\x07user_id\x18\x01 \x01(\x03\x42\x07\xfa\x42\x04\"\x02 \x00R\x06userId\",\n\x0cUserResponse\x12\x1c\n\x04user\x18\x01 \x01(\x0b\x32\x08.pb.UserR\x04user\"H\n\x12\x44\x65leteUserResponse\x12\x18\n\x07success\x18\x01 \x01(\x08R\x07success\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message\"h\n\x10PageQueryRequest\x12\x12\n\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06select\x18\x03 \x03(\tR\x06select\x12\x12\n\x04sort\x18\x04 \x03(\tR\x04sort\"G\n\x11PageUsersResponse\x12\x1c\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x08.pb.UserR\x04\x64\x61ta\x12\x14\n\x05total\x18\x02 \x01(\x03R\x05total\"\x7f\n\x12StreamQueryRequest\x12\x1d\n\npage_token\x18\x01 \x01(\tR\tpageToken\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06select\x18\x03 \x03(\tR\x06select\x12\x1c\n\tascending\x18\x04 \x01(\x08R\tascending\"h\n\x13StreamUsersResponse\x12\x1d\n\npage_token\x18\x01 \x01(\tR\tpageToken\x12\x1c\n\x04\x64\x61ta\x18\x02 \x03(\x0b\x32\x08.pb.UserR\x04\x64\x61ta\x12\x14\n\x05total\x18\x03 \x01(\x03R\x05total2\x80\x04\n\x0bUserService\x12K\n\nCreateUser\x12\x15.pb.CreateUserRequest\x1a\x10.pb.UserResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\"\t/v1/users:\x01*\x12L\n\x07GetUser\x12\x12.pb.GetUserRequest\x1a\x10.pb.UserResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/users/{user_id}\x12U\n\nUpdateUser\x12\x15.pb.UpdateUserRequest\x1a\x10.pb.UserResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x1a\x13/v1/users/{user_id}:\x01*\x12X\n\nDeleteUser\x12\x15.pb.DeleteUserRequest\x1a\x16.pb.DeleteUserResponse\"\x1b\x82\xd3\xe4\x93\x02\x15*\x13/v1/users/{user_id}\x12K\n\tListUsers\x12\x14.pb.PageQueryRequest\x1a\x15.pb.PageUsersResponse\"\x11\x82\xd3\xe4\x93\x02\x0b\x12\t/v1/users\x12X\n\x0bStreamUsers\x12\x16.pb.StreamQueryRequest\x1a\x17.pb.StreamUsersResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/users/streamB?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,40 +36,28 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'main_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pb'
-  _globals['_REQUEST'].fields_by_name['name']._loaded_options = None
-  _globals['_REQUEST'].fields_by_name['name']._serialized_options = b'\372B\004r\002( '
   _globals['_USER'].fields_by_name['name']._loaded_options = None
   _globals['_USER'].fields_by_name['name']._serialized_options = b'\372B\006r\004 \001(d'
   _globals['_USER'].fields_by_name['email']._loaded_options = None
   _globals['_USER'].fields_by_name['email']._serialized_options = b'\372B\007r\005(\377\001`\001'
   _globals['_USER'].fields_by_name['age']._loaded_options = None
-  _globals['_USER'].fields_by_name['age']._serialized_options = b'\372B\007\032\005\030\226\001(\000'
+  _globals['_USER'].fields_by_name['age']._serialized_options = b'\372B\005\212\001\002\020\000'
+  _globals['_USER'].fields_by_name['phone_number']._loaded_options = None
+  _globals['_USER'].fields_by_name['phone_number']._serialized_options = b'\372B\005\212\001\002\020\000'
+  _globals['_USER'].fields_by_name['bio']._loaded_options = None
+  _globals['_USER'].fields_by_name['bio']._serialized_options = b'\372B\005\212\001\002\020\000'
+  _globals['_USER'].fields_by_name['rating']._loaded_options = None
+  _globals['_USER'].fields_by_name['rating']._serialized_options = b'\372B\005\212\001\002\020\000'
   _globals['_CREATEUSERREQUEST'].fields_by_name['name']._loaded_options = None
   _globals['_CREATEUSERREQUEST'].fields_by_name['name']._serialized_options = b'\372B\006r\004 \001(d'
   _globals['_CREATEUSERREQUEST'].fields_by_name['email']._loaded_options = None
   _globals['_CREATEUSERREQUEST'].fields_by_name['email']._serialized_options = b'\372B\007r\005(\377\001`\001'
-  _globals['_CREATEUSERREQUEST'].fields_by_name['age']._loaded_options = None
-  _globals['_CREATEUSERREQUEST'].fields_by_name['age']._serialized_options = b'\372B\007\032\005\030\226\001(\000'
   _globals['_GETUSERREQUEST'].fields_by_name['user_id']._loaded_options = None
   _globals['_GETUSERREQUEST'].fields_by_name['user_id']._serialized_options = b'\372B\004\"\002 \000'
   _globals['_UPDATEUSERREQUEST'].fields_by_name['user_id']._loaded_options = None
   _globals['_UPDATEUSERREQUEST'].fields_by_name['user_id']._serialized_options = b'\372B\004\"\002 \000'
-  _globals['_UPDATEUSERREQUEST'].fields_by_name['name']._loaded_options = None
-  _globals['_UPDATEUSERREQUEST'].fields_by_name['name']._serialized_options = b'\372B\006r\004 \001(d'
-  _globals['_UPDATEUSERREQUEST'].fields_by_name['email']._loaded_options = None
-  _globals['_UPDATEUSERREQUEST'].fields_by_name['email']._serialized_options = b'\372B\007r\005(\377\001`\001'
-  _globals['_UPDATEUSERREQUEST'].fields_by_name['age']._loaded_options = None
-  _globals['_UPDATEUSERREQUEST'].fields_by_name['age']._serialized_options = b'\372B\007\032\005\030\226\001(\000'
   _globals['_DELETEUSERREQUEST'].fields_by_name['user_id']._loaded_options = None
   _globals['_DELETEUSERREQUEST'].fields_by_name['user_id']._serialized_options = b'\372B\004\"\002 \000'
-  _globals['_LISTUSERSREQUEST'].fields_by_name['page']._loaded_options = None
-  _globals['_LISTUSERSREQUEST'].fields_by_name['page']._serialized_options = b'\372B\004\032\002(\001'
-  _globals['_LISTUSERSREQUEST'].fields_by_name['page_size']._loaded_options = None
-  _globals['_LISTUSERSREQUEST'].fields_by_name['page_size']._serialized_options = b'\372B\006\032\004\030d(\001'
-  _globals['_SAY'].methods_by_name['Hello']._loaded_options = None
-  _globals['_SAY'].methods_by_name['Hello']._serialized_options = b'\202\323\344\223\002\025\"\020/v1/hello/{name}:\001*'
-  _globals['_SAY'].methods_by_name['HelloStream']._loaded_options = None
-  _globals['_SAY'].methods_by_name['HelloStream']._serialized_options = b'\202\323\344\223\002\014\"\n/v1/stream'
   _globals['_USERSERVICE'].methods_by_name['CreateUser']._loaded_options = None
   _globals['_USERSERVICE'].methods_by_name['CreateUser']._serialized_options = b'\202\323\344\223\002\016\"\t/v1/users:\001*'
   _globals['_USERSERVICE'].methods_by_name['GetUser']._loaded_options = None
@@ -79,30 +68,30 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_USERSERVICE'].methods_by_name['DeleteUser']._serialized_options = b'\202\323\344\223\002\025*\023/v1/users/{user_id}'
   _globals['_USERSERVICE'].methods_by_name['ListUsers']._loaded_options = None
   _globals['_USERSERVICE'].methods_by_name['ListUsers']._serialized_options = b'\202\323\344\223\002\013\022\t/v1/users'
-  _globals['_REQUEST']._serialized_start=106
-  _globals['_REQUEST']._serialized_end=203
-  _globals['_RESPONSE']._serialized_start=205
-  _globals['_RESPONSE']._serialized_end=233
-  _globals['_USER']._serialized_start=236
-  _globals['_USER']._serialized_end=480
-  _globals['_CREATEUSERREQUEST']._serialized_start=482
-  _globals['_CREATEUSERREQUEST']._serialized_end=596
-  _globals['_GETUSERREQUEST']._serialized_start=598
-  _globals['_GETUSERREQUEST']._serialized_end=648
-  _globals['_UPDATEUSERREQUEST']._serialized_start=651
-  _globals['_UPDATEUSERREQUEST']._serialized_end=799
-  _globals['_DELETEUSERREQUEST']._serialized_start=801
-  _globals['_DELETEUSERREQUEST']._serialized_end=854
-  _globals['_USERRESPONSE']._serialized_start=856
-  _globals['_USERRESPONSE']._serialized_end=900
-  _globals['_DELETEUSERRESPONSE']._serialized_start=902
-  _globals['_DELETEUSERRESPONSE']._serialized_end=974
-  _globals['_LISTUSERSREQUEST']._serialized_start=976
-  _globals['_LISTUSERSREQUEST']._serialized_end=1088
-  _globals['_LISTUSERSRESPONSE']._serialized_start=1090
-  _globals['_LISTUSERSRESPONSE']._serialized_end=1212
-  _globals['_SAY']._serialized_start=1215
-  _globals['_SAY']._serialized_end=1349
-  _globals['_USERSERVICE']._serialized_start=1352
-  _globals['_USERSERVICE']._serialized_end=1774
+  _globals['_USERSERVICE'].methods_by_name['StreamUsers']._loaded_options = None
+  _globals['_USERSERVICE'].methods_by_name['StreamUsers']._serialized_options = b'\202\323\344\223\002\022\022\020/v1/users/stream'
+  _globals['_USER']._serialized_start=139
+  _globals['_USER']._serialized_end=1586
+  _globals['_CREATEUSERREQUEST']._serialized_start=1589
+  _globals['_CREATEUSERREQUEST']._serialized_end=2217
+  _globals['_GETUSERREQUEST']._serialized_start=2219
+  _globals['_GETUSERREQUEST']._serialized_end=2269
+  _globals['_UPDATEUSERREQUEST']._serialized_start=2272
+  _globals['_UPDATEUSERREQUEST']._serialized_end=3143
+  _globals['_DELETEUSERREQUEST']._serialized_start=3145
+  _globals['_DELETEUSERREQUEST']._serialized_end=3198
+  _globals['_USERRESPONSE']._serialized_start=3200
+  _globals['_USERRESPONSE']._serialized_end=3244
+  _globals['_DELETEUSERRESPONSE']._serialized_start=3246
+  _globals['_DELETEUSERRESPONSE']._serialized_end=3318
+  _globals['_PAGEQUERYREQUEST']._serialized_start=3320
+  _globals['_PAGEQUERYREQUEST']._serialized_end=3424
+  _globals['_PAGEUSERSRESPONSE']._serialized_start=3426
+  _globals['_PAGEUSERSRESPONSE']._serialized_end=3497
+  _globals['_STREAMQUERYREQUEST']._serialized_start=3499
+  _globals['_STREAMQUERYREQUEST']._serialized_end=3626
+  _globals['_STREAMUSERSRESPONSE']._serialized_start=3628
+  _globals['_STREAMUSERSRESPONSE']._serialized_end=3732
+  _globals['_USERSERVICE']._serialized_start=3735
+  _globals['_USERSERVICE']._serialized_end=4247
 # @@protoc_insertion_point(module_scope)

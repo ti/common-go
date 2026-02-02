@@ -5,126 +5,9 @@ import grpc
 import main_pb2 as main__pb2
 
 
-class SayStub(object):
-    """Test the Say service
-    """
-
-    def __init__(self, channel):
-        """Constructor.
-
-        Args:
-            channel: A grpc.Channel.
-        """
-        self.Hello = channel.unary_unary(
-                '/pb.Say/Hello',
-                request_serializer=main__pb2.Request.SerializeToString,
-                response_deserializer=main__pb2.Response.FromString,
-                _registered_method=True)
-        self.HelloStream = channel.unary_stream(
-                '/pb.Say/HelloStream',
-                request_serializer=main__pb2.Request.SerializeToString,
-                response_deserializer=main__pb2.Response.FromString,
-                _registered_method=True)
-
-
-class SayServicer(object):
-    """Test the Say service
-    """
-
-    def Hello(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def HelloStream(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-
-def add_SayServicer_to_server(servicer, server):
-    rpc_method_handlers = {
-            'Hello': grpc.unary_unary_rpc_method_handler(
-                    servicer.Hello,
-                    request_deserializer=main__pb2.Request.FromString,
-                    response_serializer=main__pb2.Response.SerializeToString,
-            ),
-            'HelloStream': grpc.unary_stream_rpc_method_handler(
-                    servicer.HelloStream,
-                    request_deserializer=main__pb2.Request.FromString,
-                    response_serializer=main__pb2.Response.SerializeToString,
-            ),
-    }
-    generic_handler = grpc.method_handlers_generic_handler(
-            'pb.Say', rpc_method_handlers)
-    server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('pb.Say', rpc_method_handlers)
-
-
- # This class is part of an EXPERIMENTAL API.
-class Say(object):
-    """Test the Say service
-    """
-
-    @staticmethod
-    def Hello(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/pb.Say/Hello',
-            main__pb2.Request.SerializeToString,
-            main__pb2.Response.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def HelloStream(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(
-            request,
-            target,
-            '/pb.Say/HelloStream',
-            main__pb2.Request.SerializeToString,
-            main__pb2.Response.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-
 class UserServiceStub(object):
-    """User service - CRUD operations
+    """User service - Comprehensive CRUD operations demonstrating all protobuf types
+    This service demonstrates proper proto definition without using 'any' or 'struct' types
     """
 
     def __init__(self, channel):
@@ -155,13 +38,19 @@ class UserServiceStub(object):
                 _registered_method=True)
         self.ListUsers = channel.unary_unary(
                 '/pb.UserService/ListUsers',
-                request_serializer=main__pb2.ListUsersRequest.SerializeToString,
-                response_deserializer=main__pb2.ListUsersResponse.FromString,
+                request_serializer=main__pb2.PageQueryRequest.SerializeToString,
+                response_deserializer=main__pb2.PageUsersResponse.FromString,
+                _registered_method=True)
+        self.StreamUsers = channel.unary_unary(
+                '/pb.UserService/StreamUsers',
+                request_serializer=main__pb2.StreamQueryRequest.SerializeToString,
+                response_deserializer=main__pb2.StreamUsersResponse.FromString,
                 _registered_method=True)
 
 
 class UserServiceServicer(object):
-    """User service - CRUD operations
+    """User service - Comprehensive CRUD operations demonstrating all protobuf types
+    This service demonstrates proper proto definition without using 'any' or 'struct' types
     """
 
     def CreateUser(self, request, context):
@@ -193,7 +82,14 @@ class UserServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def ListUsers(self, request, context):
-        """List users with pagination
+        """List users with page-based pagination
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StreamUsers(self, request, context):
+        """Stream users with cursor-based pagination
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -224,8 +120,13 @@ def add_UserServiceServicer_to_server(servicer, server):
             ),
             'ListUsers': grpc.unary_unary_rpc_method_handler(
                     servicer.ListUsers,
-                    request_deserializer=main__pb2.ListUsersRequest.FromString,
-                    response_serializer=main__pb2.ListUsersResponse.SerializeToString,
+                    request_deserializer=main__pb2.PageQueryRequest.FromString,
+                    response_serializer=main__pb2.PageUsersResponse.SerializeToString,
+            ),
+            'StreamUsers': grpc.unary_unary_rpc_method_handler(
+                    servicer.StreamUsers,
+                    request_deserializer=main__pb2.StreamQueryRequest.FromString,
+                    response_serializer=main__pb2.StreamUsersResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -236,7 +137,8 @@ def add_UserServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class UserService(object):
-    """User service - CRUD operations
+    """User service - Comprehensive CRUD operations demonstrating all protobuf types
+    This service demonstrates proper proto definition without using 'any' or 'struct' types
     """
 
     @staticmethod
@@ -362,8 +264,35 @@ class UserService(object):
             request,
             target,
             '/pb.UserService/ListUsers',
-            main__pb2.ListUsersRequest.SerializeToString,
-            main__pb2.ListUsersResponse.FromString,
+            main__pb2.PageQueryRequest.SerializeToString,
+            main__pb2.PageUsersResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamUsers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pb.UserService/StreamUsers',
+            main__pb2.StreamQueryRequest.SerializeToString,
+            main__pb2.StreamUsersResponse.FromString,
             options,
             channel_credentials,
             insecure,

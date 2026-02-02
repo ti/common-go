@@ -4,7 +4,6 @@ import (
 	"github.com/ti/common-go/dependencies"
 	"github.com/ti/common-go/dependencies/database"
 	dephttp "github.com/ti/common-go/dependencies/http"
-	depgrpc "github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto"
 )
 
 // Dependencies depend on the main structure
@@ -59,5 +58,4 @@ type Dependencies struct {
 	dependencies.Dependency
 	DB       database.Database `required:"false"`
 	DemoHTTP *dephttp.HTTP     `required:"false"`
-	DemoGRPC depgrpc.SayClient `required:"false"`
 }

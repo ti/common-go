@@ -19,166 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Say_Hello_FullMethodName       = "/pb.Say/Hello"
-	Say_HelloStream_FullMethodName = "/pb.Say/HelloStream"
-)
-
-// SayClient is the client API for Say service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// Test the Say service
-type SayClient interface {
-	Hello(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	HelloStream(ctx context.Context, in *Request, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Response], error)
-}
-
-type sayClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewSayClient(cc grpc.ClientConnInterface) SayClient {
-	return &sayClient{cc}
-}
-
-func (c *sayClient) Hello(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Response)
-	err := c.cc.Invoke(ctx, Say_Hello_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *sayClient) HelloStream(ctx context.Context, in *Request, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Response], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Say_ServiceDesc.Streams[0], Say_HelloStream_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[Request, Response]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Say_HelloStreamClient = grpc.ServerStreamingClient[Response]
-
-// SayServer is the server API for Say service.
-// All implementations must embed UnimplementedSayServer
-// for forward compatibility.
-//
-// Test the Say service
-type SayServer interface {
-	Hello(context.Context, *Request) (*Response, error)
-	HelloStream(*Request, grpc.ServerStreamingServer[Response]) error
-	mustEmbedUnimplementedSayServer()
-}
-
-// UnimplementedSayServer must be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedSayServer struct{}
-
-func (UnimplementedSayServer) Hello(context.Context, *Request) (*Response, error) {
-	return nil, status.Error(codes.Unimplemented, "method Hello not implemented")
-}
-func (UnimplementedSayServer) HelloStream(*Request, grpc.ServerStreamingServer[Response]) error {
-	return status.Error(codes.Unimplemented, "method HelloStream not implemented")
-}
-func (UnimplementedSayServer) mustEmbedUnimplementedSayServer() {}
-func (UnimplementedSayServer) testEmbeddedByValue()             {}
-
-// UnsafeSayServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to SayServer will
-// result in compilation errors.
-type UnsafeSayServer interface {
-	mustEmbedUnimplementedSayServer()
-}
-
-func RegisterSayServer(s grpc.ServiceRegistrar, srv SayServer) {
-	// If the following call panics, it indicates UnimplementedSayServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&Say_ServiceDesc, srv)
-}
-
-func _Say_Hello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SayServer).Hello(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Say_Hello_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SayServer).Hello(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Say_HelloStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Request)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(SayServer).HelloStream(m, &grpc.GenericServerStream[Request, Response]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Say_HelloStreamServer = grpc.ServerStreamingServer[Response]
-
-// Say_ServiceDesc is the grpc.ServiceDesc for Say service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var Say_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "pb.Say",
-	HandlerType: (*SayServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Hello",
-			Handler:    _Say_Hello_Handler,
-		},
-	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "HelloStream",
-			Handler:       _Say_HelloStream_Handler,
-			ServerStreams: true,
-		},
-	},
-	Metadata: "main.proto",
-}
-
-const (
-	UserService_CreateUser_FullMethodName = "/pb.UserService/CreateUser"
-	UserService_GetUser_FullMethodName    = "/pb.UserService/GetUser"
-	UserService_UpdateUser_FullMethodName = "/pb.UserService/UpdateUser"
-	UserService_DeleteUser_FullMethodName = "/pb.UserService/DeleteUser"
-	UserService_ListUsers_FullMethodName  = "/pb.UserService/ListUsers"
+	UserService_CreateUser_FullMethodName  = "/pb.UserService/CreateUser"
+	UserService_GetUser_FullMethodName     = "/pb.UserService/GetUser"
+	UserService_UpdateUser_FullMethodName  = "/pb.UserService/UpdateUser"
+	UserService_DeleteUser_FullMethodName  = "/pb.UserService/DeleteUser"
+	UserService_ListUsers_FullMethodName   = "/pb.UserService/ListUsers"
+	UserService_StreamUsers_FullMethodName = "/pb.UserService/StreamUsers"
 )
 
 // UserServiceClient is the client API for UserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// User service - CRUD operations
+// User service - Comprehensive CRUD operations demonstrating all protobuf types
+// This service demonstrates proper proto definition without using 'any' or 'struct' types
 type UserServiceClient interface {
 	// Create a new user
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*UserResponse, error)
@@ -188,8 +42,10 @@ type UserServiceClient interface {
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UserResponse, error)
 	// Delete user
 	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error)
-	// List users with pagination
-	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
+	// List users with page-based pagination
+	ListUsers(ctx context.Context, in *PageQueryRequest, opts ...grpc.CallOption) (*PageUsersResponse, error)
+	// Stream users with cursor-based pagination
+	StreamUsers(ctx context.Context, in *StreamQueryRequest, opts ...grpc.CallOption) (*StreamUsersResponse, error)
 }
 
 type userServiceClient struct {
@@ -240,10 +96,20 @@ func (c *userServiceClient) DeleteUser(ctx context.Context, in *DeleteUserReques
 	return out, nil
 }
 
-func (c *userServiceClient) ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error) {
+func (c *userServiceClient) ListUsers(ctx context.Context, in *PageQueryRequest, opts ...grpc.CallOption) (*PageUsersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListUsersResponse)
+	out := new(PageUsersResponse)
 	err := c.cc.Invoke(ctx, UserService_ListUsers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) StreamUsers(ctx context.Context, in *StreamQueryRequest, opts ...grpc.CallOption) (*StreamUsersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StreamUsersResponse)
+	err := c.cc.Invoke(ctx, UserService_StreamUsers_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +120,8 @@ func (c *userServiceClient) ListUsers(ctx context.Context, in *ListUsersRequest,
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
 //
-// User service - CRUD operations
+// User service - Comprehensive CRUD operations demonstrating all protobuf types
+// This service demonstrates proper proto definition without using 'any' or 'struct' types
 type UserServiceServer interface {
 	// Create a new user
 	CreateUser(context.Context, *CreateUserRequest) (*UserResponse, error)
@@ -264,8 +131,10 @@ type UserServiceServer interface {
 	UpdateUser(context.Context, *UpdateUserRequest) (*UserResponse, error)
 	// Delete user
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error)
-	// List users with pagination
-	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
+	// List users with page-based pagination
+	ListUsers(context.Context, *PageQueryRequest) (*PageUsersResponse, error)
+	// Stream users with cursor-based pagination
+	StreamUsers(context.Context, *StreamQueryRequest) (*StreamUsersResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -288,8 +157,11 @@ func (UnimplementedUserServiceServer) UpdateUser(context.Context, *UpdateUserReq
 func (UnimplementedUserServiceServer) DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteUser not implemented")
 }
-func (UnimplementedUserServiceServer) ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error) {
+func (UnimplementedUserServiceServer) ListUsers(context.Context, *PageQueryRequest) (*PageUsersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListUsers not implemented")
+}
+func (UnimplementedUserServiceServer) StreamUsers(context.Context, *StreamQueryRequest) (*StreamUsersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StreamUsers not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
@@ -385,7 +257,7 @@ func _UserService_DeleteUser_Handler(srv interface{}, ctx context.Context, dec f
 }
 
 func _UserService_ListUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListUsersRequest)
+	in := new(PageQueryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -397,7 +269,25 @@ func _UserService_ListUsers_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: UserService_ListUsers_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(UserServiceServer).ListUsers(ctx, req.(*ListUsersRequest))
+		return srv.(UserServiceServer).ListUsers(ctx, req.(*PageQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_StreamUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).StreamUsers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_StreamUsers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).StreamUsers(ctx, req.(*StreamQueryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -428,6 +318,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListUsers",
 			Handler:    _UserService_ListUsers_Handler,
+		},
+		{
+			MethodName: "StreamUsers",
+			Handler:    _UserService_StreamUsers_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/ti/common-go/config"
 	"github.com/ti/common-go/dependencies"
@@ -26,13 +25,10 @@ func main() {
 
 	log.Action("Start").Info("Starting server with camelCase JSON format")
 
-	// 2. Initialize the Say service
-	srv := service.New(&cfg.Dependencies, &cfg.Service)
-
-	// 3. Initialize the UserService
+	// 2. Initialize the UserService
 	userSrv := service.NewUserServiceServer(&cfg.Dependencies, &cfg.Service)
 
-	// 4. Create server with camelCase enabled
+	// 3. Create server with camelCase enabled
 	gs := grpcmux.NewServer(
 		grpcmux.WithHTTPAddr(":8080"),
 		grpcmux.WithGrpcAddr(":8081"),
@@ -40,23 +36,17 @@ func main() {
 		grpcmux.WithUseCamelCase(), // Enable camelCase format
 	)
 
-	// 5. Register Say service
-	pb.RegisterSayServer(gs, srv)
-	_ = pb.RegisterSayHandlerServer(context.Background(), gs.ServeMux(), srv)
-
-	// 6. Register UserService (CRUD operations)
+	// 4. Register UserService (CRUD operations)
 	pb.RegisterUserServiceServer(gs, userSrv)
 	_ = pb.RegisterUserServiceHandlerServer(context.Background(), gs.ServeMux(), userSrv)
-
-	// 7. Stream in internal process
-	gs.HandleFunc(http.MethodPost, "/v1/stream", srv.HelloStreamHTTP)
 
 	log.Action("Start").Info("Server ready with camelCase JSON format",
 		"httpAddr", ":8080",
 		"grpcAddr", ":8081",
 		"format", "camelCase",
-		"services", "Say, UserService")
+		"service", "UserService")
 
+	// 5. Start server
 	gs.Start()
 }
 

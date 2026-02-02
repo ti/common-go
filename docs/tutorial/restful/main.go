@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/ti/common-go/config"
 	"github.com/ti/common-go/dependencies"
@@ -30,27 +29,24 @@ import (
 )
 
 func main() {
-	// 1. Initial configuration and dependencies (optional)
+	// 1. Initial configuration and dependencies
 	var cfg Config
 	err := config.Init(context.Background(), "", &cfg, dependencies.WithNewFns(database.New))
 	if err != nil {
 		log.Action("InitConfig").Fatal(err.Error())
 	}
-	// 2. Initialize the service
-	srv := service.New(&cfg.Dependencies, &cfg.Service)
+
+	// 2. Create gRPC-Gateway server
 	gs := grpcmux.NewServer(
 		grpcmux.WithConfig(&cfg.Apis),
 	)
-	pb.RegisterSayServer(gs, srv)                                             // register grpc
-	_ = pb.RegisterSayHandlerServer(context.Background(), gs.ServeMux(), srv) // register http (optional)
 
-	// Register UserService
+	// 3. Register UserService (CRUD operations)
 	userSrv := service.NewUserServiceServer(&cfg.Dependencies, &cfg.Service)
 	pb.RegisterUserServiceServer(gs, userSrv)                                             // register grpc
-	_ = pb.RegisterUserServiceHandlerServer(context.Background(), gs.ServeMux(), userSrv) // register http (optional)
+	_ = pb.RegisterUserServiceHandlerServer(context.Background(), gs.ServeMux(), userSrv) // register http
 
-	// 3. Stream in internal process
-	gs.HandleFunc(http.MethodPost, "/v1/stream", srv.HelloStreamHTTP)
+	// 4. Start server
 	gs.Start()
 }
 
