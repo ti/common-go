@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x65rror.proto\x12\x02pb*(\n\tErrorCode\x12\x06\n\x02OK\x10\x00\x12\x13\n\x0e\x43ustomNotFound\x10\xb4\"B?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x65rror.proto\x12\x02pb*\xfc\x03\n\tErrorCode\x12\x06\n\x02OK\x10\x00\x12\x15\n\x10\x63\x61ptcha_required\x10\xa1\x1f\x12\x14\n\x0f\x63\x61ptcha_invalid\x10\xa2\x1f\x12\x13\n\x0euser_not_found\x10\xa4\x1f\x12\x18\n\x13user_already_exists\x10\xa9\x1f\x12\x19\n\x14\x65mail_already_in_use\x10\xaa\x1f\x12\x11\n\x0cuser_deleted\x10\xab\x1f\x12\x17\n\x12user_not_activated\x10\xac\x1f\x12\x16\n\x11invalid_user_data\x10\xb4\x1f\x12\x14\n\x0finvalid_request\x10\xb5\x1f\x12\x18\n\x13unauthorized_client\x10\xb6\x1f\x12\x12\n\raccess_denied\x10\xb7\x1f\x12\x1e\n\x19unsupported_response_type\x10\xb8\x1f\x12\x12\n\rinvalid_scope\x10\xb9\x1f\x12\x12\n\rinvalid_grant\x10\xba\x1f\x12\x15\n\x10payment_required\x10\xbe\x1f\x12\x15\n\x10\x61ge_out_of_range\x10\xbf\x1f\x12\x19\n\x14insufficient_balance\x10\xc0\x1f\x12\x15\n\x10premium_required\x10\xc1\x1f\x12\x11\n\x0cserver_error\x10\xa2\'\x12\x13\n\x0e\x64\x61tabase_error\x10\xa3\'\x12\x18\n\x13service_unavailable\x10\xa4\'B?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,6 +32,6 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'error_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pb'
-  _globals['_ERRORCODE']._serialized_start=19
-  _globals['_ERRORCODE']._serialized_end=59
+  _globals['_ERRORCODE']._serialized_start=20
+  _globals['_ERRORCODE']._serialized_end=528
 # @@protoc_insertion_point(module_scope)

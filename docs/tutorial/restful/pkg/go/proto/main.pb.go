@@ -997,7 +997,7 @@ var File_main_proto protoreflect.FileDescriptor
 const file_main_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"main.proto\x12\x02pb\x1a\x17validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\xa7\v\n" +
+	"main.proto\x12\x02pb\x1a\x17validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/wrappers.proto\x1a\verror.proto\"\xa7\v\n" +
 	"\x04User\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1d\n" +
 	"\x04name\x18\x02 \x01(\tB\t\xfaB\x06r\x04 \x01(dR\x04name\x12 \n" +
@@ -1216,6 +1216,7 @@ func file_main_proto_init() {
 	if File_main_proto != nil {
 		return
 	}
+	file_error_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

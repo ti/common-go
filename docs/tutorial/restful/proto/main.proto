@@ -8,6 +8,7 @@ import "validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
+import "error.proto";
 
 // User service - Comprehensive CRUD operations demonstrating all protobuf types
 // This service demonstrates proper proto definition without using 'any' or 'struct' types

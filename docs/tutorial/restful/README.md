@@ -523,3 +523,246 @@ gs := grpcmux.NewServer(
 字段示例: `user_id`, `is_premium`, `phone_number`
 
 参考 `cmd/camelCase/main.go` 和 `cmd/snakeCase/main.go` 查看完整示例。
+
+## 错误处理
+
+本教程展示了完整的自定义错误码系统，遵循 gRPC 和 HTTP 错误码规范。
+
+### 错误码规范
+
+错误码定义在 `proto/error.proto` 中，遵循以下规范：
+- **4xxx**: 客户端错误（无效输入、未授权等）
+- **5xxx**: 服务端错误（内部错误、服务不可用等）
+
+### 注册错误码
+
+在服务初始化时注册自定义错误码，使 grpcmux 框架能够正确映射到 HTTP 状态码：
+
+```go
+func NewUserServiceServer(dep *Dependencies, cfg *Config) *UserServiceServer {
+    // 注册自定义错误码
+    mux.RegisterErrorCodes(pb.ErrorCode_name)
+
+    return &UserServiceServer{
+        dep: dep,
+        cfg: cfg,
+    }
+}
+```
+
+### 使用错误码
+
+在业务逻辑中使用自定义错误码：
+
+```go
+// 用户不存在
+return nil, status.Error(codes.Code(pb.ErrorCode_user_not_found),
+    fmt.Sprintf("user with ID %d not found", req.UserId))
+
+// 邮箱已被使用
+return nil, status.Error(codes.Code(pb.ErrorCode_email_already_in_use),
+    fmt.Sprintf("email %s is already in use", req.Email))
+
+// 年龄超出范围
+return nil, status.Error(codes.Code(pb.ErrorCode_age_out_of_range),
+    fmt.Sprintf("age %d is out of valid range (0-150)", age))
+```
+
+### 常见错误示例
+
+#### 1. 用户不存在 (user_not_found - 4004)
+
+```bash
+curl -X GET http://127.0.0.1:8080/v1/users/999999999 \
+  -H "Content-Type: application/json"
+```
+
+**错误响应:**
+```json
+{
+  "code": 4004,
+  "message": "user with ID 999999999 not found"
+}
+```
+
+#### 2. 邮箱已被使用 (email_already_in_use - 4010)
+
+```bash
+# 先创建一个用户
+curl -X POST http://127.0.0.1:8080/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Test User", "email": "test@example.com"}'
+
+# 尝试使用相同邮箱创建另一个用户
+curl -X POST http://127.0.0.1:8080/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Another User", "email": "test@example.com"}'
+```
+
+**错误响应:**
+```json
+{
+  "code": 4010,
+  "message": "email test@example.com is already in use"
+}
+```
+
+#### 3. 年龄超出范围 (age_out_of_range - 4031)
+
+```bash
+curl -X POST http://127.0.0.1:8080/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Invalid Age", "email": "invalid@example.com", "age": 200}'
+```
+
+**错误响应:**
+```json
+{
+  "code": 4031,
+  "message": "age 200 is out of valid range (0-150)"
+}
+```
+
+#### 4. 用户已被删除 (user_deleted - 4011)
+
+当尝试访问已删除（`isActive = false`）的用户时：
+
+```bash
+curl -X GET http://127.0.0.1:8080/v1/users/{deleted_user_id} \
+  -H "Content-Type: application/json"
+```
+
+**错误响应:**
+```json
+{
+  "code": 4011,
+  "message": "user with ID {deleted_user_id} has been deleted"
+}
+```
+
+#### 5. 数据库错误 (database_error - 5027)
+
+当数据库不可用或操作失败时：
+
+```json
+{
+  "code": 5027,
+  "message": "database not available"
+}
+```
+
+### 完整错误码列表
+
+| 错误码 | 名称 | 说明 |
+|-------|------|------|
+| 0 | OK | 成功 |
+| 4001 | captcha_required | 需要验证码 |
+| 4002 | captcha_invalid | 验证码无效 |
+| 4004 | user_not_found | 用户不存在 |
+| 4009 | user_already_exists | 用户已存在 |
+| 4010 | email_already_in_use | 邮箱已被使用 |
+| 4011 | user_deleted | 用户已被删除 |
+| 4012 | user_not_activated | 用户未激活 |
+| 4020 | invalid_user_data | 用户数据无效 |
+| 4021 | invalid_request | OAuth2: 无效请求 |
+| 4022 | unauthorized_client | OAuth2: 未授权的客户端 |
+| 4023 | access_denied | OAuth2: 访问被拒绝 |
+| 4024 | unsupported_response_type | OAuth2: 不支持的响应类型 |
+| 4025 | invalid_scope | OAuth2: 无效范围 |
+| 4026 | invalid_grant | OAuth2: 无效授权 |
+| 4030 | payment_required | 需要支付 |
+| 4031 | age_out_of_range | 年龄超出范围 |
+| 4032 | insufficient_balance | 余额不足 |
+| 4033 | premium_required | 需要高级会员 |
+| 5026 | server_error | 服务器错误 |
+| 5027 | database_error | 数据库错误 |
+| 5028 | service_unavailable | 服务不可用 |
+
+### 实现的错误处理场景
+
+#### CreateUser 方法
+- 数据库不可用检查 → `database_error`
+- 邮箱唯一性检查 → `email_already_in_use`
+- 年龄范围验证 → `age_out_of_range`
+- 数据库插入失败 → `database_error`
+
+#### GetUser 方法
+- 数据库不可用检查 → `database_error`
+- 用户不存在 → `user_not_found`
+- 用户已删除检查 → `user_deleted`
+
+#### UpdateUser 方法
+- 数据库不可用检查 → `database_error`
+- 用户不存在 → `user_not_found`
+- 年龄范围验证 → `age_out_of_range`
+- 邮箱唯一性检查 → `email_already_in_use`
+- 数据库更新失败 → `database_error`
+
+#### DeleteUser 方法
+- 数据库不可用检查 → `database_error`
+- 用户不存在 → `user_not_found`
+- 用户已删除检查 → `user_deleted`
+- 数据库删除失败 → `database_error`
+
+#### ListUsers & StreamUsers 方法
+- 数据库不可用检查 → `database_error`
+- 查询失败 → `database_error`
+
+### 客户端错误处理建议
+
+```javascript
+// JavaScript 示例
+async function getUser(userId) {
+  try {
+    const response = await fetch(`/v1/users/${userId}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      switch (data.code) {
+        case 4004:
+          console.log('用户不存在');
+          break;
+        case 4011:
+          console.log('用户已被删除');
+          break;
+        case 5027:
+          console.log('数据库错误，请稍后重试');
+          break;
+        default:
+          console.log('未知错误:', data.message);
+      }
+      return null;
+    }
+
+    return data.user;
+  } catch (error) {
+    console.error('网络错误:', error);
+    return null;
+  }
+}
+```
+
+### 添加自定义错误码
+
+要添加新的错误码，按以下步骤操作：
+
+1. 在 `proto/error.proto` 中添加错误码定义：
+```protobuf
+enum ErrorCode {
+  // ... 现有错误码 ...
+
+  // 添加新错误码，使用 4xxx (客户端) 或 5xxx (服务端)
+  custom_error = 4050;
+}
+```
+
+2. 重新生成 proto 代码：
+```bash
+make build
+```
+
+3. 在业务逻辑中使用新错误码：
+```go
+return nil, status.Error(codes.Code(pb.ErrorCode_custom_error),
+    "custom error message")
+```

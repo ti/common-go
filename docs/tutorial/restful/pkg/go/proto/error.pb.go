@@ -22,24 +22,102 @@ const (
 )
 
 // ErrorCode error code enumeration type
-// General error, reference: https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
+// General errors reference: https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
+// Custom error codes follow HTTP status code conventions:
+// - 4xxx: Client errors (invalid input, unauthorized, etc.)
+// - 5xxx: Server errors (internal errors, service unavailable, etc.)
 type ErrorCode int32
 
 const (
 	ErrorCode_OK ErrorCode = 0
-	// If the task does not exist, the grpcmux framework will automatically output the error code of ResourceNotFound.TaskNotFound to the user.
-	ErrorCode_CustomNotFound ErrorCode = 4404
+	// Captcha required. GRPC_code: 4001
+	ErrorCode_captcha_required ErrorCode = 4001
+	// Invalid captcha. GRPC_code: 4002
+	ErrorCode_captcha_invalid ErrorCode = 4002
+	// User not found. GRPC_code: 4004
+	ErrorCode_user_not_found ErrorCode = 4004
+	// User already exists. GRPC_code: 4009
+	ErrorCode_user_already_exists ErrorCode = 4009
+	// Email already in use. GRPC_code: 4010
+	ErrorCode_email_already_in_use ErrorCode = 4010
+	// User has been deleted. GRPC_code: 4011
+	ErrorCode_user_deleted ErrorCode = 4011
+	// User account not activated. GRPC_code: 4012
+	ErrorCode_user_not_activated ErrorCode = 4012
+	// Invalid user data. GRPC_code: 4020
+	ErrorCode_invalid_user_data ErrorCode = 4020
+	// OAuth 2.0 related errors
+	ErrorCode_invalid_request           ErrorCode = 4021
+	ErrorCode_unauthorized_client       ErrorCode = 4022
+	ErrorCode_access_denied             ErrorCode = 4023
+	ErrorCode_unsupported_response_type ErrorCode = 4024
+	ErrorCode_invalid_scope             ErrorCode = 4025
+	ErrorCode_invalid_grant             ErrorCode = 4026
+	// Payment related errors
+	ErrorCode_payment_required ErrorCode = 4030
+	// Age out of valid range. GRPC_code: 4031
+	ErrorCode_age_out_of_range ErrorCode = 4031
+	// Insufficient account balance. GRPC_code: 4032
+	ErrorCode_insufficient_balance ErrorCode = 4032
+	// Premium membership required. GRPC_code: 4033
+	ErrorCode_premium_required ErrorCode = 4033
+	// Server errors
+	ErrorCode_server_error ErrorCode = 5026
+	// Database operation failed. GRPC_code: 5027
+	ErrorCode_database_error ErrorCode = 5027
+	// External service unavailable. GRPC_code: 5028
+	ErrorCode_service_unavailable ErrorCode = 5028
 )
 
 // Enum value maps for ErrorCode.
 var (
 	ErrorCode_name = map[int32]string{
 		0:    "OK",
-		4404: "CustomNotFound",
+		4001: "captcha_required",
+		4002: "captcha_invalid",
+		4004: "user_not_found",
+		4009: "user_already_exists",
+		4010: "email_already_in_use",
+		4011: "user_deleted",
+		4012: "user_not_activated",
+		4020: "invalid_user_data",
+		4021: "invalid_request",
+		4022: "unauthorized_client",
+		4023: "access_denied",
+		4024: "unsupported_response_type",
+		4025: "invalid_scope",
+		4026: "invalid_grant",
+		4030: "payment_required",
+		4031: "age_out_of_range",
+		4032: "insufficient_balance",
+		4033: "premium_required",
+		5026: "server_error",
+		5027: "database_error",
+		5028: "service_unavailable",
 	}
 	ErrorCode_value = map[string]int32{
-		"OK":             0,
-		"CustomNotFound": 4404,
+		"OK":                        0,
+		"captcha_required":          4001,
+		"captcha_invalid":           4002,
+		"user_not_found":            4004,
+		"user_already_exists":       4009,
+		"email_already_in_use":      4010,
+		"user_deleted":              4011,
+		"user_not_activated":        4012,
+		"invalid_user_data":         4020,
+		"invalid_request":           4021,
+		"unauthorized_client":       4022,
+		"access_denied":             4023,
+		"unsupported_response_type": 4024,
+		"invalid_scope":             4025,
+		"invalid_grant":             4026,
+		"payment_required":          4030,
+		"age_out_of_range":          4031,
+		"insufficient_balance":      4032,
+		"premium_required":          4033,
+		"server_error":              5026,
+		"database_error":            5027,
+		"service_unavailable":       5028,
 	}
 )
 
@@ -74,10 +152,30 @@ var File_error_proto protoreflect.FileDescriptor
 
 const file_error_proto_rawDesc = "" +
 	"\n" +
-	"\verror.proto\x12\x02pb*(\n" +
+	"\verror.proto\x12\x02pb*\xfc\x03\n" +
 	"\tErrorCode\x12\x06\n" +
-	"\x02OK\x10\x00\x12\x13\n" +
-	"\x0eCustomNotFound\x10\xb4\"B?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3"
+	"\x02OK\x10\x00\x12\x15\n" +
+	"\x10captcha_required\x10\xa1\x1f\x12\x14\n" +
+	"\x0fcaptcha_invalid\x10\xa2\x1f\x12\x13\n" +
+	"\x0euser_not_found\x10\xa4\x1f\x12\x18\n" +
+	"\x13user_already_exists\x10\xa9\x1f\x12\x19\n" +
+	"\x14email_already_in_use\x10\xaa\x1f\x12\x11\n" +
+	"\fuser_deleted\x10\xab\x1f\x12\x17\n" +
+	"\x12user_not_activated\x10\xac\x1f\x12\x16\n" +
+	"\x11invalid_user_data\x10\xb4\x1f\x12\x14\n" +
+	"\x0finvalid_request\x10\xb5\x1f\x12\x18\n" +
+	"\x13unauthorized_client\x10\xb6\x1f\x12\x12\n" +
+	"\raccess_denied\x10\xb7\x1f\x12\x1e\n" +
+	"\x19unsupported_response_type\x10\xb8\x1f\x12\x12\n" +
+	"\rinvalid_scope\x10\xb9\x1f\x12\x12\n" +
+	"\rinvalid_grant\x10\xba\x1f\x12\x15\n" +
+	"\x10payment_required\x10\xbe\x1f\x12\x15\n" +
+	"\x10age_out_of_range\x10\xbf\x1f\x12\x19\n" +
+	"\x14insufficient_balance\x10\xc0\x1f\x12\x15\n" +
+	"\x10premium_required\x10\xc1\x1f\x12\x11\n" +
+	"\fserver_error\x10\xa2'\x12\x13\n" +
+	"\x0edatabase_error\x10\xa3'\x12\x18\n" +
+	"\x13service_unavailable\x10\xa4'B?Z=github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto;pbb\x06proto3"
 
 var (
 	file_error_proto_rawDescOnce sync.Once

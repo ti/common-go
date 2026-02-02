@@ -8,6 +8,7 @@ import (
 	"github.com/ti/common-go/dependencies/database"
 	"github.com/ti/common-go/dependencies/database/query"
 	pb "github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto"
+	"github.com/ti/common-go/grpcmux/mux"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,6 +25,10 @@ type UserServiceServer struct {
 
 // NewUserServiceServer creates a new UserServiceServer instance
 func NewUserServiceServer(dep *Dependencies, cfg *Config) *UserServiceServer {
+	// Register custom error codes with grpcmux framework
+	// This allows the framework to properly map custom error codes to HTTP status codes
+	mux.RegisterErrorCodes(pb.ErrorCode_name)
+
 	return &UserServiceServer{
 		dep: dep,
 		cfg: cfg,
@@ -141,7 +146,18 @@ func (s *UserServiceServer) CreateUser(ctx context.Context, req *pb.CreateUserRe
 
 	// Check if database is available
 	if s.dep.DB == nil {
-		return nil, status.Error(codes.Internal, "database not available")
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error), "database not available")
+	}
+
+	// Check if email already exists (simulate email uniqueness check)
+	var existingUsers []User
+	emailFilter := database.C{
+		database.CE{Key: "email", Value: req.Email, C: database.Eq},
+	}
+	err := s.dep.DB.Find(ctx, "users", emailFilter, nil, 1, &existingUsers)
+	if err == nil && len(existingUsers) > 0 {
+		return nil, status.Error(codes.Code(pb.ErrorCode_email_already_in_use),
+			fmt.Sprintf("email %s is already in use", req.Email))
 	}
 
 	// Create user object with required fields
@@ -154,9 +170,14 @@ func (s *UserServiceServer) CreateUser(ctx context.Context, req *pb.CreateUserRe
 		UpdatedAt: now,
 	}
 
-	// Set optional fields from request
+	// Set optional fields from request with validation
 	if req.Age != nil {
 		age := req.Age.Value
+		// Validate age range
+		if age < 0 || age > 150 {
+			return nil, status.Error(codes.Code(pb.ErrorCode_age_out_of_range),
+				fmt.Sprintf("age %d is out of valid range (0-150)", age))
+		}
 		user.Age = &age
 	}
 	if req.IsPremium != nil {
@@ -192,9 +213,10 @@ func (s *UserServiceServer) CreateUser(ctx context.Context, req *pb.CreateUserRe
 	}
 
 	// Insert into database
-	_, err := s.dep.DB.Insert(ctx, "users", user)
+	_, err = s.dep.DB.Insert(ctx, "users", user)
 	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to create user: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error),
+			fmt.Sprintf("failed to create user: %v", err))
 	}
 
 	// Return response
@@ -211,7 +233,7 @@ func (s *UserServiceServer) GetUser(ctx context.Context, req *pb.GetUserRequest)
 
 	// Check if database is available
 	if s.dep.DB == nil {
-		return nil, status.Error(codes.Internal, "database not available")
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error), "database not available")
 	}
 
 	// Query user
@@ -220,7 +242,15 @@ func (s *UserServiceServer) GetUser(ctx context.Context, req *pb.GetUserRequest)
 		{Key: "user_id", Value: req.UserId, C: database.Eq},
 	}, &user)
 	if err != nil {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("user not found: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_user_not_found),
+			fmt.Sprintf("user with ID %d not found", req.UserId))
+	}
+
+	// Check if user has been deleted (simulate soft delete check)
+	// In a real system, you might have an is_deleted flag
+	if user.IsActive != nil && !*user.IsActive {
+		return nil, status.Error(codes.Code(pb.ErrorCode_user_deleted),
+			fmt.Sprintf("user with ID %d has been deleted", req.UserId))
 	}
 
 	// Return response
@@ -237,7 +267,7 @@ func (s *UserServiceServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRe
 
 	// Check if database is available
 	if s.dep.DB == nil {
-		return nil, status.Error(codes.Internal, "database not available")
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error), "database not available")
 	}
 
 	// Check if user exists
@@ -246,7 +276,30 @@ func (s *UserServiceServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRe
 		{Key: "user_id", Value: req.UserId, C: database.Eq},
 	}, &existingUser)
 	if err != nil {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("user not found: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_user_not_found),
+			fmt.Sprintf("user with ID %d not found", req.UserId))
+	}
+
+	// Validate age if being updated
+	if req.Age != nil {
+		age := req.Age.Value
+		if age < 0 || age > 150 {
+			return nil, status.Error(codes.Code(pb.ErrorCode_age_out_of_range),
+				fmt.Sprintf("age %d is out of valid range (0-150)", age))
+		}
+	}
+
+	// Check if trying to update email to one that's already in use
+	if req.Email != nil && req.Email.Value != existingUser.Email {
+		var usersWithEmail []User
+		emailFilter := database.C{
+			database.CE{Key: "email", Value: req.Email.Value, C: database.Eq},
+		}
+		err := s.dep.DB.Find(ctx, "users", emailFilter, nil, 1, &usersWithEmail)
+		if err == nil && len(usersWithEmail) > 0 {
+			return nil, status.Error(codes.Code(pb.ErrorCode_email_already_in_use),
+				fmt.Sprintf("email %s is already in use", req.Email.Value))
+		}
 	}
 
 	// Build update document with only provided fields
@@ -314,7 +367,8 @@ func (s *UserServiceServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRe
 		{Key: "user_id", Value: req.UserId, C: database.Eq},
 	}, updates)
 	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to update user: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error),
+			fmt.Sprintf("failed to update user: %v", err))
 	}
 
 	// Get updated user
@@ -323,7 +377,8 @@ func (s *UserServiceServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRe
 		{Key: "user_id", Value: req.UserId, C: database.Eq},
 	}, &updatedUser)
 	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get updated user: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error),
+			fmt.Sprintf("failed to get updated user: %v", err))
 	}
 
 	// Return response
@@ -340,7 +395,7 @@ func (s *UserServiceServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRe
 
 	// Check if database is available
 	if s.dep.DB == nil {
-		return nil, status.Error(codes.Internal, "database not available")
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error), "database not available")
 	}
 
 	// Check if user exists
@@ -349,7 +404,14 @@ func (s *UserServiceServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRe
 		{Key: "user_id", Value: req.UserId, C: database.Eq},
 	}, &existingUser)
 	if err != nil {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("user not found: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_user_not_found),
+			fmt.Sprintf("user with ID %d not found", req.UserId))
+	}
+
+	// Check if user is already deleted (simulate checking deleted status)
+	if existingUser.IsActive != nil && !*existingUser.IsActive {
+		return nil, status.Error(codes.Code(pb.ErrorCode_user_deleted),
+			fmt.Sprintf("user with ID %d has already been deleted", req.UserId))
 	}
 
 	// Delete user
@@ -357,7 +419,8 @@ func (s *UserServiceServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRe
 		{Key: "user_id", Value: req.UserId, C: database.Eq},
 	})
 	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to delete user: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error),
+			fmt.Sprintf("failed to delete user: %v", err))
 	}
 
 	// Return success response
@@ -371,7 +434,7 @@ func (s *UserServiceServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRe
 func (s *UserServiceServer) ListUsers(ctx context.Context, req *pb.PageQueryRequest) (*pb.PageUsersResponse, error) {
 	// Check if database is available
 	if s.dep.DB == nil {
-		return nil, status.Error(codes.Internal, "database not available")
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error), "database not available")
 	}
 
 	// Build PageQueryRequest for database layer
@@ -392,7 +455,8 @@ func (s *UserServiceServer) ListUsers(ctx context.Context, req *pb.PageQueryRequ
 	// Use query.PageQuery for efficient pagination
 	resp, err := query.PageQuery[User](ctx, s.dep.DB, "users", dbReq)
 	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to query users: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error),
+			fmt.Sprintf("failed to query users: %v", err))
 	}
 
 	// Convert to protobuf
@@ -412,7 +476,7 @@ func (s *UserServiceServer) ListUsers(ctx context.Context, req *pb.PageQueryRequ
 func (s *UserServiceServer) StreamUsers(ctx context.Context, req *pb.StreamQueryRequest) (*pb.StreamUsersResponse, error) {
 	// Check if database is available
 	if s.dep.DB == nil {
-		return nil, status.Error(codes.Internal, "database not available")
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error), "database not available")
 	}
 
 	// Build StreamQueryRequest for database layer
@@ -431,7 +495,8 @@ func (s *UserServiceServer) StreamUsers(ctx context.Context, req *pb.StreamQuery
 	// Use query.StreamQuery for cursor-based pagination
 	resp, err := query.StreamQuery[User](ctx, s.dep.DB, "users", dbReq)
 	if err != nil {
-		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to stream users: %v", err))
+		return nil, status.Error(codes.Code(pb.ErrorCode_database_error),
+			fmt.Sprintf("failed to stream users: %v", err))
 	}
 
 	// Convert to protobuf
