@@ -21,3 +21,4 @@ id_rsa.pub
 .kube/
 .kube
 _root/
+snakeCase
