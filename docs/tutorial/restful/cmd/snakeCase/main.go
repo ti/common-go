@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ti/common-go/config"
 	"github.com/ti/common-go/dependencies"
@@ -36,7 +37,31 @@ func main() {
 		// No WithUseCamelCase() - uses default snake_case
 	)
 
-	// 4. Register UserService (CRUD operations)
+	// 4. Register custom health checkers.
+	// Each checker is called on every gRPC/HTTP health check request.
+	// If any checker returns a non-nil error, the service reports NOT_SERVING.
+
+	// Example: check database connectivity by running a lightweight query
+	gs.AddHealthChecker(func(ctx context.Context) error {
+		if cfg.Dependencies.DB == nil {
+			return nil
+		}
+		_, err := cfg.Dependencies.DB.Count(ctx, "_health", nil)
+		if err != nil {
+			return fmt.Errorf("database unhealthy: %w", err)
+		}
+		return nil
+	})
+
+	// Example: check that a required downstream HTTP dependency was initialised
+	gs.AddHealthChecker(func(ctx context.Context) error {
+		if cfg.Dependencies.DemoHTTP == nil {
+			return fmt.Errorf("demo http dependency not initialised")
+		}
+		return nil
+	})
+
+	// 5. Register UserService (CRUD operations)
 	pb.RegisterUserServiceServer(gs, userSrv)
 	_ = pb.RegisterUserServiceHandlerServer(context.Background(), gs.ServeMux(), userSrv)
 
@@ -46,7 +71,7 @@ func main() {
 		"format", "snake_case",
 		"service", "UserService")
 
-	// 5. Start server
+	// 6. Start server
 	gs.Start()
 }
 
