@@ -248,6 +248,18 @@ func (s *Server) HandleFunc(method, path string, h runtime.HandlerFunc) {
 	s.mux.Handle(method, path, h)
 }
 
+// AddHealthChecker registers a custom health check function.
+// All registered checkers are called on every gRPC health Check request.
+// If any checker returns a non-nil error, the response status is NOT_SERVING.
+// Can be called before or after Start().
+func (s *Server) AddHealthChecker(checker HealthChecker) {
+	if s.healthServer == nil {
+		s.opts.healthCheckers = append(s.opts.healthCheckers, checker)
+		return
+	}
+	s.healthServer.checkers = append(s.healthServer.checkers, checker)
+}
+
 // Handle registers custom HTTP handler
 func (s *Server) Handle(pattern string, handler http.Handler) {
 	if s.httpServerMux == nil {
@@ -323,7 +335,7 @@ func (s *Server) startGRPC(ctx context.Context) error {
 	}
 
 	healthServer := health.NewServer()
-	s.healthServer = &simpleHealthServer{healthServer}
+	s.healthServer = &simpleHealthServer{server: healthServer, checkers: s.opts.healthCheckers}
 	pbhealth.RegisterHealthServer(s.grpcServer, s.healthServer)
 	s.healthServer.server.SetServingStatus(allServices, pbhealth.HealthCheckResponse_SERVING)
 	s.Logger.Log(ctx, logging.LevelInfo, "Start grpc at "+s.opts.grpcAddr)

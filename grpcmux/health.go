@@ -7,9 +7,14 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
+// HealthChecker is a function that performs a custom health check.
+// Return a non-nil error to indicate the service is not healthy.
+type HealthChecker func(ctx context.Context) error
+
 // simpleHealthServer the simple health server
 type simpleHealthServer struct {
-	server *health.Server
+	server   *health.Server
+	checkers []HealthChecker
 }
 
 const allServices = "*"
@@ -18,6 +23,13 @@ const allServices = "*"
 func (s *simpleHealthServer) Check(ctx context.Context,
 	in *healthpb.HealthCheckRequest,
 ) (*healthpb.HealthCheckResponse, error) {
+	for _, checker := range s.checkers {
+		if err := checker(ctx); err != nil {
+			return &healthpb.HealthCheckResponse{
+				Status: healthpb.HealthCheckResponse_NOT_SERVING,
+			}, nil
+		}
+	}
 	in.Service = allServices
 	return s.server.Check(ctx, in)
 }

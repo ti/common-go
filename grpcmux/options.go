@@ -38,6 +38,7 @@ type options struct {
 	tracing                      bool
 	logBody                      bool
 	useCamelCase                 bool
+	healthCheckers               []HealthChecker
 }
 
 func evaluateOptions(opts []Option) *options {
