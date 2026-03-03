@@ -8,10 +8,9 @@ import (
 	"strings"
 
 	"github.com/ti/common-go/dependencies/database"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -315,7 +314,7 @@ func (m *Mongo) findRows(ctx context.Context, table string, conds database.C, so
 ) (database.Row, error) {
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
-	opts := &options.FindOptions{}
+	opts := options.Find()
 	var sortFields bson.D
 	if len(sortBy) == 0 {
 		sortFields = bson.D{
@@ -410,10 +409,10 @@ func (m *Mongo) IncrCounter(ctx context.Context, counterTable, key string, start
 
 // counter
 type counter struct {
-	ID      primitive.ObjectID `bson:"_id,omitempty"`
-	Project string             `bson:"project"`
-	Key     string             `bson:"key"`
-	Count   int64              `bson:"count"`
+	ID      bson.ObjectID `bson:"_id,omitempty"`
+	Project string        `bson:"project"`
+	Key     string        `bson:"key"`
+	Count   int64         `bson:"count"`
 }
 
 // DecrCounter Decr Counter
@@ -473,7 +472,7 @@ func (m *Mongo) StartTransaction(ctx context.Context) (database.Transaction, err
 }
 
 type sessionTransaction struct {
-	session mongo.Session
+	session *mongo.Session
 	ctx     context.Context
 }
 

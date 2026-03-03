@@ -6,17 +6,14 @@ import (
 	"reflect"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
-
-	"go.mongodb.org/mongo-driver/bson/bsoncodec"
-	"go.mongodb.org/mongo-driver/bson/bsonrw"
 )
 
 var (
-	// Protobuf’s wrappers types
+	// Protobuf's wrappers types
 	boolValueType   = reflect.TypeOf(wrapperspb.BoolValue{})
 	bytesValueType  = reflect.TypeOf(wrapperspb.BytesValue{})
 	doubleValueType = reflect.TypeOf(wrapperspb.DoubleValue{})
@@ -44,7 +41,7 @@ type wrapperValueCodec struct{}
 const valueTag = "Value"
 
 // EncodeValue encodes Protobuf type wrapper value to BSON value
-func (e *wrapperValueCodec) EncodeValue(ectx bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
+func (e *wrapperValueCodec) EncodeValue(ectx bson.EncodeContext, vw bson.ValueWriter, val reflect.Value) error {
 	val = val.FieldByName(valueTag)
 	enc, err := ectx.LookupEncoder(val.Type())
 	if err != nil {
@@ -54,7 +51,7 @@ func (e *wrapperValueCodec) EncodeValue(ectx bsoncodec.EncodeContext, vw bsonrw.
 }
 
 // DecodeValue decodes BSON value to Protobuf type wrapper value
-func (e *wrapperValueCodec) DecodeValue(ectx bsoncodec.DecodeContext, vr bsonrw.ValueReader, val reflect.Value) error {
+func (e *wrapperValueCodec) DecodeValue(ectx bson.DecodeContext, vr bson.ValueReader, val reflect.Value) error {
 	val = val.FieldByName(valueTag)
 	enc, err := ectx.LookupDecoder(val.Type())
 	if err != nil {
@@ -67,7 +64,7 @@ func (e *wrapperValueCodec) DecodeValue(ectx bsoncodec.DecodeContext, vr bsonrw.
 type timestampCodec struct{}
 
 // EncodeValue encodes Protobuf Timestamp value to BSON value
-func (e *timestampCodec) EncodeValue(ectx bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
+func (e *timestampCodec) EncodeValue(ectx bson.EncodeContext, vw bson.ValueWriter, val reflect.Value) error {
 	if !val.CanAddr() {
 		return errors.New("value is not timestamp addr")
 	}
@@ -84,7 +81,7 @@ func (e *timestampCodec) EncodeValue(ectx bsoncodec.EncodeContext, vw bsonrw.Val
 }
 
 // DecodeValue decodes BSON value to Timestamp value
-func (e *timestampCodec) DecodeValue(ectx bsoncodec.DecodeContext, vr bsonrw.ValueReader, val reflect.Value) error {
+func (e *timestampCodec) DecodeValue(ectx bson.DecodeContext, vr bson.ValueReader, val reflect.Value) error {
 	enc, err := ectx.LookupDecoder(timeType)
 	if err != nil {
 		return err
@@ -98,7 +95,7 @@ func (e *timestampCodec) DecodeValue(ectx bsoncodec.DecodeContext, vr bsonrw.Val
 	return nil
 }
 
-// DefaultRegistry is the default bsoncodec.Registry. It contains the default codecs.
+// DefaultRegistry is the default bson.Registry. It contains the default codecs.
 var DefaultRegistry = NewRegistry()
 
 // EncodeToDocument any data to bson.D
@@ -107,44 +104,29 @@ func EncodeToDocument(val any) (bson.D, error) {
 }
 
 // EncodeToDocumentByRegistry any data to bson.D
-func EncodeToDocumentByRegistry(val any, r *bsoncodec.Registry) (bson.D, error) {
+func EncodeToDocumentByRegistry(val any, r *bson.Registry) (bson.D, error) {
 	buf := &bytes.Buffer{}
-	vw, err := bsonrw.NewBSONValueWriter(buf)
-	if err != nil {
-		return nil, err
-	}
-	enc, errEncoder := bson.NewEncoder(vw)
-	if errEncoder != nil {
-		return nil, errEncoder
-	}
-	err = enc.SetRegistry(r)
-	if err != nil {
-		return nil, err
-	}
+	vw := bson.NewDocumentWriter(buf)
+	enc := bson.NewEncoder(vw)
+	enc.SetRegistry(r)
 	enc.UseJSONStructTags()
 	enc.OmitZeroStruct()
 	enc.NilMapAsEmpty()
-	err = enc.Encode(val)
-	if err != nil {
+	if err := enc.Encode(val); err != nil {
 		return nil, err
 	}
-	dec, err := bson.NewDecoder(bsonrw.NewBSONDocumentReader(buf.Bytes()))
-	if err != nil {
-		return nil, err
-	}
+	dec := bson.NewDecoder(bson.NewDocumentReader(bytes.NewReader(buf.Bytes())))
 	dec.UseJSONStructTags()
-	dec.DefaultDocumentD()
 	dec.DefaultDocumentM()
 	var data bson.D
-	err = dec.Decode(&data)
-	if err != nil {
+	if err := dec.Decode(&data); err != nil {
 		return nil, err
 	}
-	return data, err
+	return data, nil
 }
 
 // NewRegistry the register with grpc supported
-func NewRegistry() *bsoncodec.Registry {
+func NewRegistry() *bson.Registry {
 	reg := bson.NewRegistry()
 	// Encoders
 	reg.RegisterTypeEncoder(boolValueType, wrapperValueCodecRef)

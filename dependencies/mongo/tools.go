@@ -8,27 +8,26 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // ObjectIDToBase64 object id to base64
-func ObjectIDToBase64(id primitive.ObjectID) string {
+func ObjectIDToBase64(id bson.ObjectID) string {
 	return base64.RawURLEncoding.EncodeToString(id[:])
 }
 
 // ObjectIDFromBase64 creates a new ObjectID from a hex string. It returns an error if the src string is not a
 // valid ObjectID.
-func ObjectIDFromBase64(s string) (primitive.ObjectID, error) {
+func ObjectIDFromBase64(s string) (bson.ObjectID, error) {
 	b, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return primitive.NilObjectID, err
+		return bson.NilObjectID, err
 	}
 
 	if len(b) != 12 {
-		return primitive.NilObjectID, errors.New("the provided base64 string is not a valid id")
+		return bson.NilObjectID, errors.New("the provided base64 string is not a valid id")
 	}
 
 	var oid [12]byte

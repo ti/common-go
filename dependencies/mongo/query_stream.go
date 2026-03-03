@@ -7,10 +7,9 @@ import (
 	"strings"
 
 	"github.com/ti/common-go/dependencies/database"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -101,7 +100,7 @@ func parseQuery(ctx context.Context, col *mongo.Collection,
 	return
 }
 
-func parseSelect(opts *options.FindOptions, selectData []string) {
+func parseSelect(opts *options.FindOptionsBuilder, selectData []string) {
 	var selectFields bson.D
 	for _, v := range selectData {
 		if len(v) < 2 {
@@ -213,15 +212,15 @@ type PageToken struct {
 }
 
 type objectData struct {
-	ID primitive.ObjectID `bson:"_id"`
+	ID bson.ObjectID `bson:"_id"`
 }
 
-func getDocObjectIDFromCursor(cur *mongo.Cursor) primitive.ObjectID {
+func getDocObjectIDFromCursor(cur *mongo.Cursor) bson.ObjectID {
 	var data objectData
 	if err := cur.Decode(&data); err == nil {
 		return data.ID
 	}
-	return primitive.ObjectID{}
+	return bson.ObjectID{}
 }
 
 func getFiledByName(src any, field string) any {

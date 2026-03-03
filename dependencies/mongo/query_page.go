@@ -9,10 +9,9 @@ import (
 	"strings"
 
 	"github.com/ti/common-go/dependencies/database"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -34,7 +33,7 @@ func PageQuery[T any](ctx context.Context, s *Mongo, table string,
 	if in.Page > 0 {
 		skip = (in.Page - 1) * int(limit)
 	}
-	opts := &options.FindOptions{}
+	opts := options.Find()
 	if skip > 0 {
 		opts.SetSkip(int64(skip))
 	}
@@ -120,8 +119,8 @@ func parseSelectAndDistinct(selectIn []string) (selectParams map[string]int, dis
 func parseDistinct[T any](ctx context.Context, collection *mongo.Collection,
 	distinct string,
 ) (*database.PageQueryResponse[T], error) {
-	ret, err := collection.Distinct(ctx, distinct, bson.M{})
-	if err != nil {
+	var ret []any
+	if err := collection.Distinct(ctx, distinct, bson.M{}).Decode(&ret); err != nil {
 		return nil, err
 	}
 	retDistinct := &database.PageQueryResponse[T]{
@@ -147,8 +146,7 @@ func parseDistinct[T any](ctx context.Context, collection *mongo.Collection,
 	}
 	retDistinct.Total = int64(len(ret))
 	var result []*T
-	err = json.Unmarshal([]byte(retJSON), &result)
-	if err != nil {
+	if err := json.Unmarshal([]byte(retJSON), &result); err != nil {
 		return nil, fmt.Errorf("conver json %s error %w", retJSON, err)
 	}
 	retDistinct.Data = result
@@ -250,7 +248,7 @@ func filterKvs(filter bson.D, k, v string) bson.D {
 		regV := v[1 : len(v)-1]
 		filter = append(filter, bson.E{
 			Key:   k,
-			Value: primitive.Regex{Pattern: regV},
+			Value: bson.Regex{Pattern: regV},
 		})
 	case charDot:
 		filter = append(filter, bson.E{

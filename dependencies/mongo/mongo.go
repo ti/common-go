@@ -11,9 +11,9 @@ import (
 	"github.com/ti/common-go/dependencies/mongo/codecs"
 
 	"github.com/ti/common-go/dependencies/database"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // Mongo the mongo client
@@ -57,7 +57,7 @@ func (m *Mongo) Init(ctx context.Context, u *url.URL) error {
 			OmitZeroStruct:          false,
 			StringifyMapKeysWithFmt: false,
 		})
-	mongoClient, err := mongo.Connect(ctx, opts)
+	mongoClient, err := mongo.Connect(opts)
 	if err != nil {
 		return errors.New("can not dial mongo " + uri + " - " + err.Error())
 	}
