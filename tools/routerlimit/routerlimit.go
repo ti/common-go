@@ -98,13 +98,12 @@ func getQuota(quotaLimit Limit, path string, header Getter) *LimitValue {
 	limitValue := &LimitValue{
 		Quota:    quotaLimit.Quota,
 		Duration: quotaLimit.Duration,
-		Key:      path,
 	}
 	var targetHeaderKey string
 	for _, headerKey := range quotaLimit.Headers {
 		headerValue := header.Get(headerKey)
 		if headerValue != "" {
-			limitValue.Key += ":" + headerValue
+			limitValue.Key += "." + headerValue
 			targetHeaderKey += headerKey
 		}
 	}

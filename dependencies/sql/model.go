@@ -26,7 +26,7 @@ func GenerateScheme(table string, data any) string {
 
 // GenerateDBScheme gen scheme
 func GenerateDBScheme(database string) string {
-	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS " + database + ";")
+	return "CREATE DATABASE IF NOT EXISTS " + database + ";"
 }
 
 // GenerateIndexScheme gen scheme

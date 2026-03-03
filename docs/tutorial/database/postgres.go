@@ -24,7 +24,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	data := &pb.Request{
+	data := &pb.CreateUserRequest{
 		Name: "test",
 	}
 	const table = "test"
@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var newData pb.Request
+	var newData pb.CreateUserRequest
 	err = db.FindOne(ctx, table, database.C{
 		{
 			Key: "name",

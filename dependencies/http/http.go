@@ -280,7 +280,7 @@ func (h *HTTP) Download(ctx context.Context, downloadURL string, writer io.Write
 			if errResolve != nil {
 				return 0, errResolve
 			}
-			base = fmt.Sprintf("http://" + host + h.path)
+			base = "http://" + host + h.path
 		}
 		downloadURL = base + downloadURL
 	}
@@ -306,7 +306,7 @@ func (h *HTTP) buildRequestBody(ctx context.Context, path string,
 		if errResolve != nil {
 			return base, nil, errResolve
 		}
-		base = fmt.Sprintf("http://" + host + h.path)
+		base = "http://" + host + h.path
 	}
 	if reqData == nil {
 		return

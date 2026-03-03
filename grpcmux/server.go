@@ -238,7 +238,7 @@ func (s *Server) initMemConnListener(opts ...grpc.ServerOption) {
 	)
 	s.bufListener = bufListener
 	if err != nil {
-		panic(fmt.Errorf("Conn buf failed for " + err.Error()))
+		panic(errors.New("Conn buf failed for " + err.Error()))
 	}
 	s.bufServer = grpc.NewServer(opts...)
 }
