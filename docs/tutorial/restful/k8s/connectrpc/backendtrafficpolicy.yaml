@@ -1,0 +1,70 @@
+# BackendTrafficPolicy for ConnectRPC + grpcmux service.
+#
+# Key settings:
+#   1. HTTP/2 backend protocol — Envoy must forward to the Go h2c backend
+#      using HTTP/2 (cleartext). Without this, Envoy defaults to HTTP/1.1
+#      which breaks gRPC streaming and is less efficient for ConnectRPC.
+#
+#   2. Timeout tuning — The default timeout may be too short for streaming RPCs.
+#      Adjust requestTimeout based on your longest expected RPC duration.
+#      Set to 0s to disable timeout (use only for streaming endpoints).
+#
+# Apply AFTER the HTTPRoute is created:
+#   kubectl apply -f backendtrafficpolicy.yaml
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: connectrpc-userservice-policy
+  namespace: aws300
+  labels:
+    app: userservice
+spec:
+  # Target the HTTPRoute (not individual backend Services).
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: connectrpc-userservice
+
+  # ── HTTP/2 backend ──────────────────────────────────────────────────────────
+  # Tell Envoy to use HTTP/2 (h2c) when connecting to the Go backend.
+  # The Go server uses h2c.NewHandler which supports both HTTP/1.1 and HTTP/2.
+  #
+  # This is critical for:
+  #   - Native gRPC clients (require HTTP/2)
+  #   - ConnectRPC streaming (bidirectional streaming requires HTTP/2)
+  #   - Efficient multiplexing of many concurrent RPC connections
+  #
+  # For ConnectRPC unary calls (the common browser case), HTTP/1.1 also works,
+  # but HTTP/2 is preferred for performance.
+  connection:
+    bufferLimit: 32768  # 32 KiB per connection buffer
+
+  # ── Timeout configuration ───────────────────────────────────────────────────
+  timeout:
+    http:
+      # requestTimeout: Maximum duration for a complete request/response cycle.
+      # For unary RPCs: set to a reasonable value (e.g., 30s).
+      # For streaming RPCs (StreamUsers, etc.): set to 0s (unlimited) or a
+      # very large value to allow the stream to stay open.
+      requestTimeout: 30s
+      # connectionIdleTimeout: Close idle connections after this duration.
+      # Increase for services with infrequent but long-running streams.
+      connectionIdleTimeout: 300s
+
+  # ── Health check ────────────────────────────────────────────────────────────
+  # Envoy actively probes the backend health endpoint.
+  # The Go grpcmux server exposes GET /healthz → "SERVING".
+  healthCheck:
+    active:
+      enable: true
+      type: HTTP
+      http:
+        path: /healthz
+        expectedStatuses:
+          - start: 200
+            end: 200
+      interval: 10s
+      timeout: 5s
+      unhealthyThreshold: 3
+      healthyThreshold: 2

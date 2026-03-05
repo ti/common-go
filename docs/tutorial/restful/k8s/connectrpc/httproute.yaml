@@ -1,0 +1,78 @@
+# HTTPRoute for ConnectRPC + grpcmux service.
+#
+# This route attaches to the existing "eg" Envoy Gateway (namespace: aws300)
+# and handles both:
+#   - ConnectRPC / gRPC-Web traffic:  /pb.UserService/*
+#   - REST gateway traffic:           /v1/users/**
+#   - Health check:                   /healthz
+#
+# TLS terminates at Envoy Gateway (port 443).
+# The backend (Go server) runs h2c (cleartext HTTP/2) on port 8080.
+#
+# Replace "your-app.nx.run" with your actual hostname.
+# Replace "your-app-service" with your Kubernetes Service name.
+#
+# Usage:
+#   kubectl apply -f httproute.yaml
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: connectrpc-userservice
+  namespace: aws300
+  labels:
+    app: userservice
+spec:
+  # Attach to the existing "eg" Envoy Gateway.
+  # The listener "https-tls" (or whichever hostname listener covers your domain)
+  # must already exist on the gateway. Add a new listener for your hostname if needed.
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: eg
+      namespace: aws300
+      # sectionName restricts to a specific listener.
+      # If your hostname is on a dedicated listener, specify it:
+      # sectionName: https-your-app
+
+  hostnames:
+    - "your-app.nx.run"  # ← replace with your domain
+
+  rules:
+    # ── ConnectRPC / gRPC / gRPC-Web ──────────────────────────────────────────
+    # All RPCs arrive as POST /pb.UserService/<MethodName>.
+    # Envoy forwards them to the Go backend over h2c.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /pb.UserService/
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: userservice       # ← replace with your K8s Service name
+          port: 8080
+          weight: 1
+
+    # ── REST gateway endpoints ─────────────────────────────────────────────────
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: userservice
+          port: 8080
+          weight: 1
+
+    # ── Health check ───────────────────────────────────────────────────────────
+    - matches:
+        - path:
+            type: Exact
+            value: /healthz
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: userservice
+          port: 8080
+          weight: 1

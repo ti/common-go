@@ -39,6 +39,8 @@ type options struct {
 	logBody                      bool
 	useCamelCase                 bool
 	healthCheckers               []HealthChecker
+	tlsCertFile                  string
+	tlsKeyFile                   string
 }
 
 func evaluateOptions(opts []Option) *options {
@@ -111,6 +113,8 @@ type Config struct {
 	LogBody      bool   `yaml:"logBody"`
 	Tracing      bool   `yaml:"tracing"`
 	UseCamelCase bool   `yaml:"useCamelCase"`
+	TLSCertFile  string `yaml:"tlsCertFile"`
+	TLSKeyFile   string `yaml:"tlsKeyFile"`
 }
 
 // WithConfig init with config
@@ -140,6 +144,10 @@ func WithConfig(c *Config) Option {
 		}
 		if c.UseCamelCase {
 			o.useCamelCase = true
+		}
+		if c.TLSCertFile != "" && c.TLSKeyFile != "" {
+			o.tlsCertFile = c.TLSCertFile
+			o.tlsKeyFile = c.TLSKeyFile
 		}
 	}
 }
@@ -211,6 +219,26 @@ func WithHTTPMiddleWares(middleWares ...func(http.Handler) http.Handler) Option 
 func WithUseCamelCase() Option {
 	return func(o *options) {
 		o.useCamelCase = true
+	}
+}
+
+// WithTLS enables HTTPS/TLS mode for the HTTP server.
+// When set, the server listens with TLS instead of h2c (cleartext HTTP/2).
+// Use this when TLS terminates at the Go server rather than at a reverse proxy.
+// If not set (default), the server uses h2c, which is suitable for deployments
+// behind a TLS-terminating proxy (e.g., Envoy Gateway, Nginx, AWS ALB).
+//
+// Example:
+//
+//	// TLS mode: browser connects directly with HTTPS
+//	gs := grpcmux.NewServer(grpcmux.WithTLS("/path/to/cert.pem", "/path/to/key.pem"))
+//
+//	// h2c mode (default): TLS terminated at Envoy/proxy
+//	gs := grpcmux.NewServer()
+func WithTLS(certFile, keyFile string) Option {
+	return func(o *options) {
+		o.tlsCertFile = certFile
+		o.tlsKeyFile = keyFile
 	}
 }
 

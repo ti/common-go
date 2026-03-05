@@ -1,0 +1,31 @@
+# buf.gen.yaml — Code generation configuration.
+# Generates TypeScript types from proto files using protoc-gen-es.
+#
+# Output layout:
+#   src/gen/
+#   └── pb/               (matches proto package "pb")
+#       ├── main_pb.ts    (User, CreateUserRequest, GetUserRequest, … message classes)
+#       └── error_pb.ts   (ErrorCode enum)
+#
+# The generated files use @bufbuild/protobuf runtime (Protobuf-ES v2).
+# Service definitions (for connect clients) are included in main_pb.ts.
+#
+# Note: protoc-gen-connect-es is NOT needed separately — @bufbuild/protoc-gen-es
+# generates both message types AND service descriptors in the same file.
+# The ConnectRPC client uses the service descriptor from main_pb.ts directly.
+version: v2
+plugins:
+  - local: protoc-gen-es
+    out: src/gen
+    opt:
+      # Generate TypeScript source files
+      - target=ts
+      # Include imported dependencies (google/api/*, validate/*, etc.)
+      - include_imports=true
+      # Use source-relative paths for cleaner output
+      - paths=source_relative
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto

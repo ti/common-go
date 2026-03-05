@@ -1,0 +1,100 @@
+# Gateway listener patch for "your-app.nx.run".
+#
+# The existing "eg" Gateway in namespace aws300 already has several HTTPS listeners.
+# Add a new listener for your application hostname.
+#
+# Options:
+#   A) Add a new dedicated listener (recommended if you need a separate TLS cert):
+#      Apply this patch with kubectl patch or add the listener block to your Helm values.
+#
+#   B) Reuse an existing listener (if your hostname is already covered by a wildcard cert):
+#      In the HTTPRoute, leave sectionName unset so the route attaches to all matching listeners.
+#
+# This file shows option A — adding a new listener via a strategic merge patch.
+#
+# Prerequisites:
+#   1. Create the TLS secret:
+#        kubectl create secret tls tls-your-app \
+#          --cert=your-app.crt --key=your-app.key \
+#          -n aws300
+#      Or use cert-manager (recommended):
+#        kubectl annotate gateway eg \
+#          cert-manager.io/cluster-issuer=letsencrypt-gateway \
+#          -n aws300
+#
+#   2. Apply the patch:
+#        kubectl patch gateway eg -n aws300 --type=json -p "$(cat gateway-listener-patch.json)"
+#      Or update your Helm values.yaml to include the listener.
+#
+# NOTE: Direct kubectl patch of a Gateway listener list requires a JSON patch.
+# The YAML below shows the listener config to add — convert to JSON patch as needed.
+#
+# Listener to add to spec.listeners:
+# ─────────────────────────────────────────────────────────────────────────────
+# - allowedRoutes:
+#     namespaces:
+#       from: All
+#   hostname: your-app.nx.run      # ← replace with your domain
+#   name: https-your-app           # ← unique listener name
+#   port: 443
+#   protocol: HTTPS
+#   tls:
+#     certificateRefs:
+#       - group: ""
+#         kind: Secret
+#         name: tls-your-app       # ← TLS secret name
+#     mode: Terminate
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# JSON patch equivalent (save as gateway-listener-patch.json):
+# [
+#   {
+#     "op": "add",
+#     "path": "/spec/listeners/-",
+#     "value": {
+#       "allowedRoutes": { "namespaces": { "from": "All" } },
+#       "hostname": "your-app.nx.run",
+#       "name": "https-your-app",
+#       "port": 443,
+#       "protocol": "HTTPS",
+#       "tls": {
+#         "certificateRefs": [{ "group": "", "kind": "Secret", "name": "tls-your-app" }],
+#         "mode": "Terminate"
+#       }
+#     }
+#   }
+# ]
+#
+# After the listener is created, update httproute.yaml to add:
+#   sectionName: https-your-app
+# to the parentRef so the route is scoped to this listener only.
+---
+# This is a documentation-only placeholder.
+# The actual listener is managed by patching the Gateway resource above.
+# See the comments for the exact kubectl command and JSON patch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: eg
+  namespace: aws300
+  annotations:
+    # cert-manager will automatically provision a TLS cert for each listener hostname
+    cert-manager.io/cluster-issuer: letsencrypt-gateway
+spec:
+  gatewayClassName: eg
+  # Add the following to spec.listeners in your Helm values / kustomize patch:
+  # (do NOT apply this entire file — it would replace the existing listeners)
+  listeners:
+    - allowedRoutes:
+        namespaces:
+          from: All
+      hostname: your-app.nx.run     # ← replace with your domain
+      name: https-your-app          # ← unique, kebab-case
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: tls-your-app      # ← cert-manager will create this automatically
+        mode: Terminate

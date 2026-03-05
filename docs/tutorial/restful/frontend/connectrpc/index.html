@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ConnectRPC + grpcmux Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1a1b1e;
+      --surface: #25262b;
+      --border: #373a40;
+      --text: #c1c2c5;
+      --text-dim: #868e96;
+      --accent: #339af0;
+      --accent-dim: #1c7ed6;
+      --success: #69db7c;
+      --error: #ff6b6b;
+      --radius: 8px;
+      --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .badge-blue { background: #1864ab; color: #a5d8ff; }
+    .badge-green { background: #1a5436; color: #8ce99a; }
+    .badge-purple { background: #4c2c8f; color: #d0bfff; }
+
+    .info-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 28px;
+    }
+
+    .info-panel dt {
+      color: var(--accent);
+      display: inline;
+    }
+
+    .info-panel .row {
+      margin-bottom: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-header h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .method-path {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    .card-body {
+      padding: 16px 18px;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="number"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.875rem;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+    }
+
+    button {
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 8px 18px;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    button:hover:not(:disabled) { background: var(--accent-dim); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .result {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      margin-top: 12px;
+      min-height: 64px;
+      overflow-x: auto;
+      padding: 10px 12px;
+      white-space: pre;
+      color: var(--text-dim);
+    }
+
+    .result:empty::before {
+      content: "Result will appear here…";
+      color: var(--border);
+    }
+
+    footer {
+      margin-top: 36px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.78rem;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ConnectRPC + grpcmux Demo</h1>
+    <div class="badge-row">
+      <span class="badge badge-blue">Connect Protocol</span>
+      <span class="badge badge-green">h2c / HTTPS</span>
+      <span class="badge badge-purple">Pure TypeScript</span>
+    </div>
+    <div class="info-panel">
+      <div class="row"><dt>Backend: </dt><span id="info-server">—</span></div>
+      <div class="row"><dt>Base URL: </dt><span id="info-base-url">—</span></div>
+      <div class="row"><dt>Protocol: </dt><span id="info-protocol">—</span></div>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- CreateUser -->
+    <div class="card">
+      <div class="card-header">
+        <h2>CreateUser</h2>
+        <span class="method-path">/pb.UserService/CreateUser</span>
+      </div>
+      <div class="card-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="input-name">Name</label>
+            <input id="input-name" type="text" placeholder="Alice" value="Alice" />
+          </div>
+          <div class="field">
+            <label for="input-email">Email</label>
+            <input id="input-email" type="email" placeholder="alice@example.com" value="alice@example.com" />
+          </div>
+        </div>
+        <button id="btn-create">Create User</button>
+        <div class="result" id="result-create"></div>
+      </div>
+    </div>
+
+    <!-- GetUser -->
+    <div class="card">
+      <div class="card-header">
+        <h2>GetUser</h2>
+        <span class="method-path">/pb.UserService/GetUser</span>
+      </div>
+      <div class="card-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="input-user-id">User ID</label>
+            <input id="input-user-id" type="text" placeholder="123456789" />
+          </div>
+        </div>
+        <button id="btn-get">Get User</button>
+        <div class="result" id="result-get"></div>
+      </div>
+    </div>
+
+    <!-- ListUsers -->
+    <div class="card">
+      <div class="card-header">
+        <h2>ListUsers</h2>
+        <span class="method-path">/pb.UserService/ListUsers</span>
+      </div>
+      <div class="card-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="input-page">Page</label>
+            <input id="input-page" type="number" value="1" min="1" />
+          </div>
+          <div class="field">
+            <label for="input-limit">Limit</label>
+            <input id="input-limit" type="number" value="10" min="1" max="100" />
+          </div>
+        </div>
+        <button id="btn-list">List Users</button>
+        <div class="result" id="result-list"></div>
+      </div>
+    </div>
+
+    <!-- DeleteUser -->
+    <div class="card">
+      <div class="card-header">
+        <h2>DeleteUser</h2>
+        <span class="method-path">/pb.UserService/DeleteUser</span>
+      </div>
+      <div class="card-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="input-delete-id">User ID</label>
+            <input id="input-delete-id" type="text" placeholder="123456789" />
+          </div>
+        </div>
+        <button id="btn-delete">Delete User</button>
+        <div class="result" id="result-delete"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>
+      Backend: <a href="https://github.com/ti/common-go" target="_blank">github.com/ti/common-go</a> ·
+      ConnectRPC: <a href="https://connectrpc.com" target="_blank">connectrpc.com</a> ·
+      Transport: Connect protocol (JSON, HTTP/1.1)
+    </p>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

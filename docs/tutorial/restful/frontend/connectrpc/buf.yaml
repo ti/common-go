@@ -1,0 +1,27 @@
+# buf.yaml — Buf workspace configuration for TypeScript code generation.
+# This generates TypeScript types from the existing proto files.
+#
+# Usage:
+#   npm run gen         # generates/updates src/gen/
+#   npm run gen:clean   # removes src/gen/ and regenerates
+#
+# Requires buf to be installed (included as devDependency via @bufbuild/buf).
+version: v2
+modules:
+  # Point to the proto directory relative to this file.
+  # The proto files are shared with the Go backend.
+  - path: ../../proto
+deps:
+  # protovalidate (for validate.proto imported by main.proto)
+  - buf.build/bufbuild/protovalidate
+  # googleapis (for google/api/annotations.proto and google/api/http.proto)
+  - buf.build/googleapis/googleapis
+lint:
+  use:
+    - STANDARD
+  except:
+    # Allow the existing proto package naming convention (single word "pb")
+    - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - FILE

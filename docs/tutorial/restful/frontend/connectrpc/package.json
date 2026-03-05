@@ -1,0 +1,24 @@
+{
+  "name": "connectrpc-frontend",
+  "version": "1.0.0",
+  "description": "ConnectRPC + grpcmux frontend demo — pure TypeScript, no framework",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "gen": "npx --yes @bufbuild/buf generate",
+    "gen:clean": "rm -rf src/gen && npx --yes @bufbuild/buf generate"
+  },
+  "devDependencies": {
+    "@bufbuild/protoc-gen-es": "^2.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0"
+  },
+  "optionalDependencies": {
+    "@bufbuild/protobuf": "^2.0.0",
+    "@connectrpc/connect": "^2.0.0",
+    "@connectrpc/connect-web": "^2.0.0"
+  }
+}

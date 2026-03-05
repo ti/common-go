@@ -305,6 +305,33 @@ func (s *Server) startHTTP(ctx context.Context) error {
 		s.httpServerMux.Handle("/", s.mux)
 		handler = s.httpServerMux
 	}
+
+	tlsCert := s.opts.tlsCertFile
+	tlsKey := s.opts.tlsKeyFile
+	useTLS := tlsCert != "" && tlsKey != ""
+
+	if useTLS {
+		// TLS mode: HTTP/2 over TLS (h2). The standard Go HTTP server automatically
+		// enables HTTP/2 when ListenAndServeTLS is used. No h2c wrapper needed.
+		s.HTTPServer = &http.Server{
+			Addr:              s.opts.httpAddr,
+			Handler:           handler,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			IdleTimeout:       5 * time.Minute,
+			WriteTimeout:      90 * time.Second,
+			MaxHeaderBytes:    1 << 20,
+		}
+		s.Logger.Log(ctx, logging.LevelInfo, "Start https (TLS) at "+s.opts.httpAddr)
+		err := s.HTTPServer.ListenAndServeTLS(tlsCert, tlsKey)
+		if !errors.Is(err, http.ErrServerClosed) {
+			return errors.New("Start https failed for " + err.Error())
+		}
+		return nil
+	}
+
+	// h2c mode (default): cleartext HTTP/2 + HTTP/1.1.
+	// Suitable for deployments behind a TLS-terminating proxy (Envoy Gateway, Nginx, etc.).
 	h2Handler := h2c.NewHandler(handler, &http2.Server{
 		IdleTimeout:          time.Minute,
 		MaxConcurrentStreams: 1000,

@@ -22,3 +22,4 @@ id_rsa.pub
 .kube
 _root/
 snakeCase
+/connectrpc
