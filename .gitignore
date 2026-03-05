@@ -13,6 +13,7 @@ go.mod
 *.iml
 tmp
 vendor
+node_modules
 .idea
 .vscode
 .history
