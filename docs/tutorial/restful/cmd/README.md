@@ -1,6 +1,6 @@
 # RESTful API 命令行程序
 
-本目录包含两个示例程序，展示如何使用不同的 JSON 命名格式启动 RESTful API 服务器。
+本目录包含三个示例程序，展示如何使用不同的 JSON 命名格式和协议启动 API 服务器。
 
 ## 目录结构
 
@@ -10,6 +10,10 @@ cmd/
 │   └── main.go
 ├── snakeCase/          # snake_case JSON 格式服务器（默认）
 │   └── main.go
+├── connectrpc/         # ConnectRPC + gRPC-Gateway + gRPC 多协议服务器
+│   ├── main.go
+│   ├── handler.go
+│   └── README.md
 ├── README.md           # 本文档
 └── JSON_FORMAT_COMPARISON.md  # 格式对比测试报告
 ```
@@ -71,6 +75,27 @@ cmd/
 - Python 后端项目
 - 数据库字段直接映射
 - 传统 RESTful API 标准
+
+---
+
+### 3. ConnectRPC 服务器
+
+**位置**: `cmd/connectrpc/`
+
+**特点**:
+- 在 camelCase 基础上增加 ConnectRPC 协议支持
+- HTTP 端口: `8080`（REST + ConnectRPC 共存）
+- gRPC 端口: `8081`
+- Metrics 端口: `9090`
+- 支持 Connect、gRPC、gRPC-Web 三种协议
+- TLS 通过 config.yaml 配置（默认 h2c）
+
+**路由**:
+- `/v1/users/*` — gRPC-Gateway REST
+- `/pb.UserService/*` — ConnectRPC
+- `:8081` — native gRPC
+
+详见 [connectrpc/README.md](./connectrpc/README.md)。
 
 ---
 

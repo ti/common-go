@@ -302,8 +302,13 @@ func (s *Server) startHTTP(ctx context.Context) error {
 	if s.httpServerMux == nil {
 		handler = s.mux
 	} else {
-		s.httpServerMux.Handle("/", s.mux)
-		handler = s.httpServerMux
+		// Custom handlers (registered via Handle) are served by httpServerMux.
+		// The gateway mux is the fallback for all other paths.
+		// We use the raw serveMux (without middleware) as the fallback because
+		// the mux.Middleware wrapper applies the interceptor chain once to the
+		// entire combined handler — logging, auth, recovery, request-id, etc.
+		s.httpServerMux.Handle("/", s.mux.ServeMux())
+		handler = s.mux.Middleware(s.httpServerMux)
 	}
 
 	tlsCert := s.opts.tlsCertFile

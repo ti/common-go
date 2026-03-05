@@ -75,6 +75,16 @@ func (srv *ServeMux) ServeMux() *runtime.ServeMux {
 	return srv.serveMux
 }
 
+// Middleware wraps the given handler with the same HTTP interceptor chain
+// (logging, auth, recovery, request-id, metadata injection, etc.)
+// that is applied to the gateway routes.
+// Use this to ensure custom handlers registered via Server.Handle share
+// the same observability and security behaviour as gRPC-Gateway routes.
+func (srv *ServeMux) Middleware(h http.Handler) http.Handler {
+	middleWares := append([]func(http.Handler) http.Handler{defaultInterceptor(srv.opts)}, srv.opts.middleWares...)
+	return handlerWithMiddleWares(h, middleWares...)
+}
+
 // isPermanentHTTPHeader checks whether hdr belongs to the list of
 // permanent request headers maintained by IANA.
 // http://www.iana.org/assignments/message-headers/message-headers.xml

@@ -1,40 +1,21 @@
 /**
- * client.ts — ConnectRPC transport client using Connect protocol (JSON over HTTP).
+ * client.ts — ConnectRPC client using plain fetch().
  *
- * The Connect protocol for unary RPCs is simply:
+ * The Connect protocol for unary RPCs:
  *   POST /<package>.<Service>/<Method>
- *   Content-Type: application/connect+json
+ *   Content-Type: application/json
  *   Body: JSON-encoded request message
  *
- * Responses are JSON-encoded, with errors signaled via HTTP status codes and
- * a JSON error body: { "code": "not_found", "message": "..." }
- *
- * This client uses plain fetch() to call the ConnectRPC backend, which means:
- *   - No code generation needed
- *   - Works in all browsers over HTTP/1.1
- *   - Human-readable in DevTools network panel
- *   - Type-safe via TypeScript interfaces
- *
- * For production use, generate a typed client with buf generate + @connectrpc/connect-web.
- * See buf.yaml and buf.gen.yaml for the code generation configuration.
+ * No code generation or special transport library needed.
  */
 
-// Base URL for the backend.
-// In development: Vite proxies /pb.UserService/* → http://localhost:8080 (see vite.config.ts).
-// In production: set VITE_API_BASE_URL environment variable at build time.
+// Base URL — Vite proxies /pb.UserService/* to the backend (see vite.config.ts).
 const BASE_URL: string =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
     ?.VITE_API_BASE_URL ?? window.location.origin;
 
-// ConnectRPC error structure (Connect protocol JSON error body)
-export interface ConnectError {
-  code: string;     // e.g. "not_found", "invalid_argument", "unauthenticated"
-  message: string;
-  details?: unknown[];
-}
-
-// ── Proto message types ───────────────────────────────────────────────────────
+// ── Proto types ───────────────────────────────────────────────────────────────
 
 export interface CreateUserRequest {
   name: string;
@@ -45,7 +26,7 @@ export interface CreateUserRequest {
 }
 
 export interface GetUserRequest {
-  user_id: string; // int64 as string in JSON
+  user_id: string;
 }
 
 export interface PageQueryRequest {
@@ -55,7 +36,7 @@ export interface PageQueryRequest {
 }
 
 export interface DeleteUserRequest {
-  user_id: string; // int64 as string in JSON
+  user_id: string;
 }
 
 export interface User {
@@ -84,35 +65,28 @@ export interface PageUsersResponse {
   total?: string;
 }
 
-// ── Core RPC helper ───────────────────────────────────────────────────────────
+// ── RPC helper ────────────────────────────────────────────────────────────────
 
-/**
- * Calls a ConnectRPC method using the Connect protocol (application/connect+json).
- *
- * The Connect protocol spec for unary calls:
- *   - Method: POST
- *   - Path:   /<package>.<Service>/<Method>
- *   - Request Content-Type: application/connect+json
- *   - Request body: JSON-encoded proto message
- *   - Response body: JSON-encoded proto message (success) OR connect error (failure)
- *   - Error indicated by HTTP status code != 200 and body: {"code":"...","message":"..."}
- */
+interface ConnectError {
+  code: string;
+  message: string;
+}
+
 async function rpc<Req, Resp>(method: string, req: Req): Promise<Resp> {
   const url = `${BASE_URL}/pb.UserService/${method}`;
   const resp = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/connect+json",
-      "Connect-Protocol-Version": "1",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
 
-  const body = await resp.json() as Resp | ConnectError;
+  const body = (await resp.json()) as Resp | ConnectError;
 
   if (!resp.ok || (body as ConnectError).code) {
     const err = body as ConnectError;
-    throw new Error(`[${err.code ?? resp.status}] ${err.message ?? resp.statusText}`);
+    throw new Error(
+      `[${err.code ?? resp.status}] ${err.message ?? resp.statusText}`
+    );
   }
 
   return body as Resp;
@@ -133,7 +107,5 @@ export const userClient = {
   deleteUser: (req: DeleteUserRequest): Promise<DeleteUserResponse> =>
     rpc("DeleteUser", req),
 };
-
-// ── Exported info ─────────────────────────────────────────────────────────────
 
 export { BASE_URL };

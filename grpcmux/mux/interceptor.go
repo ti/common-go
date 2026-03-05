@@ -124,7 +124,8 @@ func enableCORS(w http.ResponseWriter, r *http.Request) bool {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, PATCH, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+
-					"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp")
+					"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp, "+
+					"Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout")
 				w.Header().Set("Vary", "Origin, Accept-Encoding")
 				w.Header().Set("Access-Control-Max-Age", "86400")
 			}

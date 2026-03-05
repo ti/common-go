@@ -181,6 +181,24 @@ func codeToError(c codes.Code) string {
 	return strconv.FormatInt(int64(c), 10)
 }
 
+// CodeToError returns the error string for a gRPC code.
+// For standard gRPC codes (0-16), returns the canonical name (e.g. "not_found").
+// For custom codes registered via RegisterErrorCodes, returns the registered name.
+// For unknown codes, returns the numeric string.
+func CodeToError(c codes.Code) string {
+	return codeToError(c)
+}
+
+// CodeToHTTPStatus maps a gRPC code to an HTTP status code.
+// For standard gRPC codes (0-16), follows the gRPC-Gateway mapping.
+// For custom codes (e.g. 4xxx, 5xxx), uses the convention:
+//   - 4xxx → HTTP 400 (Bad Request)
+//   - 5xxx → HTTP 500 (Internal Server Error)
+//   - Standard HTTP codes (200-599) → used directly
+func CodeToHTTPStatus(c codes.Code) int {
+	return codeToStatus(c)
+}
+
 // codesErrors some errors string for grpc codes.
 var codesErrors = map[codes.Code]string{
 	codes.OK:                 "ok",
