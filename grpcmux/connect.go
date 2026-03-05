@@ -8,6 +8,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/ti/common-go/grpcmux/mux"
+	"github.com/ti/common-go/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -69,11 +70,27 @@ func (s *Server) newConnectHandler(server any, m grpc.MethodDesc) http.Handler {
 
 		ctx := r.Context()
 
+		// Inject method name into logger context (parallel to medaGetter in gRPC-Gateway)
+		log.Inject(ctx, map[string]any{
+			"method": m.MethodName,
+		})
+
 		// Decode request
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1 MB limit
 		if err != nil {
 			writeConnectError(w, status.New(codes.InvalidArgument, "failed to read request body"))
 			return
+		}
+
+		// Log request body when logBody is enabled (parallel to medaGetter in gRPC-Gateway)
+		if s.opts.logBody && len(body) > 0 {
+			reqLog := string(body)
+			if len(reqLog) > 1024000 {
+				reqLog = reqLog[:1024000]
+			}
+			log.Inject(ctx, map[string]any{
+				"request": reqLog,
+			})
 		}
 
 		method := reflect.ValueOf(server).MethodByName(m.MethodName)
@@ -127,6 +144,17 @@ func (s *Server) newConnectHandler(server any, m grpc.MethodDesc) http.Handler {
 		if err != nil {
 			writeConnectError(w, status.New(codes.Internal, "failed to marshal response"))
 			return
+		}
+
+		// Log response body when logBody is enabled (parallel to forwardResponser in gRPC-Gateway)
+		if s.opts.logBody {
+			respLog := string(respBytes)
+			if len(respLog) > 2048 {
+				respLog = respLog[:2048]
+			}
+			log.Inject(ctx, map[string]any{
+				"response": respLog,
+			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
