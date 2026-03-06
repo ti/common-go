@@ -318,13 +318,17 @@ func (s *Server) startHTTP(ctx context.Context) error {
 	if useTLS {
 		// TLS mode: HTTP/2 over TLS (h2). The standard Go HTTP server automatically
 		// enables HTTP/2 when ListenAndServeTLS is used. No h2c wrapper needed.
+		//
+		// ReadTimeout and WriteTimeout are intentionally 0 (disabled) because
+		// HTTP/2 streaming RPCs (ConnectRPC SubscribeEvents, gRPC server-streaming)
+		// are long-lived connections. Setting a WriteTimeout kills streaming
+		// connections abruptly, causing ConnectError: missing EndStreamResponse.
+		// ReadHeaderTimeout is safe: it only applies to the initial headers phase.
 		s.HTTPServer = &http.Server{
 			Addr:              s.opts.httpAddr,
 			Handler:           handler,
 			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
 			IdleTimeout:       5 * time.Minute,
-			WriteTimeout:      90 * time.Second,
 			MaxHeaderBytes:    1 << 20,
 		}
 		s.Logger.Log(ctx, logging.LevelInfo, "Start https (TLS) at "+s.opts.httpAddr)
@@ -337,6 +341,12 @@ func (s *Server) startHTTP(ctx context.Context) error {
 
 	// h2c mode (default): cleartext HTTP/2 + HTTP/1.1.
 	// Suitable for deployments behind a TLS-terminating proxy (Envoy Gateway, Nginx, etc.).
+	//
+	// ReadTimeout and WriteTimeout are intentionally 0 (disabled) because
+	// HTTP/2 streaming RPCs (ConnectRPC SubscribeEvents, gRPC server-streaming)
+	// are long-lived connections. Setting a WriteTimeout kills streaming
+	// connections abruptly, causing ConnectError: missing EndStreamResponse.
+	// ReadHeaderTimeout is safe: it only applies to the initial headers phase.
 	h2Handler := h2c.NewHandler(handler, &http2.Server{
 		IdleTimeout:          time.Minute,
 		MaxConcurrentStreams: 1000,
@@ -345,9 +355,7 @@ func (s *Server) startHTTP(ctx context.Context) error {
 		Addr:              s.opts.httpAddr,
 		Handler:           h2Handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       5 * time.Minute,
-		WriteTimeout:      90 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
 	s.Logger.Log(ctx, logging.LevelInfo, "Start http at "+s.opts.httpAddr)
