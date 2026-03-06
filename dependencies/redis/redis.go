@@ -3,6 +3,7 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/url"
@@ -65,6 +66,13 @@ func (r *Redis) Init(ctx context.Context, u *url.URL) error {
 		}
 	}
 	opts.SelectDB, _ = strconv.Atoi(query.Get("db"))
+	if u.Scheme == "rediss" {
+		hostname := u.Hostname()
+		opts.TLSConfig = &tls.Config{
+			ServerName: hostname,
+			MinVersion: tls.VersionTLS12,
+		}
+	}
 	client, err := rueidis.NewClient(opts)
 	if err != nil {
 		return err
