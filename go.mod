@@ -3,6 +3,7 @@ module github.com/ti/common-go
 go 1.26
 
 require (
+	connectrpc.com/connect v1.19.1
 	github.com/IBM/sarama v1.47.0
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/envoyproxy/protoc-gen-validate v1.3.3
