@@ -251,6 +251,135 @@ func TestMockDatabase(t *testing.T) {
 	})
 }
 
+func TestReplaceOne(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.New(ctx, "mock://local/replaceonetest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close(ctx)
+
+	t.Run("Replace existing document", func(t *testing.T) {
+		_ = db.InsertOne(ctx, "users", &TestUser{ID: 1, Name: "Alice", Email: "alice@example.com", Age: 25})
+
+		count, err := db.ReplaceOne(ctx, "users",
+			database.C{{Key: "id", Value: int64(1)}},
+			&TestUser{ID: 1, Name: "Alice Updated", Email: "alice2@example.com", Age: 26})
+		if err != nil {
+			t.Fatal("ReplaceOne failed:", err)
+		}
+		if count != 1 {
+			t.Errorf("Expected count 1, got %d", count)
+		}
+
+		var result TestUser
+		_ = db.FindOne(ctx, "users", database.C{{Key: "id", Value: int64(1)}}, &result)
+		if result.Name != "Alice Updated" {
+			t.Errorf("Expected 'Alice Updated', got '%s'", result.Name)
+		}
+		if result.Age != 26 {
+			t.Errorf("Expected age 26, got %d", result.Age)
+		}
+
+		// Only one document should exist
+		total, _ := db.Count(ctx, "users", database.C{})
+		if total != 1 {
+			t.Errorf("Expected 1 document after replace, got %d", total)
+		}
+	})
+
+	t.Run("Upsert - insert when not found", func(t *testing.T) {
+		count, err := db.ReplaceOne(ctx, "users",
+			database.C{{Key: "id", Value: int64(99)}},
+			&TestUser{ID: 99, Name: "New User", Email: "new@example.com", Age: 20})
+		if err != nil {
+			t.Fatal("ReplaceOne upsert failed:", err)
+		}
+		if count != 1 {
+			t.Errorf("Expected count 1 for upsert, got %d", count)
+		}
+
+		var result TestUser
+		err = db.FindOne(ctx, "users", database.C{{Key: "id", Value: int64(99)}}, &result)
+		if err != nil {
+			t.Fatal("FindOne after upsert failed:", err)
+		}
+		if result.Name != "New User" {
+			t.Errorf("Expected 'New User', got '%s'", result.Name)
+		}
+	})
+}
+
+func TestReplace(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.New(ctx, "mock://local/replacetest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close(ctx)
+
+	// Seed two users
+	_ = db.InsertOne(ctx, "users", &TestUser{ID: 1, Name: "Alice", Email: "alice@example.com", Age: 25})
+	_ = db.InsertOne(ctx, "users", &TestUser{ID: 2, Name: "Bob", Email: "bob@example.com", Age: 30})
+
+	t.Run("Replace single document by index key", func(t *testing.T) {
+		count, err := db.Replace(ctx, "users", []string{"id"},
+			&TestUser{ID: 1, Name: "Alice v2", Email: "aliceV2@example.com", Age: 27})
+		if err != nil {
+			t.Fatal("Replace failed:", err)
+		}
+		if count != 1 {
+			t.Errorf("Expected count 1, got %d", count)
+		}
+
+		var result TestUser
+		_ = db.FindOne(ctx, "users", database.C{{Key: "id", Value: int64(1)}}, &result)
+		if result.Name != "Alice v2" {
+			t.Errorf("Expected 'Alice v2', got '%s'", result.Name)
+		}
+
+		// Total should still be 2
+		total, _ := db.Count(ctx, "users", database.C{})
+		if total != 2 {
+			t.Errorf("Expected 2 documents after replace, got %d", total)
+		}
+	})
+
+	t.Run("Replace bulk with upsert for new doc", func(t *testing.T) {
+		users := []*TestUser{
+			{ID: 2, Name: "Bob v2", Email: "bob2@example.com", Age: 31},
+			{ID: 3, Name: "Charlie", Email: "charlie@example.com", Age: 35}, // new
+		}
+		count, err := db.Replace(ctx, "users", []string{"id"}, users)
+		if err != nil {
+			t.Fatal("Replace bulk failed:", err)
+		}
+		if count != 2 {
+			t.Errorf("Expected count 2, got %d", count)
+		}
+
+		// Bob should be updated
+		var bob TestUser
+		_ = db.FindOne(ctx, "users", database.C{{Key: "id", Value: int64(2)}}, &bob)
+		if bob.Name != "Bob v2" {
+			t.Errorf("Expected 'Bob v2', got '%s'", bob.Name)
+		}
+
+		// Charlie should be inserted
+		var charlie TestUser
+		err = db.FindOne(ctx, "users", database.C{{Key: "id", Value: int64(3)}}, &charlie)
+		if err != nil {
+			t.Fatal("Charlie not found after Replace upsert:", err)
+		}
+
+		// Total should now be 3
+		total, _ := db.Count(ctx, "users", database.C{})
+		if total != 3 {
+			t.Errorf("Expected 3 documents after bulk replace, got %d", total)
+		}
+	})
+}
+
 func TestConditions(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.New(ctx, "mock://local/condtest")

@@ -127,13 +127,71 @@ func (m *Mock) UpdateOne(ctx context.Context, tableName string, condition databa
 	return 0, nil
 }
 
-// Replace replaces documents (not implemented yet - similar to Update)
+// Replace replaces documents by index keys (upsert semantics: replace if found, insert if not).
+// indexKeys specifies which fields to use as the match condition.
+// If indexKeys is empty, "_id" / "id" is used as default.
 func (m *Mock) Replace(ctx context.Context, tableName string, indexKeys []string, docs any) (count int, err error) {
-	// For mock, we treat Replace similar to Insert
-	return m.Insert(ctx, tableName, docs)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(indexKeys) == 0 {
+		indexKeys = []string{"id"}
+	}
+
+	table := m.getOrCreateTable(tableName)
+
+	v := reflect.ValueOf(docs)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	var items []any
+	if v.Kind() == reflect.Slice {
+		if v.Len() == 0 {
+			return 0, fmt.Errorf("no insert data found")
+		}
+		items = make([]any, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			items[i] = v.Index(i).Interface()
+		}
+	} else {
+		items = []any{docs}
+	}
+
+	for _, item := range items {
+		newRow, convErr := structToMap(item)
+		if convErr != nil {
+			return count, convErr
+		}
+
+		// Build condition from index keys
+		cond := make(database.C, 0, len(indexKeys))
+		for _, key := range indexKeys {
+			normalizedKey := normalizeKey(key)
+			if val, ok := newRow[normalizedKey]; ok {
+				cond = append(cond, database.CE{Key: normalizedKey, Value: val})
+			}
+		}
+
+		// Find and replace, or insert if not found
+		replaced := false
+		for i := range table.data {
+			if matchConditions(table.data[i], cond) {
+				table.data[i] = newRow
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			table.data = append(table.data, newRow)
+		}
+		count++
+	}
+
+	return count, nil
 }
 
-// ReplaceOne replaces a single document
+// ReplaceOne replaces a single document matching condition (upsert: insert if not found).
 func (m *Mock) ReplaceOne(ctx context.Context, tableName string, condition database.C, data any) (count int, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -153,7 +211,9 @@ func (m *Mock) ReplaceOne(ctx context.Context, tableName string, condition datab
 		}
 	}
 
-	return 0, nil
+	// Not found: insert (upsert semantics, matching mongo SetUpsert(true))
+	table.data = append(table.data, newRow)
+	return 1, nil
 }
 
 // Delete deletes documents matching the condition

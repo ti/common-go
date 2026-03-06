@@ -214,6 +214,9 @@ func mapToStruct(m map[string]any, dest any) error {
 				val := reflect.ValueOf(value)
 				if val.Type().AssignableTo(fieldValue.Type()) {
 					fieldValue.Set(val)
+				} else if val.Type().ConvertibleTo(fieldValue.Type()) {
+					// Handle numeric type mismatches (e.g. int stored, int64 field)
+					fieldValue.Set(val.Convert(fieldValue.Type()))
 				}
 			}
 		}
