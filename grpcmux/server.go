@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,6 +110,7 @@ type Server struct {
 	Logger        logging.Logger
 	mux           *mux.ServeMux
 	httpServerMux *http.ServeMux
+	wsServeMux    *http.ServeMux // WebSocket handlers — bypasses h2c
 	HTTPServer    *http.Server
 	healthServer  *simpleHealthServer
 	// GrpcServer the *grpc..Server
@@ -268,6 +270,24 @@ func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.httpServerMux.Handle(pattern, handler)
 }
 
+// HandleWebSocket registers a WebSocket handler for the given pattern.
+// Unlike Handle/HandleFunc, WebSocket handlers registered here are served
+// by a dedicated mux that sits OUTSIDE the h2c wrapper. This is required
+// because h2c.NewHandler intercepts "Connection: Upgrade" before any routing
+// occurs, which prevents the standard WebSocket handshake from succeeding.
+//
+// The handler receives plain HTTP/1.1 upgrade requests and should perform
+// the WebSocket handshake itself (e.g. via gorilla/websocket Upgrader).
+//
+// Auth middleware is NOT applied to these handlers — add your own auth logic
+// inside the handler if needed.
+func (s *Server) HandleWebSocket(pattern string, handler http.Handler) {
+	if s.wsServeMux == nil {
+		s.wsServeMux = http.NewServeMux()
+	}
+	s.wsServeMux.Handle(pattern, handler)
+}
+
 // ServeMux returns the native server mux of grpc gateay
 func (s *Server) ServeMux() *runtime.ServeMux {
 	return s.mux.ServeMux()
@@ -309,6 +329,23 @@ func (s *Server) startHTTP(ctx context.Context) error {
 		// entire combined handler — logging, auth, recovery, request-id, etc.
 		s.httpServerMux.Handle("/", s.mux.ServeMux())
 		handler = s.mux.Middleware(s.httpServerMux)
+	}
+
+	// If WebSocket handlers are registered, wrap the outermost handler so that
+	// WebSocket upgrade requests are dispatched to wsServeMux BEFORE h2c sees
+	// them. h2c.NewHandler intercepts "Connection: Upgrade" and prevents the
+	// HTTP/1.1 → WebSocket handshake from completing, so we must short-circuit
+	// it here.
+	if s.wsServeMux != nil {
+		wsMux := s.wsServeMux
+		inner := handler
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+				wsMux.ServeHTTP(w, r)
+				return
+			}
+			inner.ServeHTTP(w, r)
+		})
 	}
 
 	tlsCert := s.opts.tlsCertFile
