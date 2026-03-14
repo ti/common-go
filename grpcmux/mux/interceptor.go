@@ -44,10 +44,11 @@ var noLogPath = map[string]bool{
 }
 
 func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
+	corsHandler := newCORSHandler(&opts.cors)
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !opts.noCors {
-				if enableCORS(w, r) {
+			if corsHandler != nil {
+				if corsHandler(w, r) {
 					return
 				}
 			}
@@ -112,30 +113,71 @@ func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
 	}
 }
 
-func enableCORS(w http.ResponseWriter, r *http.Request) bool {
-	if filepath.Ext(r.URL.Path) == "" {
-		w.Header().Set("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
+var defaultAllowHeaders = "Authorization, Content-Type, Accept, " +
+	"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp, " +
+	"Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout"
+
+// newCORSHandler builds a CORS handler function from the given config.
+// Returns nil when CORS is disabled.
+func newCORSHandler(cfg *CORSConfig) func(http.ResponseWriter, *http.Request) bool {
+	if cfg.Disabled {
+		return nil
 	}
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		if uri, err := url.Parse(origin); err == nil {
-			if uri.Host != r.Host {
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, PATCH, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+
-					"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp, "+
-					"Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout")
-				w.Header().Set("Vary", "Origin, Accept-Encoding")
-				w.Header().Set("Access-Control-Max-Age", "86400")
-			}
+
+	// Pre-compute the allowed-origins lookup set.
+	allowAll := len(cfg.AllowedOrigins) == 0 // empty treated as allow-all
+	allowedSet := make(map[string]bool, len(cfg.AllowedOrigins))
+	for _, o := range cfg.AllowedOrigins {
+		if o == "*" {
+			allowAll = true
+		} else {
+			allowedSet[strings.ToLower(o)] = true
 		}
 	}
-	if r.Method == http.MethodHead || r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return true
+
+	// Pre-compute the Allow-Headers value.
+	allowHeaders := defaultAllowHeaders
+	if len(cfg.AllowedHeaders) > 0 {
+		allowHeaders = allowHeaders + ", " + strings.Join(cfg.AllowedHeaders, ", ")
 	}
-	return false
+
+	// Pre-compute the Expose-Headers value.
+	exposeHeaders := ""
+	if len(cfg.ExposeHeaders) > 0 {
+		exposeHeaders = strings.Join(cfg.ExposeHeaders, ", ")
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) bool {
+		if filepath.Ext(r.URL.Path) == "" {
+			w.Header().Set("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
+		}
+
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if uri, err := url.Parse(origin); err == nil {
+				if uri.Host != r.Host {
+					originLower := strings.ToLower(origin)
+					if allowAll || allowedSet[originLower] {
+						w.Header().Set("Access-Control-Allow-Credentials", "true")
+						w.Header().Set("Access-Control-Allow-Origin", origin)
+						w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, PATCH, OPTIONS")
+						w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
+						if exposeHeaders != "" {
+							w.Header().Set("Access-Control-Expose-Headers", exposeHeaders)
+						}
+						w.Header().Set("Vary", "Origin, Accept-Encoding")
+						w.Header().Set("Access-Control-Max-Age", "86400")
+					}
+				}
+			}
+		}
+
+		if r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return true
+		}
+		return false
+	}
 }
 
 func queryHeaderAdapter(r *http.Request) {

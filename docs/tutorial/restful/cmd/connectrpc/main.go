@@ -32,6 +32,9 @@ func main() {
 		grpcmux.WithGrpcAddr(":8081"),
 		grpcmux.WithMetricsAddr(":9090"),
 		grpcmux.WithUseCamelCase(),
+		grpcmux.WithCORS(grpcmux.CORSConfig{
+			AllowedOrigins: []string{"*"},
+		}),
 		grpcmux.WithConfig(&cfg.Apis),
 	)
 

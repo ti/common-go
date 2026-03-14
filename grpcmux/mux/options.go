@@ -15,6 +15,9 @@ var defaultOptions = &options{
 	runTimeOpts:  nil,
 	middleWares:  nil,
 	bodyReWriter: nil,
+	cors: CORSConfig{
+		AllowedOrigins: []string{"*"},
+	},
 	newErrorBody: func(grpcStatus *status.Status, statusCodeStr string) proto.Message {
 		statusError := &Error{
 			Error:            statusCodeStr,
@@ -46,13 +49,31 @@ var defaultMarshalOptions = protojson.MarshalOptions{
 	EmitUnpopulated: false,
 }
 
+// CORSConfig holds CORS (Cross-Origin Resource Sharing) configuration.
+type CORSConfig struct {
+	// Disabled completely disables CORS header injection.
+	// Use this when CORS is handled by a reverse proxy (e.g. Envoy, Nginx).
+	Disabled bool
+	// AllowedOrigins is the list of allowed origins.
+	// Use ["*"] to allow all origins (default).
+	// When set to ["*"], the response mirrors the request Origin.
+	// Otherwise only origins in this list are allowed.
+	AllowedOrigins []string
+	// AllowedHeaders is the list of extra allowed request headers
+	// appended to the built-in set.
+	AllowedHeaders []string
+	// ExposeHeaders is the list of response headers the browser is
+	// allowed to access from JavaScript.
+	ExposeHeaders []string
+}
+
 type options struct {
 	runTimeOpts       []runtime.ServeMuxOption
 	middleWares       []func(http.Handler) http.Handler
 	logBody           bool
 	noLog             bool
 	recovery          bool
-	noCors            bool
+	cors              CORSConfig
 	authFunc          func(context.Context) (context.Context, error)
 	noAuthPrefix      []string
 	marshalOptions    protojson.MarshalOptions
@@ -91,10 +112,18 @@ func WithOutLog() Option {
 	}
 }
 
-// WithOutCORS disable cors
+// WithOutCORS disable cors.
+// Deprecated: Use WithCORS(CORSConfig{Disabled: true}) instead.
 func WithOutCORS() Option {
 	return func(o *options) {
-		o.noCors = true
+		o.cors.Disabled = true
+	}
+}
+
+// WithCORS sets the CORS configuration.
+func WithCORS(c CORSConfig) Option {
+	return func(o *options) {
+		o.cors = c
 	}
 }
 

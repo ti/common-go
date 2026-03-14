@@ -7,6 +7,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	muxlogging "github.com/ti/common-go/grpcmux/logging"
+	"github.com/ti/common-go/grpcmux/mux"
 	"github.com/ti/common-go/tools/routerlimit"
 	"google.golang.org/grpc"
 )
@@ -41,6 +42,7 @@ type options struct {
 	healthCheckers               []HealthChecker
 	tlsCertFile                  string
 	tlsKeyFile                   string
+	cors                         *mux.CORSConfig
 }
 
 func evaluateOptions(opts []Option) *options {
@@ -105,16 +107,20 @@ func WithMetaTags(tags []string) Option {
 	}
 }
 
+// CORSConfig is an alias for mux.CORSConfig exposed at the grpcmux package level.
+type CORSConfig = mux.CORSConfig
+
 // Config the config exporter.
 type Config struct {
-	GrpcAddr     string `yaml:"grpcAddr"`
-	HTTPAddr     string `yaml:"httpAddr"`
-	MetricsAddr  string `yaml:"metricsAddr"`
-	LogBody      bool   `yaml:"logBody"`
-	Tracing      bool   `yaml:"tracing"`
-	UseCamelCase bool   `yaml:"useCamelCase"`
-	TLSCertFile  string `yaml:"tlsCertFile"`
-	TLSKeyFile   string `yaml:"tlsKeyFile"`
+	GrpcAddr     string      `yaml:"grpcAddr"`
+	HTTPAddr     string      `yaml:"httpAddr"`
+	MetricsAddr  string      `yaml:"metricsAddr"`
+	LogBody      bool        `yaml:"logBody"`
+	Tracing      bool        `yaml:"tracing"`
+	UseCamelCase bool        `yaml:"useCamelCase"`
+	TLSCertFile  string      `yaml:"tlsCertFile"`
+	TLSKeyFile   string      `yaml:"tlsKeyFile"`
+	CORS         *CORSConfig `yaml:"cors"`
 }
 
 // WithConfig init with config
@@ -149,6 +155,27 @@ func WithConfig(c *Config) Option {
 			o.tlsCertFile = c.TLSCertFile
 			o.tlsKeyFile = c.TLSKeyFile
 		}
+		if c.CORS != nil {
+			o.cors = c.CORS
+		}
+	}
+}
+
+// WithCORS sets the CORS configuration for the HTTP server.
+//
+// Example — restrict to specific origins:
+//
+//	gs := grpcmux.NewServer(grpcmux.WithCORS(grpcmux.CORSConfig{
+//	    AllowedOrigins: []string{"https://example.com", "https://app.example.com"},
+//	    ExposeHeaders:  []string{"X-Request-Id"},
+//	}))
+//
+// Example — disable CORS (handled by reverse proxy):
+//
+//	gs := grpcmux.NewServer(grpcmux.WithCORS(grpcmux.CORSConfig{Disabled: true}))
+func WithCORS(c CORSConfig) Option {
+	return func(o *options) {
+		o.cors = &c
 	}
 }
 

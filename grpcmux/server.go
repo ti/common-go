@@ -83,6 +83,9 @@ func NewServer(opts ...Option) *Server {
 	if o.useCamelCase {
 		muxOpts = append(muxOpts, mux.WithUseCamelCase())
 	}
+	if o.cors != nil {
+		muxOpts = append(muxOpts, mux.WithCORS(*o.cors))
+	}
 	if svc.useMemConn {
 		muxOpts = append(muxOpts, mux.WithOutLog())
 	} else {
