@@ -942,3 +942,230 @@ make build
 return nil, status.Error(codes.Code(pb.ErrorCode_custom_error),
     "custom error message")
 ```
+
+## Dependencies 依赖管理
+
+项目中所有的**外部依赖**——包括数据库、缓存、消息队列、HTTP/gRPC 下游服务、AI 模型服务等——都建议通过 **URI** 的形式定义，并统一通过 `Dependencies` 结构体接入。
+
+这样做的好处：
+- **配置即连接**：一个 URI 字符串包含协议、地址、认证和参数，无需为每种依赖单独编写初始化逻辑
+- **统一生命周期**：框架自动并发初始化所有依赖，并在进程退出时自动调用 `Close` 进行优雅关闭
+- **环境无关**：开发/测试/生产只需切换配置文件中的 URI，代码零修改
+
+### 核心原理
+
+`config.Init()` 在加载配置后，自动扫描 Config 中嵌入了 `dependencies.Dependency` 的 struct 字段，将 YAML 中对应的 key-value（字段名→URI）传入 `dependencies.Init()` 进行初始化。
+
+对每个字段，框架按以下优先级尝试初始化：
+
+1. **指针类型** (`*T`)：自动 `reflect.New(T)`，然后查找并调用 `Init(context.Context, *url.URL) error` 方法
+2. **接口类型** (`interface`)：通过 `WithNewFns()` 注册的工厂函数创建实例
+3. 如果都没有，返回错误并提示注册方式
+
+### 定义 Dependencies 结构体
+
+```go
+// service/dependencies.go
+package service
+
+import (
+    "github.com/ti/common-go/dependencies"
+    "github.com/ti/common-go/dependencies/database"
+    "github.com/ti/common-go/dependencies/redis"
+    "github.com/ti/common-go/dependencies/broker"
+    dephttp "github.com/ti/common-go/dependencies/http"
+    "github.com/ti/common-go/dependencies/mqlru"
+    pb "your/project/proto"
+)
+
+type Dependencies struct {
+    dependencies.Dependency                           // 必须嵌入，作为第一个匿名字段
+
+    // ——— 存储类 ———
+    DB    *database.DB   `required:"false"`           // 数据库（mock/mongo/mysql/postgres）
+    Redis *redis.Redis   `required:"false"`           // 缓存
+
+    // ——— 消息队列 ———
+    Broker *broker.Broker `required:"false"`           // MQ（kafka 等）
+    Cache  *mqlru.Lru     `required:"false"`           // 带 MQ 同步的 LRU 缓存
+
+    // ——— 下游服务 ———
+    PaymentAPI *dephttp.HTTP            `required:"false"` // HTTP 下游
+    UserSvc    pb.UserServiceClient     `required:"false"` // gRPC 下游（接口类型）
+
+    // ——— AI 模型 ———
+    LLM     *dephttp.HTTP `required:"false"`           // AI 模型 API
+}
+```
+
+**规则：**
+- **第一个字段**必须是匿名嵌入的 `dependencies.Dependency`
+- 字段类型必须是**指针** (`*T`) 或**接口** (`interface`)
+- 字段名（小写化后）对应 YAML 配置中的 key
+- 默认 `required:"true"`，加 `required:"false"` 标记为可选（URI 为空时跳过，不报错）
+
+### YAML 配置
+
+```yaml
+dependencies:
+    # 存储
+    db: "mock://local/myapp"
+    redis: "redis://:password@127.0.0.1:6379?db=0"
+
+    # 消息队列
+    broker: "kafka://127.0.0.1:9092/events"
+    cache: "cache://memory?ttl=5m&capacity=1000"
+
+    # 下游 HTTP 服务
+    paymentAPI: "http://payment.internal:8080?try=3&timeout=5s&log=true"
+
+    # 下游 gRPC 服务
+    userSvc: "dns://user-service.ns.svc:8081?log=true&metrics=true"
+
+    # AI 模型服务
+    llm: "http://llm-gateway.internal:8080/v1/chat/completions?timeout=30s&try=2&log=true"
+```
+
+### main.go 初始化
+
+```go
+type Config struct {
+    Dependencies service.Dependencies   // 框架自动发现并初始化
+    Service      service.Config
+    Apis         grpcmux.Config
+}
+
+func main() {
+    var cfg Config
+    err := config.Init(context.Background(), "", &cfg,
+        // 接口类型的字段需要注册工厂函数
+        dependencies.WithNewFns(
+            database.New,              // database.Database 接口
+            pb.NewUserServiceClient,   // gRPC 客户端接口
+        ),
+    )
+    if err != nil {
+        log.Action("InitConfig").Fatal(err.Error())
+    }
+    // cfg.Dependencies.DB、cfg.Dependencies.Redis 等已自动初始化完成
+}
+```
+
+### 内置依赖类型
+
+| 类型 | 字段类型 | URI 格式 | 初始化方式 |
+|------|---------|----------|-----------|
+| Mock DB | `*database.DB` | `mock://local/dbname` | 自动 Init |
+| MongoDB | `*database.DB` | `mongodb://user:pass@host/db` | 自动 Init |
+| MySQL | `*database.DB` | `mysql://user:pass@tcp(host:3306)/db` | 自动 Init |
+| PostgreSQL | `*database.DB` | `postgres://user:pass@host:5432/db` | 自动 Init |
+| Redis | `*redis.Redis` | `redis://:pass@host:6379?db=0` | 自动 Init |
+| Redis (TLS) | `*redis.Redis` | `rediss://:pass@host:6379` | 自动 Init |
+| HTTP 客户端 | `*dephttp.HTTP` | `http://host?try=3&timeout=5s&log=true` | 自动 Init |
+| Broker (Kafka) | `*broker.Broker` | `kafka://host:9092/topic` | 自动 Init |
+| LRU 缓存 | `*mqlru.Lru` | `cache://memory?ttl=5m&capacity=1000` | 自动 Init |
+| gRPC 客户端 | `pb.XxxClient` (接口) | `dns://svc:8081?log=true` | WithNewFns |
+
+### 自定义依赖
+
+当你需要接入一个框架未内置的外部服务（如第三方 SDK、AI 平台等），只需让结构体实现 `Init` 方法：
+
+```go
+type MySDK struct {
+    client *somepackage.Client
+}
+
+// Init 实现 Init(context.Context, *url.URL) error 接口
+// 框架自动调用，无需手动注册
+func (s *MySDK) Init(ctx context.Context, u *url.URL) error {
+    apiKey := u.User.Username()
+    secret, _ := u.User.Password()
+    region := u.Query().Get("region")
+    s.client = somepackage.NewClient(u.Host, apiKey, secret, region)
+    return s.client.Ping(ctx)
+}
+
+// Close 可选实现，框架在 graceful shutdown 时自动调用
+func (s *MySDK) Close(ctx context.Context) error {
+    return s.client.Close()
+}
+```
+
+在 Dependencies 中直接使用：
+
+```go
+type Dependencies struct {
+    dependencies.Dependency
+    MySDK *MySDK                      // 配置: mySDK: "custom://apiKey:secret@host:9090?region=us-east-1"
+}
+```
+
+### URI 参数约定
+
+各内置依赖支持的通用查询参数：
+
+**HTTP 客户端 (`dephttp.HTTP`):**
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `timeout` | 请求超时 | `timeout=5s` |
+| `try` | 重试次数 | `try=3` |
+| `log` | 启用日志 | `log=true` |
+| `logBody` | 记录请求/响应体 | `logBody=true` |
+| `tracing` | 启用 OpenTelemetry 追踪 | `tracing=true` |
+| `metrics` | 启用 Prometheus 指标 | `metrics=true` |
+| `proxy` | HTTP 代理 | `proxy=http://proxy:1080` |
+
+**Redis:**
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `db` | 数据库编号 | `db=1` |
+| `master` | Sentinel master 名称 | `master=mymaster` |
+| `cache` | 启用客户端缓存 | `cache=true` |
+| `shuffle` | 随机化初始连接顺序 | `shuffle=true` |
+
+**LRU 缓存 (`mqlru.Lru`):**
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `ttl` | 缓存过期时间 | `ttl=5m` |
+| `capacity` | 最大缓存条目数 | `capacity=1000` |
+| `touch` | 访问时刷新 TTL | `touch=false` |
+| `mq` | 启用 MQ 同步 | `mq=false` |
+
+### 多层依赖（分组）
+
+当依赖数量较多时，可以用嵌套 struct 分组管理：
+
+```go
+type Dependencies struct {
+    dependencies.Dependency
+    Storage  StorageDeps
+    Services ServiceDeps
+}
+
+type StorageDeps struct {
+    DB    *database.DB
+    Redis *redis.Redis
+}
+
+type ServiceDeps struct {
+    UserSvc pb.UserServiceClient
+}
+```
+
+```yaml
+dependencies:
+    storage:
+        db: "mongodb://localhost/myapp"
+        redis: "redis://localhost:6379"
+    services:
+        userSvc: "dns://user-svc:8081?log=true"
+```
+
+框架自动检测嵌套结构，切换为 `InitMulti` 模式，按分组**并发**初始化。
+
+### 最佳实践
+
+1. **所有外部依赖都通过 URI 定义**：无论是数据库、缓存、消息队列、下游微服务还是 AI 模型 API，统一用 URI 描述连接信息，让配置文件成为唯一的环境差异来源
+2. **用 `required:"false"` 标记可选依赖**：避免因某个非核心服务不可用而阻塞启动
+3. **自定义依赖实现 `Init` + `Close`**：融入框架的自动初始化和优雅关闭机制
+4. **善用 URI 查询参数**：超时、重试、日志、追踪等行为通过 URI 参数控制，不侵入业务代码
