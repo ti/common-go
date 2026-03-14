@@ -502,6 +502,182 @@ import _ "github.com/ti/common-go/dependencies/sql"
 
 详细的数据库配置说明请参考 `service/dependencies.go` 中的注释。
 
+## CORS 配置
+
+grpcmux 内置了 CORS 支持，默认允许所有跨域请求。可通过 `WithCORS` 选项自定义：
+
+### 默认配置（允许所有 Origin）
+
+```go
+gs := grpcmux.NewServer(
+    grpcmux.WithCORS(grpcmux.CORSConfig{
+        AllowedOrigins: []string{"*"},
+    }),
+)
+```
+
+### 限制特定域名
+
+```go
+gs := grpcmux.NewServer(
+    grpcmux.WithCORS(grpcmux.CORSConfig{
+        AllowedOrigins: []string{"https://example.com", "https://app.example.com"},
+        ExposeHeaders:  []string{"X-Request-Id"},
+    }),
+)
+```
+
+### 添加额外请求头
+
+不填写 `AllowedHeaders` 时，默认允许以下请求头：
+`Authorization, Content-Type, Accept, X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp, Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout`
+
+`AllowedHeaders` 字段用于在默认基础上**追加**额外的头：
+
+```go
+gs := grpcmux.NewServer(
+    grpcmux.WithCORS(grpcmux.CORSConfig{
+        AllowedOrigins: []string{"*"},
+        AllowedHeaders: []string{"X-Custom-Header", "X-Organization-Id"},
+        ExposeHeaders:  []string{"X-Request-Id", "X-Trace-Id"},
+    }),
+)
+```
+
+### 禁用 CORS（由反向代理处理）
+
+```go
+gs := grpcmux.NewServer(
+    grpcmux.WithCORS(grpcmux.CORSConfig{Disabled: true}),
+)
+```
+
+### 通过配置文件设置
+
+```yaml
+apis:
+  cors:
+    allowedOrigins:
+      - "https://example.com"
+    allowedHeaders:
+      - "X-Custom-Header"
+    exposeHeaders:
+      - "X-Request-Id"
+```
+
+### CORSConfig 字段说明
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `Disabled` | `bool` | `false` | 完全禁用 CORS 头注入 |
+| `AllowedOrigins` | `[]string` | `["*"]` | 允许的 Origin 列表，`*` 表示允许全部 |
+| `AllowedHeaders` | `[]string` | `[]` | 在默认允许头基础上追加的额外请求头 |
+| `ExposeHeaders` | `[]string` | `[]` | 允许前端 JS 读取的响应头 |
+
+### CORS 覆盖范围
+
+| 路径类型 | 是否受 CORS 保护 |
+|----------|:---:|
+| gRPC-Gateway REST 路由 | ✅ |
+| ConnectRPC 路由 | ✅ |
+| 自定义 HTTP handler (`s.Handle`) | ✅ |
+| WebSocket (`s.HandleWebSocket`) | ❌ |
+| Metrics 端点 | ❌ |
+
+## JWT Auth 鉴权
+
+grpcmux 通过 `WithAuthFunc` 提供统一的鉴权入口，**一次配置即可覆盖 gRPC、HTTP（gRPC-Gateway）和 ConnectRPC 三种接口**。
+
+### 鉴权覆盖原理
+
+`WithAuthFunc` 注册的函数会同时传递到两个层面：
+
+1. **gRPC interceptor 链** — 覆盖原生 gRPC 请求（`:8081`）
+2. **HTTP mux 中间件** — 覆盖所有 HTTP 路由（gRPC-Gateway + ConnectRPC + 自定义 Handle）
+
+```
+                     WithAuthFunc(jwtAuthFunc)
+                            │
+           ┌────────────────┼────────────────┐
+           ▼                ▼                ▼
+      gRPC interceptor   mux.authFunc    mux.authFunc
+           │                │                │
+           ▼                ▼                ▼
+      原生 gRPC :8081    gRPC-Gateway    ConnectRPC + 自定义 HTTP
+```
+
+### 基本用法
+
+```go
+import (
+    "context"
+    "strings"
+
+    "github.com/grpc-ecosystem/go-grpc-middleware/v2/metadata"
+    "google.golang.org/grpc/codes"
+    "google.golang.org/grpc/status"
+)
+
+func jwtAuthFunc(ctx context.Context) (context.Context, error) {
+    // 从 gRPC metadata 中取 Authorization header
+    // (HTTP 请求经 mux 转换后，HTTP header 已自动注入 metadata)
+    token := metadata.ExtractIncoming(ctx).Get("authorization")
+    if token == "" {
+        return ctx, status.Error(codes.Unauthenticated, "missing authorization")
+    }
+    token = strings.TrimPrefix(token, "Bearer ")
+
+    // 校验 JWT token（替换为你的实际验证逻辑）
+    claims, err := verifyJWT(token)
+    if err != nil {
+        return ctx, status.Error(codes.Unauthenticated, "invalid token")
+    }
+
+    // 将用户信息注入 context
+    ctx = mux.NewContextWithAuthInfo(ctx, claims)
+    return ctx, nil
+}
+
+func main() {
+    gs := grpcmux.NewServer(
+        grpcmux.WithAuthFunc(jwtAuthFunc),
+        grpcmux.WithNoAuthPrefixes("/healthz", "/v1/auth/login"),
+    )
+    // ...
+    gs.Start()
+}
+```
+
+### 跳过鉴权的路径
+
+使用 `WithNoAuthPrefixes` 设置不需要鉴权的路径前缀：
+
+```go
+gs := grpcmux.NewServer(
+    grpcmux.WithAuthFunc(jwtAuthFunc),
+    grpcmux.WithNoAuthPrefixes(
+        "/healthz",           // 健康检查
+        "/v1/auth/",          // 登录、注册等
+        "/v1/public/",        // 公开接口
+    ),
+)
+```
+
+该配置在两侧都生效：
+- **gRPC 侧**：按 `fullMethod` 前缀匹配
+- **HTTP 侧**：按 `r.URL.Path` 前缀匹配
+
+### 各接口的鉴权覆盖情况
+
+| 接口类型 | 鉴权方式 | 覆盖情况 |
+|----------|----------|:---:|
+| 原生 gRPC (`:8081`) | gRPC interceptor | ✅ |
+| gRPC-Gateway REST | mux 中间件 | ✅ |
+| ConnectRPC | mux 中间件（经 `mux.Middleware` 包裹） | ✅ |
+| 自定义 HTTP (`s.Handle`) | mux 中间件 | ✅ |
+| WebSocket (`s.HandleWebSocket`) | 需在 handler 内自行处理 | ❌ |
+| Metrics (`:9090`) | 独立 HTTP Server | ❌ |
+
 ## JSON 格式控制
 
 项目支持两种 JSON 命名格式：
