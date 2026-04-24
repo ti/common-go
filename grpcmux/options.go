@@ -33,6 +33,7 @@ type options struct {
 	grpcUnaryServerInterceptors  []grpc.UnaryServerInterceptor
 	grpcStreamServerInterceptors []grpc.StreamServerInterceptor
 	httpMiddleWares              []func(http.Handler) http.Handler
+	preHTTPMiddleWares           []func(http.Handler) http.Handler
 	noAuthPrefix                 []string
 	withOutKeepAliveOpts         bool
 	autoHTTP                     bool
@@ -239,6 +240,19 @@ func WithGRPCStreamServerInterceptors(i ...grpc.StreamServerInterceptor) Option 
 func WithHTTPMiddleWares(middleWares ...func(http.Handler) http.Handler) Option {
 	return func(o *options) {
 		o.httpMiddleWares = middleWares
+	}
+}
+
+// WithPreHTTPMiddleWares registers HTTP middlewares that run OUTSIDE the
+// default interceptor chain (before authFunc / logging / recovery). Use this
+// when a middleware must rewrite the request before the auth check — e.g.
+// translate a HttpOnly cookie into an Authorization: Bearer header so the
+// downstream authFunc sees a valid token. Middlewares registered via
+// WithHTTPMiddleWares run AFTER authFunc and therefore cannot influence its
+// result.
+func WithPreHTTPMiddleWares(middleWares ...func(http.Handler) http.Handler) Option {
+	return func(o *options) {
+		o.preHTTPMiddleWares = middleWares
 	}
 }
 

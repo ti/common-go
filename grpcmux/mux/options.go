@@ -70,6 +70,7 @@ type CORSConfig struct {
 type options struct {
 	runTimeOpts       []runtime.ServeMuxOption
 	middleWares       []func(http.Handler) http.Handler
+	preMiddleWares    []func(http.Handler) http.Handler
 	logBody           bool
 	noLog             bool
 	recovery          bool
@@ -190,6 +191,18 @@ func WithoutRecovery() Option {
 func WithHTTPAuthFunc(fn func(context.Context, *http.Request) (context.Context, error)) Option {
 	return func(o *options) {
 		o.httpAuthFunc = fn
+	}
+}
+
+// WithPreMiddleWares registers HTTP middlewares that run OUTSIDE the default
+// interceptor chain (i.e. before authFunc/logging/recovery). Use this when a
+// middleware must rewrite the request (e.g. translate a Cookie into an
+// Authorization header) before the auth check happens — the middlewares
+// registered via WithMiddleWares run AFTER authFunc and therefore cannot
+// influence its result.
+func WithPreMiddleWares(middleWares ...func(http.Handler) http.Handler) Option {
+	return func(o *options) {
+		o.preMiddleWares = middleWares
 	}
 }
 

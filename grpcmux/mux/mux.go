@@ -52,7 +52,13 @@ func NewServeMux(opts ...Option) *ServeMux {
 	// register default error codes
 	muxOpts = append(muxOpts, mux.opts.runTimeOpts...)
 	mux.serveMux = runtime.NewServeMux(muxOpts...)
-	middleWares := append([]func(http.Handler) http.Handler{defaultInterceptor(o)}, o.middleWares...)
+	// Chain order (outer to inner): preMiddleWares → defaultInterceptor → middleWares → serveMux.
+	// preMiddleWares wrap OUTSIDE defaultInterceptor so they can rewrite the request
+	// (e.g. translate Cookie → Authorization) before authFunc rejects it.
+	middleWares := make([]func(http.Handler) http.Handler, 0, len(o.preMiddleWares)+1+len(o.middleWares))
+	middleWares = append(middleWares, o.preMiddleWares...)
+	middleWares = append(middleWares, defaultInterceptor(o))
+	middleWares = append(middleWares, o.middleWares...)
 	mux.handler = handlerWithMiddleWares(mux.serveMux, middleWares...)
 	return mux
 }
@@ -81,7 +87,10 @@ func (srv *ServeMux) ServeMux() *runtime.ServeMux {
 // Use this to ensure custom handlers registered via Server.Handle share
 // the same observability and security behaviour as gRPC-Gateway routes.
 func (srv *ServeMux) Middleware(h http.Handler) http.Handler {
-	middleWares := append([]func(http.Handler) http.Handler{defaultInterceptor(srv.opts)}, srv.opts.middleWares...)
+	middleWares := make([]func(http.Handler) http.Handler, 0, len(srv.opts.preMiddleWares)+1+len(srv.opts.middleWares))
+	middleWares = append(middleWares, srv.opts.preMiddleWares...)
+	middleWares = append(middleWares, defaultInterceptor(srv.opts))
+	middleWares = append(middleWares, srv.opts.middleWares...)
 	return handlerWithMiddleWares(h, middleWares...)
 }
 

@@ -90,6 +90,9 @@ func NewServer(opts ...Option) *Server {
 		muxOpts = append(muxOpts, mux.WithOutLog())
 	} else {
 		muxOpts = append(muxOpts, mux.WithMiddleWares(o.httpMiddleWares...))
+		if len(o.preHTTPMiddleWares) > 0 {
+			muxOpts = append(muxOpts, mux.WithPreMiddleWares(o.preHTTPMiddleWares...))
+		}
 	}
 	svc.mux = mux.NewServeMux(muxOpts...)
 	svc.unaryServerInterceptor = chainUnaryInterceptors(unaryServerInterceptors)
