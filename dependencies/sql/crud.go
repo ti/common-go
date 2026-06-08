@@ -578,7 +578,7 @@ func (s *SQL) Delete(ctx context.Context, table string, conds database.C) (int, 
 func (s *SQL) ExecQuery(ctx context.Context, query string, args ...any) (int, error) {
 	var result sql.Result
 	var err error
-	// 兼容非mysql版本
+	// Compatible with non-MySQL databases
 	if s.scheme == schemePostgres {
 		query = postgres.ConvertSQL(query)
 	}

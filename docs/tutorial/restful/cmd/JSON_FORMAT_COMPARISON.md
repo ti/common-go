@@ -1,37 +1,37 @@
-# JSON 格式对比测试报告
+# JSON Format Comparison Test Report
 
-本文档对比了 camelCase 和 snake_case 两种 JSON 格式在 CRUD 操作中的返回结果。
+This document compares the return results of camelCase and snake_case JSON formats in CRUD operations.
 
-## 测试环境
+## Test Environment
 
-- **camelCase 服务器**: 端口 8080 (HTTP), 8081 (gRPC)
-- **snakeCase 服务器**: 端口 8082 (HTTP), 8083 (gRPC)
-- **数据库**: Mock Database（内存数据库）
+- **camelCase server**: Port 8080 (HTTP), 8081 (gRPC)
+- **snakeCase server**: Port 8082 (HTTP), 8083 (gRPC)
+- **Database**: Mock Database (in-memory database)
 
-## 关键差异
+## Key Differences
 
-### camelCase 格式
-- 使用 `grpcmux.WithUseCamelCase()` 选项
-- 字段名使用驼峰命名：`userId`, `createdAt`, `updatedAt`, `pageSize`
+### camelCase Format
+- Uses the `grpcmux.WithUseCamelCase()` option
+- Field names use camelCase: `userId`, `createdAt`, `updatedAt`, `pageSize`
 
-### snake_case 格式（默认）
-- 不使用 `WithUseCamelCase()` 选项
-- 字段名使用下划线命名：`user_id`, `created_at`, `updated_at`, `page_size`
+### snake_case Format (Default)
+- Does not use the `WithUseCamelCase()` option
+- Field names use snake_case: `user_id`, `created_at`, `updated_at`, `page_size`
 
 ---
 
-## 测试结果对比
+## Test Results Comparison
 
-### 1. CreateUser - 创建用户
+### 1. CreateUser
 
-#### camelCase 请求和响应
+#### camelCase Request and Response
 ```bash
-# 请求
+# Request
 curl -X POST http://127.0.0.1:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"TestUser","email":"test@example.com","age":30}'
 
-# 响应
+# Response
 {
     "user": {
         "userId": "1769868266642494615",
@@ -44,14 +44,14 @@ curl -X POST http://127.0.0.1:8080/v1/users \
 }
 ```
 
-#### snake_case 请求和响应
+#### snake_case Request and Response
 ```bash
-# 请求
+# Request
 curl -X POST http://127.0.0.1:8082/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"TestUser","email":"test@example.com","age":30}'
 
-# 响应
+# Response
 {
     "user": {
         "user_id": "1769874547784032306",
@@ -64,7 +64,7 @@ curl -X POST http://127.0.0.1:8082/v1/users \
 }
 ```
 
-**字段对比**:
+**Field Comparison**:
 | camelCase | snake_case |
 |-----------|------------|
 | userId | user_id |
@@ -73,14 +73,14 @@ curl -X POST http://127.0.0.1:8082/v1/users \
 
 ---
 
-### 2. GetUser - 获取用户
+### 2. GetUser
 
-#### camelCase 请求和响应
+#### camelCase Request and Response
 ```bash
-# 请求
+# Request
 curl -X GET "http://127.0.0.1:8080/v1/users/1769868266642494615"
 
-# 响应
+# Response
 {
     "user": {
         "userId": "1769868266642494615",
@@ -93,12 +93,12 @@ curl -X GET "http://127.0.0.1:8080/v1/users/1769868266642494615"
 }
 ```
 
-#### snake_case 请求和响应
+#### snake_case Request and Response
 ```bash
-# 请求
+# Request
 curl -X GET "http://127.0.0.1:8082/v1/users/1769874547784032306"
 
-# 响应
+# Response
 {
     "user": {
         "user_id": "1769874547784032306",
@@ -113,16 +113,16 @@ curl -X GET "http://127.0.0.1:8082/v1/users/1769874547784032306"
 
 ---
 
-### 3. UpdateUser - 更新用户
+### 3. UpdateUser
 
-#### camelCase 请求和响应
+#### camelCase Request and Response
 ```bash
-# 请求（注意：请求体使用 userId）
+# Request (note: request body uses userId)
 curl -X PUT "http://127.0.0.1:8080/v1/users/1769868266642494615" \
   -H "Content-Type: application/json" \
   -d '{"userId":"1769868266642494615","name":"UpdatedUser","email":"updated@example.com","age":31}'
 
-# 响应
+# Response
 {
     "user": {
         "userId": "1769868266642494615",
@@ -135,14 +135,14 @@ curl -X PUT "http://127.0.0.1:8080/v1/users/1769868266642494615" \
 }
 ```
 
-#### snake_case 请求和响应
+#### snake_case Request and Response
 ```bash
-# 请求（注意：请求体使用 user_id）
+# Request (note: request body uses user_id)
 curl -X PUT "http://127.0.0.1:8082/v1/users/1769874547784032306" \
   -H "Content-Type: application/json" \
   -d '{"user_id":"1769874547784032306","name":"UpdatedUser","email":"updated@example.com","age":31}'
 
-# 响应
+# Response
 {
     "user": {
         "user_id": "1769874547784032306",
@@ -155,18 +155,18 @@ curl -X PUT "http://127.0.0.1:8082/v1/users/1769874547784032306" \
 }
 ```
 
-**重点**: `updatedAt` / `updated_at` 时间戳自动更新
+**Key point**: `updatedAt` / `updated_at` timestamp is automatically updated
 
 ---
 
-### 4. ListUsers - 列出用户（分页）
+### 4. ListUsers (Paginated)
 
-#### camelCase 请求和响应
+#### camelCase Request and Response
 ```bash
-# 请求（注意：查询参数使用 pageSize）
+# Request (note: query parameter uses pageSize)
 curl -X GET "http://127.0.0.1:8080/v1/users?page=1&pageSize=10"
 
-# 响应
+# Response
 {
     "users": [
         {
@@ -192,12 +192,12 @@ curl -X GET "http://127.0.0.1:8080/v1/users?page=1&pageSize=10"
 }
 ```
 
-#### snake_case 请求和响应
+#### snake_case Request and Response
 ```bash
-# 请求（注意：查询参数使用 page_size）
+# Request (note: query parameter uses page_size)
 curl -X GET "http://127.0.0.1:8082/v1/users?page=1&page_size=10"
 
-# 响应
+# Response
 {
     "users": [
         {
@@ -223,106 +223,106 @@ curl -X GET "http://127.0.0.1:8082/v1/users?page=1&page_size=10"
 }
 ```
 
-**查询参数对比**:
+**Query Parameter Comparison**:
 | camelCase | snake_case |
 |-----------|------------|
 | pageSize | page_size |
 
-**响应字段对比**:
+**Response Field Comparison**:
 | camelCase | snake_case |
 |-----------|------------|
 | pageSize | page_size |
 
 ---
 
-### 5. DeleteUser - 删除用户
+### 5. DeleteUser
 
-#### camelCase 请求和响应
+#### camelCase Request and Response
 ```bash
-# 请求
+# Request
 curl -X DELETE "http://127.0.0.1:8080/v1/users/1769868281066952197"
 
-# 响应
+# Response
 {
     "success": true,
     "message": "User 1769868281066952197 deleted successfully"
 }
 ```
 
-#### snake_case 请求和响应
+#### snake_case Request and Response
 ```bash
-# 请求
+# Request
 curl -X DELETE "http://127.0.0.1:8082/v1/users/1769874560151784593"
 
-# 响应
+# Response
 {
     "success": true,
     "message": "User 1769874560151784593 deleted successfully"
 }
 ```
 
-**注意**: DeleteUser 的响应字段（success, message）在两种格式下都相同，因为这些字段没有下划线。
+**Note**: The DeleteUser response fields (success, message) are the same in both formats because these fields do not contain underscores.
 
 ---
 
-## 总结
+## Summary
 
-### ✅ 测试结果
+### Test Results
 
-| 操作 | camelCase 字段 | snake_case 字段 | 测试状态 |
-|------|----------------|-----------------|----------|
-| CreateUser | userId, createdAt, updatedAt | user_id, created_at, updated_at | ✅ 通过 |
-| GetUser | userId, createdAt, updatedAt | user_id, created_at, updated_at | ✅ 通过 |
-| UpdateUser | userId, updatedAt | user_id, updated_at | ✅ 通过 |
-| ListUsers | userId, createdAt, updatedAt, pageSize | user_id, created_at, updated_at, page_size | ✅ 通过 |
-| DeleteUser | success, message | success, message | ✅ 通过 |
+| Operation | camelCase Fields | snake_case Fields | Test Status |
+|-----------|-----------------|-------------------|-------------|
+| CreateUser | userId, createdAt, updatedAt | user_id, created_at, updated_at | Passed |
+| GetUser | userId, createdAt, updatedAt | user_id, created_at, updated_at | Passed |
+| UpdateUser | userId, updatedAt | user_id, updated_at | Passed |
+| ListUsers | userId, createdAt, updatedAt, pageSize | user_id, created_at, updated_at, page_size | Passed |
+| DeleteUser | success, message | success, message | Passed |
 
-### 关键发现
+### Key Findings
 
-1. **字段命名转换正确**:
-   - `user_id` ↔ `userId`
-   - `created_at` ↔ `createdAt`
-   - `updated_at` ↔ `updatedAt`
-   - `page_size` ↔ `pageSize`
+1. **Field name conversion is correct**:
+   - `user_id` <-> `userId`
+   - `created_at` <-> `createdAt`
+   - `updated_at` <-> `updatedAt`
+   - `page_size` <-> `pageSize`
 
-2. **请求体格式**: 客户端应该根据服务器配置使用相应的字段名格式
+2. **Request body format**: Clients should use the appropriate field name format based on the server configuration
 
-3. **查询参数**:
-   - camelCase 服务器接受 `?pageSize=10`
-   - snake_case 服务器接受 `?page_size=10`
+3. **Query parameters**:
+   - camelCase server accepts `?pageSize=10`
+   - snake_case server accepts `?page_size=10`
 
-4. **兼容性**: Mock Database 的自动字段标准化功能确保了两种格式都能正常工作
+4. **Compatibility**: Mock Database's automatic field normalization feature ensures both formats work correctly
 
-### 使用建议
+### Usage Recommendations
 
-#### 选择 camelCase 格式：
-- ✅ JavaScript/TypeScript 前端项目（符合 JS 命名规范）
-- ✅ 与现有 camelCase API 保持一致
-- ✅ 移动端应用（iOS/Android）
+#### Choose camelCase format:
+- JavaScript/TypeScript frontend projects (matches JS naming conventions)
+- Maintaining consistency with existing camelCase APIs
+- Mobile applications (iOS/Android)
 
-#### 选择 snake_case 格式：
-- ✅ Python 后端项目（符合 Python 命名规范）
-- ✅ 数据库字段直接映射
-- ✅ RESTful API 标准（多数采用 snake_case）
+#### Choose snake_case format:
+- Python backend projects (matches Python naming conventions)
+- Direct database field mapping
+- RESTful API standard (most use snake_case)
 
-### 如何切换格式
+### How to Switch Formats
 
-**启用 camelCase**:
+**Enable camelCase**:
 ```go
 gs := grpcmux.NewServer(
-    grpcmux.WithUseCamelCase(), // 添加此选项
+    grpcmux.WithUseCamelCase(), // Add this option
 )
 ```
 
-**使用 snake_case（默认）**:
+**Use snake_case (default)**:
 ```go
 gs := grpcmux.NewServer(
-    // 不添加 WithUseCamelCase() 选项
+    // Do not add WithUseCamelCase() option
 )
 ```
 
 ---
 
-**测试完成时间**: 2026-01-31
-**测试环境**: Mock Database
-**测试结论**: ✅ 两种 JSON 格式都正常工作，字段转换准确无误
+**Test completed**: 2026-01-31
+**Test environment**: Mock Database
+**Test conclusion**: Both JSON formats work correctly, field conversion is accurate

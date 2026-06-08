@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ConvertError 转换错误
+// ConvertError converts database errors to gRPC status errors
 // nolint: gomnd
 func ConvertError(err error) error {
 	var mySQLError *mysql.MySQLError

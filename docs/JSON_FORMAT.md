@@ -1,10 +1,10 @@
-# JSON 格式配置指南
+# JSON Format Configuration Guide
 
-grpcmux 支持两种 JSON 格式输出：**下划线格式（snake_case）** 和 **驼峰格式（camelCase）**。
+grpcmux supports two JSON format outputs: **snake_case** and **camelCase**.
 
-## 默认格式
+## Default Format
 
-默认情况下，grpcmux 使用 **下划线格式（snake_case）**，这是 Protocol Buffers 的标准格式。
+By default, grpcmux uses **snake_case**, which is the standard Protocol Buffers format.
 
 ```json
 {
@@ -15,7 +15,7 @@ grpcmux 支持两种 JSON 格式输出：**下划线格式（snake_case）** 和
 }
 ```
 
-错误响应也使用下划线格式：
+Error responses also use snake_case format:
 ```json
 {
   "error": "invalid_argument",
@@ -24,13 +24,13 @@ grpcmux 支持两种 JSON 格式输出：**下划线格式（snake_case）** 和
 }
 ```
 
-## 启用驼峰格式
+## Enabling CamelCase Format
 
-如果你的前端需要驼峰格式（camelCase），可以通过以下几种方式启用：
+If your frontend requires camelCase format, you can enable it in the following ways:
 
-### 方式一：使用配置选项（推荐）
+### Method 1: Using Configuration Options (Recommended)
 
-在配置文件中添加 `useCamelCase` 字段：
+Add the `useCamelCase` field in the configuration file:
 
 ```yaml
 # config.yaml
@@ -39,10 +39,10 @@ apis:
   httpAddr: :8080
   metricsAddr: :9090
   logBody: false
-  useCamelCase: true  # 启用驼峰格式
+  useCamelCase: true  # Enable camelCase format
 ```
 
-在代码中使用：
+Usage in code:
 
 ```go
 package main
@@ -58,7 +58,7 @@ func main() {
     var cfg Config
     config.Init(context.Background(), "file://config.yaml", &cfg)
 
-    // 配置会自动应用 useCamelCase 设置
+    // The configuration automatically applies the useCamelCase setting
     server := grpcmux.NewServer(
         grpcmux.WithConfig(&cfg.Apis),
     )
@@ -74,9 +74,9 @@ type Config struct {
 }
 ```
 
-### 方式二：使用函数选项
+### Method 2: Using Function Options
 
-直接在代码中使用 `WithUseCamelCase()` 选项：
+Use the `WithUseCamelCase()` option directly in code:
 
 ```go
 package main
@@ -91,7 +91,7 @@ func main() {
     server := grpcmux.NewServer(
         grpcmux.WithHTTPAddr(":8080"),
         grpcmux.WithGrpcAddr(":8081"),
-        grpcmux.WithUseCamelCase(),  // 启用驼峰格式
+        grpcmux.WithUseCamelCase(),  // Enable camelCase format
     )
 
     pb.RegisterYourServiceServer(server, yourService)
@@ -101,9 +101,9 @@ func main() {
 }
 ```
 
-## 驼峰格式输出示例
+## CamelCase Format Output Example
 
-启用驼峰格式后，JSON 输出将变为：
+After enabling camelCase format, the JSON output becomes:
 
 ```json
 {
@@ -114,7 +114,7 @@ func main() {
 }
 ```
 
-错误响应也会使用驼峰格式：
+Error responses also use camelCase format:
 ```json
 {
   "error": "invalid_argument",
@@ -123,65 +123,65 @@ func main() {
 }
 ```
 
-## 格式对比
+## Format Comparison
 
-| Proto 字段名 | 下划线格式 (默认) | 驼峰格式 |
-|-------------|------------------|----------|
+| Proto Field Name | snake_case (Default) | camelCase |
+|-----------------|---------------------|-----------|
 | user_id | user_id | userId |
 | user_name | user_name | userName |
 | email_address | email_address | emailAddress |
 | created_at | created_at | createdAt |
 | is_active | is_active | isActive |
 
-### 错误响应字段对比
+### Error Response Field Comparison
 
-| Proto 字段名 | 下划线格式 (默认) | 驼峰格式 |
-|-------------|------------------|----------|
+| Proto Field Name | snake_case (Default) | camelCase |
+|-----------------|---------------------|-----------|
 | error | error | error |
 | error_code | error_code | errorCode |
 | error_description | error_description | errorDescription |
 
-## 注意事项
+## Notes
 
-1. **一致性**：建议在整个项目中使用统一的格式，要么全部使用下划线，要么全部使用驼峰。
+1. **Consistency**: It is recommended to use a uniform format throughout the entire project, either all snake_case or all camelCase.
 
-2. **Proto 定义不变**：无论使用哪种 JSON 格式，Proto 文件中的字段名定义保持不变（始终使用 snake_case）。
+2. **Proto definitions unchanged**: Regardless of the JSON format used, field name definitions in Proto files remain unchanged (always use snake_case).
 
-3. **gRPC 不受影响**：此设置仅影响 HTTP JSON 输出，gRPC 协议不受影响。
+3. **gRPC unaffected**: This setting only affects HTTP JSON output; the gRPC protocol is not affected.
 
-4. **前后端协调**：如果修改了 JSON 格式，确保前端代码也做相应调整。
+4. **Frontend coordination**: If you change the JSON format, ensure the frontend code is updated accordingly.
 
-## 完整示例
+## Complete Example
 
-参考 `docs/tutorial/restful` 目录下的完整示例：
+Refer to the complete example in the `docs/tutorial/restful` directory:
 
 ```bash
 cd docs/tutorial/restful
 go run main.go
 ```
 
-测试 API：
+Test the API:
 
 ```bash
-# 默认格式（下划线）
+# Default format (snake_case)
 curl http://localhost:8080/v1/hello/test
-# 返回: {"msg":"hello test"}
+# Returns: {"msg":"hello test"}
 
-# 驼峰格式（需要在配置中启用）
+# CamelCase format (needs to be enabled in configuration)
 curl http://localhost:8080/v1/hello/test
-# 返回: {"msg":"hello test"}  # 这个例子中字段恰好相同
+# Returns: {"msg":"hello test"}  # In this example the field happens to be the same
 ```
 
-## 常见问题
+## FAQ
 
-**Q: 为什么默认使用下划线格式？**
+**Q: Why is snake_case the default format?**
 
-A: 这是 Protocol Buffers 的官方标准，符合跨语言一致性的设计理念。
+A: This is the official Protocol Buffers standard, consistent with the cross-language design philosophy.
 
-**Q: 修改格式会影响性能吗？**
+**Q: Does changing the format affect performance?**
 
-A: 不会。两种格式的序列化性能基本相同。
+A: No. The serialization performance of both formats is essentially the same.
 
-**Q: 可以动态切换格式吗？**
+**Q: Can the format be switched dynamically?**
 
-A: 不建议。格式应该在服务启动时确定，并在整个服务生命周期内保持不变。
+A: Not recommended. The format should be determined at service startup and remain unchanged throughout the service lifecycle.

@@ -1,16 +1,16 @@
 # Database Configuration Guide
 
-本文档说明如何配置不同类型的数据库连接。
+This document explains how to configure different types of database connections.
 
-## 配置步骤
+## Configuration Steps
 
-### 1. 在 main.go 中导入数据库驱动
+### 1. Import the Database Driver in main.go
 
-根据你使用的数据库类型，在 `main.go` 中导入相应的驱动：
+Import the appropriate driver in `main.go` based on the database type you are using:
 
 ```go
 import (
-    // Mock Database (测试用)
+    // Mock Database (for testing)
     _ "github.com/ti/common-go/dependencies/database/mock"
 
     // MongoDB
@@ -21,192 +21,192 @@ import (
 )
 ```
 
-### 2. 在 config.yaml 中配置连接字符串
+### 2. Configure the Connection String in config.yaml
 
-在 `configs/config.yaml` 的 `dependencies.db` 字段中配置数据库连接字符串。
+Configure the database connection string in the `dependencies.db` field of `configs/config.yaml`.
 
-## 数据库类型和配置示例
+## Database Types and Configuration Examples
 
-### Mock Database（内存数据库，用于测试）
+### Mock Database (In-Memory Database for Testing)
 
-**特点**：
-- 纯内存存储，无需外部依赖
-- 完全支持 CRUD 操作
-- 支持分页查询（PageQuery 和 StreamQuery）
-- 自动字段名标准化（camelCase ↔ snake_case）
-- 适合单元测试和本地开发
+**Features**:
+- Pure in-memory storage, no external dependencies required
+- Full CRUD operation support
+- Supports paginated queries (PageQuery and StreamQuery)
+- Automatic field name normalization (camelCase <-> snake_case)
+- Suitable for unit testing and local development
 
-**导入**：
+**Import**:
 ```go
 _ "github.com/ti/common-go/dependencies/database/mock"
 ```
 
-**配置示例**：
+**Configuration Example**:
 ```yaml
 dependencies:
   db: "mock://local/myapp"
-  # 或
+  # or
   db: "mock://local/project_name"
 ```
 
-**使用场景**：
-- 单元测试
-- 集成测试
-- 本地开发（无需安装数据库）
-- CI/CD 环境
+**Use Cases**:
+- Unit testing
+- Integration testing
+- Local development (no database installation required)
+- CI/CD environments
 
 ---
 
 ### MongoDB
 
-**特点**：
-- NoSQL 文档数据库
-- 支持复杂查询和聚合
-- 水平扩展能力强
-- 支持副本集（Replica Set）
-- 灵活的文档结构
+**Features**:
+- NoSQL document database
+- Supports complex queries and aggregation
+- Strong horizontal scaling capabilities
+- Supports Replica Sets
+- Flexible document structure
 
-**导入**：
+**Import**:
 ```go
 _ "github.com/ti/common-go/dependencies/mongodb"
 ```
 
-**配置示例**：
+**Configuration Examples**:
 
-#### 基本配置（本地单机）
+#### Basic Configuration (Local Single Instance)
 ```yaml
 dependencies:
   db: "mongodb://localhost:27017/myapp"
 ```
 
-#### 带认证
+#### With Authentication
 ```yaml
 dependencies:
   db: "mongodb://username:password@localhost:27017/myapp?authSource=admin&timeout=5s"
 ```
 
-#### 副本集（高可用）
+#### Replica Set (High Availability)
 ```yaml
 dependencies:
   db: "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/myapp?replicaSet=rs0&timeout=5s"
 ```
 
-#### 完整配置示例
+#### Full Configuration Example
 ```yaml
 dependencies:
   db: "mongodb://user:pass@host1:27017,host2:27017/mydb?replicaSet=rs0&authSource=admin&ssl=true&timeout=10s&maxPoolSize=100"
 ```
 
-**常用查询参数**：
-- `timeout`: 连接超时时间（例如：5s, 10s）
-- `authSource`: 认证数据库名称（通常为 "admin"）
-- `replicaSet`: 副本集名称
-- `ssl`: 启用 SSL/TLS（true/false）
-- `maxPoolSize`: 连接池最大连接数
-- `minPoolSize`: 连接池最小连接数
-- `retryWrites`: 自动重试写操作（true/false）
+**Common Query Parameters**:
+- `timeout`: Connection timeout (e.g., 5s, 10s)
+- `authSource`: Authentication database name (usually "admin")
+- `replicaSet`: Replica set name
+- `ssl`: Enable SSL/TLS (true/false)
+- `maxPoolSize`: Maximum number of connections in the pool
+- `minPoolSize`: Minimum number of connections in the pool
+- `retryWrites`: Automatically retry write operations (true/false)
 
 ---
 
 ### MySQL
 
-**特点**：
-- 关系型数据库
-- 强 ACID 支持
-- 广泛使用，生态成熟
-- 支持复杂事务
-- 适合结构化数据
+**Features**:
+- Relational database
+- Strong ACID support
+- Widely used, mature ecosystem
+- Supports complex transactions
+- Suitable for structured data
 
-**导入**：
+**Import**:
 ```go
 _ "github.com/ti/common-go/dependencies/sql"
 ```
 
-**配置示例**：
+**Configuration Examples**:
 
-#### 基本配置
+#### Basic Configuration
 ```yaml
 dependencies:
   db: "mysql://root:password@tcp(localhost:3306)/myapp"
 ```
 
-#### 推荐配置（生产环境）
+#### Recommended Configuration (Production)
 ```yaml
 dependencies:
   db: "mysql://username:password@tcp(localhost:3306)/myapp?charset=utf8mb4&parseTime=True&loc=Local&timeout=5s"
 ```
 
-#### 完整配置示例
+#### Full Configuration Example
 ```yaml
 dependencies:
   db: "mysql://user:pass@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local&timeout=10s&readTimeout=30s&writeTimeout=30s&maxAllowedPacket=16777216"
 ```
 
-**常用查询参数**：
-- `charset`: 字符集（推荐：utf8mb4，支持完整 Unicode）
-- `parseTime`: 将数据库 TIME/DATETIME 类型解析为 Go time.Time（推荐：True）
-- `loc`: 时区位置（Local=本地时区, UTC=UTC时区）
-- `timeout`: 连接超时时间
-- `readTimeout`: 读取超时时间
-- `writeTimeout`: 写入超时时间
-- `maxAllowedPacket`: 最大数据包大小（字节）
+**Common Query Parameters**:
+- `charset`: Character set (recommended: utf8mb4, supports full Unicode)
+- `parseTime`: Parse database TIME/DATETIME types to Go time.Time (recommended: True)
+- `loc`: Timezone location (Local=local timezone, UTC=UTC timezone)
+- `timeout`: Connection timeout
+- `readTimeout`: Read timeout
+- `writeTimeout`: Write timeout
+- `maxAllowedPacket`: Maximum packet size (bytes)
 
 ---
 
 ### PostgreSQL
 
-**特点**：
-- 先进的开源关系型数据库
-- 强大的查询优化器
-- 支持 JSONB、数组等复杂类型
-- 严格的数据完整性
-- 扩展性强（支持自定义类型和函数）
+**Features**:
+- Advanced open-source relational database
+- Powerful query optimizer
+- Supports complex types like JSONB, arrays
+- Strict data integrity
+- Highly extensible (supports custom types and functions)
 
-**导入**：
+**Import**:
 ```go
 _ "github.com/ti/common-go/dependencies/sql"
 ```
 
-**配置示例**：
+**Configuration Examples**:
 
-#### 基本配置
+#### Basic Configuration
 ```yaml
 dependencies:
   db: "postgres://username:password@localhost:5432/myapp"
 ```
 
-#### 禁用 SSL（本地开发）
+#### Disable SSL (Local Development)
 ```yaml
 dependencies:
   db: "postgres://username:password@localhost:5432/myapp?sslmode=disable"
 ```
 
-#### 启用 SSL（生产环境）
+#### Enable SSL (Production)
 ```yaml
 dependencies:
   db: "postgres://username:password@localhost:5432/myapp?sslmode=require&connect_timeout=10"
 ```
 
-#### 完整配置示例
+#### Full Configuration Example
 ```yaml
 dependencies:
   db: "postgres://user:pass@host:5432/dbname?sslmode=require&connect_timeout=10&pool_max_conns=20&pool_min_conns=5&application_name=myapp"
 ```
 
-**常用查询参数**：
-- `sslmode`: SSL 模式
-  - `disable`: 禁用 SSL
-  - `require`: 需要 SSL，但不验证证书
-  - `verify-ca`: 验证 CA 证书
-  - `verify-full`: 完全验证（包括主机名）
-- `connect_timeout`: 连接超时时间（秒）
-- `application_name`: 应用名称（用于日志和监控）
-- `pool_max_conns`: 连接池最大连接数
-- `pool_min_conns`: 连接池最小连接数
+**Common Query Parameters**:
+- `sslmode`: SSL mode
+  - `disable`: Disable SSL
+  - `require`: Require SSL but do not verify certificate
+  - `verify-ca`: Verify CA certificate
+  - `verify-full`: Full verification (including hostname)
+- `connect_timeout`: Connection timeout (seconds)
+- `application_name`: Application name (used for logging and monitoring)
+- `pool_max_conns`: Maximum number of connections in the pool
+- `pool_min_conns`: Minimum number of connections in the pool
 
 ---
 
-## 配置文件完整示例
+## Complete Configuration File Example
 
 ```yaml
 # configs/config.yaml
@@ -220,9 +220,9 @@ log:
     level: "debug"
 
 dependencies:
-    # 选择一个数据库配置（取消对应行的注释）：
+    # Choose a database configuration (uncomment the corresponding line):
 
-    # Mock Database (默认，用于测试)
+    # Mock Database (default, for testing)
     db: "mock://local/restful_tutorial"
 
     # MongoDB
@@ -241,61 +241,61 @@ service:
     test: test
 ```
 
-## 切换数据库类型
+## Switching Database Types
 
-要切换数据库类型，只需要：
+To switch database types, you only need to:
 
-1. **更新 main.go 的导入**（取消相应驱动的注释）
-2. **更新 config.yaml 的连接字符串**（切换到对应数据库的配置）
-3. **重新编译并运行**
+1. **Update the import in main.go** (uncomment the corresponding driver)
+2. **Update the connection string in config.yaml** (switch to the corresponding database configuration)
+3. **Recompile and run**
 
-示例：从 Mock 切换到 MySQL
+Example: Switching from Mock to MySQL
 
 ```go
 // main.go
 import (
-    // _ "github.com/ti/common-go/dependencies/database/mock"  // 注释掉
-    _ "github.com/ti/common-go/dependencies/sql"               // 取消注释
+    // _ "github.com/ti/common-go/dependencies/database/mock"  // Comment out
+    _ "github.com/ti/common-go/dependencies/sql"               // Uncomment
 )
 ```
 
 ```yaml
 # config.yaml
 dependencies:
-  # db: "mock://local/restful_tutorial"  # 注释掉
-  db: "mysql://root:password@tcp(localhost:3306)/myapp?charset=utf8mb4&parseTime=True&loc=Local"  # 取消注释
+  # db: "mock://local/restful_tutorial"  # Comment out
+  db: "mysql://root:password@tcp(localhost:3306)/myapp?charset=utf8mb4&parseTime=True&loc=Local"  # Uncomment
 ```
 
-## 数据库接口兼容性
+## Database Interface Compatibility
 
-所有数据库类型都实现了相同的 `database.Database` 接口，因此应用代码无需修改即可在不同数据库之间切换。
+All database types implement the same `database.Database` interface, so application code can switch between different databases without modification.
 
-支持的操作：
-- ✅ Insert / InsertOne
-- ✅ Update / UpdateOne
-- ✅ Delete / DeleteOne
-- ✅ Find / FindOne
-- ✅ Count / Exist
-- ✅ PageQuery (分页查询)
-- ✅ StreamQuery (流式查询)
-- ✅ Transaction (事务支持)
+Supported operations:
+- Insert / InsertOne
+- Update / UpdateOne
+- Delete / DeleteOne
+- Find / FindOne
+- Count / Exist
+- PageQuery (paginated queries)
+- StreamQuery (streaming queries)
+- Transaction (transaction support)
 
-## 常见问题
+## FAQ
 
-### Q: 可以同时使用多个数据库吗？
+### Q: Can multiple databases be used simultaneously?
 
-A: 可以。你可以在 Dependencies 结构体中定义多个数据库连接：
+A: Yes. You can define multiple database connections in the Dependencies struct:
 
 ```go
 type Dependencies struct {
     dependencies.Dependency
-    MainDB   database.Database `required:"false"`  // 主数据库
-    CacheDB  database.Database `required:"false"`  // 缓存数据库
-    LogDB    database.Database `required:"false"`  // 日志数据库
+    MainDB   database.Database `required:"false"`  // Primary database
+    CacheDB  database.Database `required:"false"`  // Cache database
+    LogDB    database.Database `required:"false"`  // Log database
 }
 ```
 
-在 config.yaml 中配置：
+Configure in config.yaml:
 ```yaml
 dependencies:
   mainDB: "mysql://localhost:3306/main"
@@ -303,20 +303,20 @@ dependencies:
   logDB: "postgres://localhost:5432/logs"
 ```
 
-### Q: Mock Database 和真实数据库的数据能互相迁移吗？
+### Q: Can data be migrated between Mock Database and real databases?
 
-A: 不能直接迁移，因为 Mock Database 只存在于内存中。但由于接口兼容，你可以编写迁移脚本从一个数据库读取并写入另一个数据库。
+A: Not directly, because Mock Database only exists in memory. However, since the interfaces are compatible, you can write migration scripts to read from one database and write to another.
 
-### Q: 如何调试数据库连接问题？
+### Q: How to debug database connection issues?
 
 A:
-1. 启用日志：设置 `log.level: "debug"` 查看详细日志
-2. 检查连接字符串格式是否正确
-3. 确认数据库服务正在运行
-4. 验证用户名密码正确
-5. 检查防火墙和网络配置
+1. Enable logging: Set `log.level: "debug"` to view detailed logs
+2. Check that the connection string format is correct
+3. Confirm the database service is running
+4. Verify that the username and password are correct
+5. Check firewall and network configuration
 
 ---
 
-**更新日期**: 2026-01-31
-**版本**: 1.0
+**Updated**: 2026-01-31
+**Version**: 1.0

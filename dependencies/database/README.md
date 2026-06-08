@@ -1,88 +1,88 @@
 # Database Module
 
-数据库抽象层，提供统一的 CRUD 接口，支持 MySQL、PostgreSQL 和 MongoDB。
+Database abstraction layer providing a unified CRUD interface, supporting MySQL, PostgreSQL, and MongoDB.
 
-## 核心接口
+## Core Interface
 
 ### Database Interface
 
 ```go
 type Database interface {
-    // 基础 CRUD
+    // Basic CRUD
     Insert(ctx context.Context, table string, data any) error
     Update(ctx context.Context, table string, conds C, updates D) error
     Delete(ctx context.Context, table string, conds C) error
     FindOne(ctx context.Context, table string, conds C, result any) error
     Find(ctx context.Context, table string, conds C, sortBy []string, limit int, results any) error
     
-    // 计数和聚合
+    // Count and Aggregation
     Count(ctx context.Context, table string, conds C) (int64, error)
     Aggregate(ctx context.Context, table string, pipeline any, result any) error
     
-    // 事务支持
+    // Transaction Support
     StartTransaction(ctx context.Context) (Transaction, error)
     WithTransaction(ctx context.Context, tx Transaction) Database
     
-    // 流式查询
+    // Stream Query
     FindRows(ctx context.Context, table string, conds C, sortBy []string, limit int, data any) (Row, error)
     
-    // 批量操作
+    // Batch Operations
     BatchInsert(ctx context.Context, table string, documents []any) error
     BatchUpdate(ctx context.Context, table string, conds C, updates D) error
 }
 ```
 
-## 条件构造器 (Conditions DSL)
+## Conditions Builder (Conditions DSL)
 
-### Condition 类型
+### Condition Type
 
 ```go
 type Condition struct {
-    Key   string      // 字段名
-    Value any         // 值
-    C     ConditionOp // 运算符
+    Key   string      // Field name
+    Value any         // Value
+    C     ConditionOp // Operator
 }
 
-type C []Condition // 条件列表
+type C []Condition // Condition list
 ```
 
-### 支持的运算符
+### Supported Operators
 
-| 运算符 | 说明 | 示例 |
-|--------|------|------|
-| `Eq` | 等于 | `{Key: "age", Value: 18, C: Eq}` |
-| `Ne` | 不等于 | `{Key: "status", Value: "deleted", C: Ne}` |
-| `Gt` | 大于 | `{Key: "price", Value: 100, C: Gt}` |
-| `Gte` | 大于等于 | `{Key: "score", Value: 60, C: Gte}` |
-| `Lt` | 小于 | `{Key: "age", Value: 65, C: Lt}` |
-| `Lte` | 小于等于 | `{Key: "amount", Value: 1000, C: Lte}` |
-| `In` | 包含于 | `{Key: "status", Value: []string{"active", "pending"}, C: In}` |
-| `Nin` | 不包含于 | `{Key: "role", Value: []string{"admin", "root"}, C: Nin}` |
-| `Like` | 模糊匹配 (SQL) | `{Key: "name", Value: "John%", C: Like}` |
-| `Regex` | 正则表达式 (Mongo) | `{Key: "email", Value: ".*@example\\.com", C: Regex}` |
-| `Exists` | 字段存在 | `{Key: "optional_field", Value: true, C: Exists}` |
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `Eq` | Equal to | `{Key: "age", Value: 18, C: Eq}` |
+| `Ne` | Not equal to | `{Key: "status", Value: "deleted", C: Ne}` |
+| `Gt` | Greater than | `{Key: "price", Value: 100, C: Gt}` |
+| `Gte` | Greater than or equal to | `{Key: "score", Value: 60, C: Gte}` |
+| `Lt` | Less than | `{Key: "age", Value: 65, C: Lt}` |
+| `Lte` | Less than or equal to | `{Key: "amount", Value: 1000, C: Lte}` |
+| `In` | Contained in | `{Key: "status", Value: []string{"active", "pending"}, C: In}` |
+| `Nin` | Not contained in | `{Key: "role", Value: []string{"admin", "root"}, C: Nin}` |
+| `Like` | Fuzzy match (SQL) | `{Key: "name", Value: "John%", C: Like}` |
+| `Regex` | Regular expression (Mongo) | `{Key: "email", Value: ".*@example\\.com", C: Regex}` |
+| `Exists` | Field exists | `{Key: "optional_field", Value: true, C: Exists}` |
 
-### 使用示例
+### Usage Examples
 
 ```go
-// 简单条件
+// Simple condition
 conds := database.C{
     {Key: "age", Value: 18, C: database.Gt},
 }
 
-// 复合条件（AND 关系）
+// Compound conditions (AND relationship)
 conds := database.C{
     {Key: "age", Value: 18, C: database.Gt},
     {Key: "status", Value: "active", C: database.Eq},
     {Key: "city", Value: []string{"Beijing", "Shanghai"}, C: database.In},
 }
 
-// 查询
+// Query
 var users []User
 db.Find(ctx, "users", conds, []string{"-created_at"}, 100, &users)
 ```
 
-## 更新构造器 (Updates DSL)
+## Update Builder (Updates DSL)
 
 ```go
 type Element struct {
@@ -90,16 +90,16 @@ type Element struct {
     Value any
 }
 
-type D []Element // 更新列表
+type D []Element // Update list
 ```
 
-### 使用示例
+### Usage Examples
 
 ```go
 updates := database.D{
     {Key: "status", Value: "active"},
     {Key: "updated_at", Value: time.Now()},
-    {Key: "login_count", Value: 1}, // 递增需要特殊处理
+    {Key: "login_count", Value: 1}, // Increment requires special handling
 }
 
 db.Update(ctx, "users", 
@@ -107,17 +107,17 @@ db.Update(ctx, "users",
     updates)
 ```
 
-## 分页查询
+## Pagination Query
 
 ### PageQueryRequest
 
 ```go
 type PageQueryRequest struct {
-    PageIndex  int         `json:"pageIndex"`  // 页码（从 1 开始）
-    PageSize   int         `json:"pageSize"`   // 每页大小
-    Conditions C           `json:"conditions"` // 查询条件
-    SortBy     []string    `json:"sortBy"`     // 排序字段
-    Select     []string    `json:"select"`     // 选择字段（可选）
+    PageIndex  int         `json:"pageIndex"`  // Page number (starting from 1)
+    PageSize   int         `json:"pageSize"`   // Page size
+    Conditions C           `json:"conditions"` // Query conditions
+    SortBy     []string    `json:"sortBy"`     // Sort fields
+    Select     []string    `json:"select"`     // Select fields (optional)
 }
 ```
 
@@ -125,15 +125,15 @@ type PageQueryRequest struct {
 
 ```go
 type PageQueryResponse[T any] struct {
-    Data       []T   `json:"data"`       // 数据列表
-    Total      int64 `json:"total"`      // 总记录数
-    PageIndex  int   `json:"pageIndex"`  // 当前页码
-    PageSize   int   `json:"pageSize"`   // 每页大小
-    TotalPages int   `json:"totalPages"` // 总页数
+    Data       []T   `json:"data"`       // Data list
+    Total      int64 `json:"total"`      // Total records
+    PageIndex  int   `json:"pageIndex"`  // Current page number
+    PageSize   int   `json:"pageSize"`   // Page size
+    TotalPages int   `json:"totalPages"` // Total pages
 }
 ```
 
-### 使用示例
+### Usage Examples
 
 ```go
 req := &database.PageQueryRequest{
@@ -143,7 +143,7 @@ req := &database.PageQueryRequest{
         {Key: "status", Value: "active"},
         {Key: "age", Value: 18, C: database.Gte},
     },
-    SortBy: []string{"-created_at", "name"}, // - 表示降序
+    SortBy: []string{"-created_at", "name"}, // - indicates descending order
 }
 
 // SQL
@@ -158,9 +158,9 @@ for _, user := range resp.Data {
 }
 ```
 
-## 流式查询
+## Stream Query
 
-用于处理大量数据，避免内存溢出。
+Used for processing large amounts of data to avoid memory overflow.
 
 ```go
 type Row interface {
@@ -170,14 +170,14 @@ type Row interface {
 }
 ```
 
-### 使用示例
+### Usage Examples
 
 ```go
 var user User
 rows, err := db.FindRows(ctx, "users", 
     database.C{{Key: "status", Value: "active"}},
     []string{"-id"},
-    0, // 无限制
+    0, // No limit
     &user)
 defer rows.Close()
 
@@ -187,12 +187,12 @@ for rows.Next() {
         continue
     }
     
-    // 处理单个用户
+    // Process single user
     processUser(&user)
 }
 ```
 
-## 事务处理
+## Transaction Handling
 
 ### Transaction Interface
 
@@ -203,19 +203,19 @@ type Transaction interface {
 }
 ```
 
-### 使用示例
+### Usage Examples
 
 ```go
-// 1. 开启事务
+// 1. Start transaction
 tx, err := db.StartTransaction(ctx)
 if err != nil {
     return err
 }
 
-// 2. 创建事务数据库实例
+// 2. Create transaction database instance
 txDB := db.WithTransaction(ctx, tx)
 
-// 3. 执行操作
+// 3. Execute operations
 if err := txDB.Insert(ctx, "orders", order); err != nil {
     tx.Rollback()
     return err
@@ -228,39 +228,39 @@ if err := txDB.Update(ctx, "inventory",
     return err
 }
 
-// 4. 提交事务
+// 4. Commit transaction
 if err := tx.Commit(); err != nil {
     return err
 }
 ```
 
-## 排序规则
+## Sorting Rules
 
-使用 `sortBy` 参数指定排序：
+Use the `sortBy` parameter to specify sorting:
 
 ```go
 sortBy := []string{
-    "-created_at",  // 降序（前缀 -）
-    "name",         // 升序
-    "-priority",    // 降序
+    "-created_at",  // Descending (prefix -)
+    "name",         // Ascending
+    "-priority",    // Descending
 }
 ```
 
-## 字段选择
+## Field Selection
 
-仅查询指定字段（可选优化）：
+Query only specified fields (optional optimization):
 
 ```go
 req := &database.PageQueryRequest{
     PageIndex: 1,
     PageSize:  10,
-    Select: []string{"id", "name", "email"}, // 仅返回这些字段
+    Select: []string{"id", "name", "email"}, // Only return these fields
 }
 ```
 
-## 最佳实践
+## Best Practices
 
-### 1. 使用上下文超时
+### 1. Use Context Timeout
 
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -269,67 +269,67 @@ defer cancel()
 db.FindOne(ctx, "users", conds, &user)
 ```
 
-### 2. 批量操作
+### 2. Batch Operations
 
 ```go
-// 批量插入（性能更好）
+// Batch insert (better performance)
 users := []any{&user1, &user2, &user3}
 db.BatchInsert(ctx, "users", users)
 ```
 
-### 3. 索引优化
+### 3. Index Optimization
 
 ```go
-// 确保查询字段有索引
+// Ensure queried fields have indexes
 type User struct {
-    Email string `db:"email,unique,index"` // 唯一索引
-    City  string `db:"city,index"`         // 普通索引
+    Email string `db:"email,unique,index"` // Unique index
+    City  string `db:"city,index"`         // Regular index
 }
 ```
 
-### 4. 避免 N+1 查询
+### 4. Avoid N+1 Queries
 
 ```go
-// 不好：循环查询
+// Bad: Loop queries
 for _, orderId := range orderIds {
     db.FindOne(ctx, "orders", database.C{{Key: "id", Value: orderId}}, &order)
 }
 
-// 好：使用 In
+// Good: Use In
 db.Find(ctx, "orders", database.C{{Key: "id", Value: orderIds, C: database.In}}, nil, 0, &orders)
 ```
 
-### 5. 使用流式查询处理大数据
+### 5. Use Stream Queries for Large Data
 
 ```go
-// 不好：一次性加载所有数据
+// Bad: Load all data at once
 var allUsers []User
-db.Find(ctx, "users", nil, nil, 0, &allUsers) // 可能 OOM
+db.Find(ctx, "users", nil, nil, 0, &allUsers) // May cause OOM
 
-// 好：流式处理
+// Good: Stream processing
 rows, _ := db.FindRows(ctx, "users", nil, nil, 0, &User{})
 defer rows.Close()
 for rows.Next() {
-    // 逐条处理
+    // Process one by one
 }
 ```
 
-## 数据库差异处理
+## Database Differences
 
 ### SQL vs Mongo
 
-| 特性 | SQL | MongoDB |
-|------|-----|---------|
-| 条件运算符 | 支持全部 | 支持全部 |
-| Like | 支持 `%` 通配符 | 使用 Regex |
-| 事务 | ✅ 完整支持 | ✅ 支持（需副本集） |
-| Schema | 需要预定义 | 灵活 Schema |
-| 聚合 | SQL 语句 | Aggregation Pipeline |
+| Feature | SQL | MongoDB |
+|---------|-----|---------|
+| Condition operators | All supported | All supported |
+| Like | Supports `%` wildcard | Uses Regex |
+| Transactions | Full support | Supported (requires replica set) |
+| Schema | Requires pre-definition | Flexible Schema |
+| Aggregation | SQL statements | Aggregation Pipeline |
 
-### 跨数据库兼容代码
+### Cross-database Compatible Code
 
 ```go
-// 这段代码可以在 MySQL/PostgreSQL/MongoDB 上运行
+// This code can run on MySQL/PostgreSQL/MongoDB
 func FindActiveUsers(ctx context.Context, db database.Database) ([]User, error) {
     var users []User
     err := db.Find(ctx, "users", 
@@ -341,22 +341,22 @@ func FindActiveUsers(ctx context.Context, db database.Database) ([]User, error) 
 }
 ```
 
-## 错误处理
+## Error Handling
 
 ```go
 err := db.FindOne(ctx, "users", conds, &user)
 if err != nil {
     if errors.Is(err, database.ErrNotFound) {
-        // 记录不存在
+        // Record does not exist
         return nil, ErrUserNotFound
     }
-    // 其他数据库错误
+    // Other database errors
     return nil, fmt.Errorf("database error: %w", err)
 }
 ```
 
-## 参考
+## Reference
 
-- [SQL 适配器文档](../sql/README.md)
-- [MongoDB 适配器文档](../mongo/README.md)
-- [主 README](../../README.md)
+- [SQL Adapter Documentation](../sql/README.md)
+- [MongoDB Adapter Documentation](../mongo/README.md)
+- [Main README](../../README.md)

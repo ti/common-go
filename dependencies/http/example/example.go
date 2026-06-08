@@ -17,7 +17,7 @@ func main() {
 		panic(err)
 	}
 
-	// 日志增加user_id和request_id
+	// Add user_id and request_id to the log context
 	ctx := log.NewContext(context.Background(), map[string]any{
 		"user_id":    "the_user_id",
 		"request_id": "uuid_from_logger_request",
@@ -28,7 +28,7 @@ func main() {
 
 	var resp RespInfo
 
-	// 下游调用增加x-request-id http头
+	// Add x-request-id HTTP header for downstream calls
 	err = cli.Request(ctx, http.MethodPost, "/_info/test", map[string][]string{
 		"x-request-id": {"uuid_from_logger_request"},
 	}, req, &resp)

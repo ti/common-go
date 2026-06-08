@@ -1,4 +1,3 @@
-# config 配置文件管理
+# config - Configuration File Management
 
-特性：支持动态绑定文件或文件夹到指定对象
-
+Features: Supports dynamic binding of files or folders to specified objects

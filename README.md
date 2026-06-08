@@ -3,62 +3,62 @@
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Common-go** 是一个全面的 Go 微服务开发库，提供 gRPC/HTTP 服务构建、依赖注入、数据库抽象、中间件和监控等功能。
+**Common-go** is a comprehensive Go microservice development library, providing gRPC/HTTP service building, dependency injection, database abstraction, middleware, and monitoring capabilities.
 
 ---
 
-## 🎯 核心设计理念
+## Core Design Philosophy
 
-### Protocol Buffers First（Protobuf 优先）
+### Protocol Buffers First
 
-**核心思想**: 使用 Protocol Buffers 定义一切 —— API、数据模型、实体对象。
+**Core concept**: Use Protocol Buffers to define everything - APIs, data models, entity objects.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Proto 定义 (.proto)                       │
+│                    Proto Definition (.proto)                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  API 接口    │  │  数据模型    │  │  验证规则    │      │
+│  │ API Interface │  │  Data Model  │  │  Validation  │      │
 │  │  (Service)   │  │  (Message)   │  │  (Validate)  │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └─────────────────────────────────────────────────────────────┘
                             │
-                    buf generate (编译)
+                    buf generate (compile)
                             │
         ┌───────────────────┼───────────────────┐
         │                   │                   │
         ▼                   ▼                   ▼
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  Go 代码     │    │  Python 代码  │    │  TypeScript  │
+│  Go Code     │    │  Python Code │    │  TypeScript  │
 │  .pb.go      │    │  _pb2.py     │    │  .pb.ts      │
 └──────────────┘    └──────────────┘    └──────────────┘
         │                   │                   │
         ▼                   ▼                   ▼
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  Go 服务     │    │  Python 客户端│    │  Web 前端    │
+│  Go Service  │    │ Python Client│    │ Web Frontend │
 └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
-**核心优势**:
-- 🌍 **跨语言一致性** - 一次定义，多语言使用
-- 🔄 **API 版本兼容** - 向前向后兼容
-- 📊 **统一数据模型** - API、数据库、消息队列统一定义
-- 🛠️ **自动化工具链** - 自动生成代码、文档、验证
+**Core Advantages**:
+- **Cross-language consistency** - Define once, use across multiple languages
+- **API version compatibility** - Forward and backward compatible
+- **Unified data model** - Unified definition for APIs, databases, and message queues
+- **Automated toolchain** - Auto-generate code, documentation, and validation
 
 ---
 
-## 📑 目录
+## Table of Contents
 
-- [核心设计理念](#核心设计理念)
-- [快速开始](#快速开始)
-- [完整示例](#完整示例)
-- [模块概览](#模块概览)
-- [最佳实践](#最佳实践)
+- [Core Design Philosophy](#core-design-philosophy)
+- [Quick Start](#quick-start)
+- [Complete Example](#complete-example)
+- [Module Overview](#module-overview)
+- [Best Practices](#best-practices)
 
 ---
 
-## 🚀 快速开始
+## Quick Start
 
-### 安装
+### Installation
 
 ```bash
 go get github.com/ti/common-go@latest
@@ -67,7 +67,7 @@ go install github.com/bufbuild/buf/cmd/buf@latest
 
 ### Hello World
 
-#### 1. 定义 Proto
+#### 1. Define Proto
 
 ```protobuf
 // proto/hello.proto
@@ -94,13 +94,13 @@ message HelloResponse {
 }
 ```
 
-#### 2. 生成代码并实现服务
+#### 2. Generate code and implement service
 
 ```go
-// 生成代码
+// Generate code
 // buf generate
 
-// 实现服务
+// Implement service
 package main
 
 import (
@@ -126,25 +126,25 @@ func main() {
     pb.RegisterGreeterServer(server, greeter)
     pb.RegisterGreeterHandlerServer(context.Background(), server.ServeMux(), greeter)
     
-    server.Start() // 支持 gRPC 和 HTTP
+    server.Start() // Supports gRPC and HTTP
 }
 ```
 
-#### 3. 测试
+#### 3. Test
 
 ```bash
-# HTTP 调用
+# HTTP call
 curl -X POST http://localhost:8080/v1/hello/World
 
-# gRPC 调用
+# gRPC call
 grpcurl -plaintext -d '{"name":"World"}' localhost:8080 hello.Greeter/SayHello
 ```
 
 ---
 
-## 🏗️ 完整示例
+## Complete Example
 
-### Proto 定义（API + 数据模型）
+### Proto Definition (API + Data Model)
 
 ```protobuf
 // proto/user.proto
@@ -155,7 +155,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "validate/validate.proto";
 
-// API 定义
+// API definition
 service UserService {
   rpc CreateUser (CreateUserRequest) returns (User) {
     option (google.api.http) = {
@@ -177,13 +177,13 @@ service UserService {
   }
 }
 
-// 数据模型（对应数据库表）
+// Data model (corresponds to database table)
 message User {
   int64 id = 1;
   string email = 2;
   string name = 3;
   UserStatus status = 4;
-  repeated string tags = 5;                        // JSON 字段
+  repeated string tags = 5;                        // JSON field
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
 }
@@ -194,7 +194,7 @@ enum UserStatus {
   USER_STATUS_INACTIVE = 2;
 }
 
-// 请求消息
+// Request messages
 message CreateUserRequest {
   string email = 1 [(validate.rules).string.email = true];
   string name = 2 [(validate.rules).string = {min_len: 2, max_len: 50}];
@@ -217,7 +217,7 @@ message ListUsersResponse {
 }
 ```
 
-### 数据库设计
+### Database Design
 
 ```go
 // model/user.go
@@ -228,18 +228,18 @@ import (
     pb "yourproject/pkg/go/proto"
 )
 
-// User 数据库实体（基于 Proto 定义）
+// User database entity (based on Proto definition)
 type User struct {
     ID        int64      `db:"id,primary,auto_increment"`
     Email     string     `db:"email,unique,index"`
     Name      string     `db:"name,size:50"`
     Status    int32      `db:"status,default:1"`
-    Tags      []string   `db:"tags,json"`           // JSON 字段
+    Tags      []string   `db:"tags,json"`           // JSON field
     CreatedAt time.Time  `db:"created_at"`
     UpdatedAt time.Time  `db:"updated_at"`
 }
 
-// ToProto 转换为 Proto 消息
+// ToProto converts to Proto message
 func (u *User) ToProto() *pb.User {
     return &pb.User{
         Id:        u.ID,
@@ -253,7 +253,7 @@ func (u *User) ToProto() *pb.User {
 }
 ```
 
-### CRUD 实现
+### CRUD Implementation
 
 ```go
 // repository/user_repository.go
@@ -270,7 +270,7 @@ type UserRepository struct {
     db *database.DB
 }
 
-// Create 创建用户
+// Create creates a user
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
     log.Extract(ctx).Action("CreateUser").Info("Creating user", "email", user.Email)
     
@@ -280,7 +280,7 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
     return r.db.Insert(ctx, "users", user)
 }
 
-// GetByID 查询用户
+// GetByID queries a user by ID
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
     var user model.User
     err := r.db.FindOne(ctx, "users",
@@ -289,8 +289,8 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
     return &user, err
 }
 
-// StreamQuery 流式查询（推荐：处理大量数据）
-// 优点：逐条处理，内存占用低，适合数据导出、批量处理等场景
+// StreamQuery performs a stream query (recommended for large datasets)
+// Advantage: process records one by one, low memory footprint, suitable for data export, batch processing, etc.
 func (r *UserRepository) StreamQuery(ctx context.Context, status *pb.UserStatus, handler func(*model.User) error) error {
     log.Extract(ctx).Action("StreamQuery").Info("Starting stream query")
     
@@ -304,22 +304,22 @@ func (r *UserRepository) StreamQuery(ctx context.Context, status *pb.UserStatus,
     var user model.User
     rows, err := r.db.FindRows(ctx, "users",
         conditions,
-        []string{"-created_at"}, // 排序
-        0,                       // 无限制
+        []string{"-created_at"}, // Sort
+        0,                       // No limit
         &user)
     if err != nil {
         return err
     }
     defer rows.Close()
     
-    // 逐条处理，内存友好
+    // Process one by one, memory-friendly
     for rows.Next() {
         if err := rows.Scan(&user); err != nil {
             log.Extract(ctx).Action("StreamQuery").Error("Scan error", "err", err)
             continue
         }
         
-        // 处理单条记录
+        // Process single record
         if err := handler(&user); err != nil {
             log.Extract(ctx).Action("StreamQuery").Error("Handler error", "err", err)
             return err
@@ -329,7 +329,7 @@ func (r *UserRepository) StreamQuery(ctx context.Context, status *pb.UserStatus,
     return nil
 }
 
-// List 分页查询（小数据量场景）
+// List performs a pagination query (for small datasets)
 func (r *UserRepository) List(ctx context.Context, req *pb.ListUsersRequest) ([]*model.User, int64, error) {
     conditions := database.C{}
     if req.Status != nil {
@@ -359,7 +359,7 @@ func (r *UserRepository) List(ctx context.Context, req *pb.ListUsersRequest) ([]
 }
 ```
 
-### RESTful API 实现
+### RESTful API Implementation
 
 ```go
 // service/user_service.go
@@ -379,11 +379,11 @@ type UserService struct {
     repo *repository.UserRepository
 }
 
-// CreateUser 创建用户
+// CreateUser creates a user
 func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.User, error) {
     ctx = log.NewContext(ctx, map[string]any{"action": "CreateUser", "email": req.Email})
     
-    // 检查邮箱唯一性
+    // Check email uniqueness
     if existing, _ := s.repo.GetByEmail(ctx, req.Email); existing != nil {
         return nil, status.Error(codes.AlreadyExists, "email already exists")
     }
@@ -402,7 +402,7 @@ func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest)
     return user.ToProto(), nil
 }
 
-// GetUser 获取用户
+// GetUser retrieves a user
 func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User, error) {
     user, err := s.repo.GetByID(ctx, req.Id)
     if err != nil {
@@ -411,7 +411,7 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
     return user.ToProto(), nil
 }
 
-// ListUsers 列出用户
+// ListUsers lists users
 func (s *UserService) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*pb.ListUsersResponse, error) {
     users, total, err := s.repo.List(ctx, req)
     if err != nil {
@@ -436,7 +436,7 @@ func (s *UserService) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (
 }
 ```
 
-### 主程序
+### Main Program
 
 ```go
 // main.go
@@ -456,12 +456,12 @@ import (
 func main() {
     ctx := context.Background()
     
-    // 1. 初始化配置
+    // 1. Initialize config
     if err := config.Init(ctx, "file://config.yaml", &cfg); err != nil {
         log.Action("Init").Fatal("Failed to init config", "err", err)
     }
     
-    // 2. 初始化依赖
+    // 2. Initialize dependencies
     var dep Dependencies
     if err := dependencies.Init(ctx, &dep, cfg.Dependencies); err != nil {
         log.Action("Init").Fatal("Failed to init dependencies", "err", err)
@@ -471,11 +471,11 @@ func main() {
         "grpcAddr", cfg.Apis.GrpcAddr,
         "httpAddr", cfg.Apis.HTTPAddr)
     
-    // 3. 创建服务
+    // 3. Create service
     userRepo := repository.NewUserRepository(dep.DB)
     userService := service.NewUserService(userRepo)
     
-    // 4. 启动服务器
+    // 4. Start server
     server := grpcmux.NewServer(
         grpcmux.WithConfig(&cfg.Apis),
     )
@@ -487,7 +487,7 @@ func main() {
     server.Start()
 }
 
-// Config 配置结构
+// Config structure
 var cfg = Config{
     Apis: grpcmux.Config{
         GrpcAddr:    ":8081",
@@ -503,7 +503,7 @@ type Config struct {
     Dependencies map[string]string `json:"dependencies"`
 }
 
-// Dependencies 依赖结构（通过 dependencies.Init 初始化）
+// Dependencies structure (initialized via dependencies.Init)
 type Dependencies struct {
     DB    *dependencies.Database `dependency:"db"`
     Redis *dependencies.Redis    `dependency:"redis"`
@@ -511,98 +511,98 @@ type Dependencies struct {
 }
 ```
 
-### 配置文件
+### Configuration file
 
 ```yaml
 # config.yaml
 apis:
-  grpcAddr: :8081      # gRPC 端口
-  httpAddr: :8080      # HTTP 端口
-  metricsAddr: :9090   # Metrics 端口
-  logBody: false       # 是否记录请求体
-  useCamelCase: false  # JSON 格式：false=下划线(默认), true=驼峰
+  grpcAddr: :8081      # gRPC port
+  httpAddr: :8080      # HTTP port
+  metricsAddr: :9090   # Metrics port
+  logBody: false       # Whether to log request body
+  useCamelCase: false  # JSON format: false=snake_case(default), true=camelCase
 
 dependencies:
   db: mongodb://user:pass@localhost:27017/mydb?authSource=admin
   redis: redis://:pass@localhost:6379/0
   cache: memory://
-  # 支持的协议:
+  # Supported protocols:
   # - mysql://user:pass@host:3306/db?charset=utf8mb4
   # - postgres://user:pass@host:5432/db?sslmode=disable
   # - mongodb://user:pass@host:27017/db
   # - redis://[:pass]@host:6379/db
 ```
 
-**配置说明**：
-- `apis`: 服务端口配置
-  - `useCamelCase`: 控制 HTTP JSON 格式（false=下划线格式如 `user_id`，true=驼峰格式如 `userId`）
-- `dependencies`: 依赖的 URI 配置（键值对形式）
-- 依赖会通过 `dependencies.Init()` 自动解析和初始化
-- 支持环境变量覆盖，如：`DB_URI=mysql://...`
+**Configuration notes**:
+- `apis`: Service port configuration
+  - `useCamelCase`: Controls HTTP JSON format (false=snake_case like `user_id`, true=camelCase like `userId`)
+- `dependencies`: Dependency URI configuration (key-value pairs)
+- Dependencies are automatically parsed and initialized via `dependencies.Init()`
+- Supports environment variable overrides, e.g.: `DB_URI=mysql://...`
 
-### 测试 API
+### Test API
 
 ```bash
-# 创建用户
+# Create user
 curl -X POST http://localhost:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"email": "alice@example.com", "name": "Alice"}'
 
-# 获取用户
+# Get user
 curl http://localhost:8080/v1/users/1
 
-# 列出用户（分页）
+# List users (paginated)
 curl "http://localhost:8080/v1/users?page_index=1&page_size=20"
 
-# 流式导出用户（适合大数据量）
-# 实现时使用 StreamQuery 方法处理
+# Stream export users (suitable for large datasets)
+# Use StreamQuery method when implementing
 ```
 
 ---
 
-## 📦 模块概览
+## Module Overview
 
-### 核心模块
+### Core Modules
 
-| 模块 | 功能 | 使用场景 |
-|------|------|---------|
-| **grpcmux** | 统一 gRPC/HTTP 服务器 | 单端口同时提供两种协议 |
-| **dependencies** | 依赖注入框架 | URI 驱动的依赖管理 |
-| **database** | 统一数据库接口 | 跨 SQL/NoSQL 的 CRUD |
-| **log** | 结构化日志 | JSON 日志和上下文传播 |
-| **config** | 配置管理 | 多源配置加载 |
+| Module | Function | Use Case |
+|--------|----------|----------|
+| **grpcmux** | Unified gRPC/HTTP server | Single port serving both protocols |
+| **dependencies** | Dependency injection framework | URI-driven dependency management |
+| **database** | Unified database interface | Cross SQL/NoSQL CRUD |
+| **log** | Structured logging | JSON logging and context propagation |
+| **config** | Configuration management | Multi-source config loading |
 
-### 数据库
+### Database
 
 ```go
-// 统一接口，支持 MySQL, PostgreSQL, MongoDB
+// Unified interface, supports MySQL, PostgreSQL, MongoDB
 type Database interface {
     Insert(ctx, table string, data any) error
     FindOne(ctx, table string, conds C, result any) error
     Update(ctx, table string, conds C, updates D) error
     Delete(ctx, table string, conds C) error
     FindRows(ctx, table string, conds C, sortBy []string, limit int, data any) (Row, error)
-    // ... 更多方法
+    // ... more methods
 }
 
-// 条件构造
+// Condition construction
 conds := database.C{
     {Key: "age", Value: 18, C: database.Gt},
     {Key: "status", Value: "active"},
 }
 
-// 流式查询（推荐：处理大量数据）
+// Stream query (recommended for large datasets)
 var user User
 rows, _ := db.FindRows(ctx, "users", conds, []string{"-created_at"}, 0, &user)
 defer rows.Close()
 
 for rows.Next() {
     rows.Scan(&user)
-    // 逐条处理，内存占用低
+    // Process one by one, low memory footprint
     processUser(&user)
 }
 
-// 分页查询（小数据量场景）
+// Pagination query (for small datasets)
 resp, _ := sql.PageQuery[User](ctx, db, "users", &database.PageQueryRequest{
     PageIndex: 1,
     PageSize: 20,
@@ -611,144 +611,144 @@ resp, _ := sql.PageQuery[User](ctx, db, "users", &database.PageQueryRequest{
 })
 ```
 
-### 依赖配置
+### Dependency Configuration
 
 ```go
-// 1. 定义配置结构
+// 1. Define config structure
 type Config struct {
     Apis         grpcmux.Config    `json:"apis"`
-    Dependencies map[string]string `json:"dependencies"` // 依赖 URI 映射
+    Dependencies map[string]string `json:"dependencies"` // Dependency URI mapping
 }
 
-// 2. 定义依赖结构
+// 2. Define dependencies structure
 type Dependencies struct {
-    DB    *dependencies.Database `dependency:"db"`    // 数据库
-    Redis *dependencies.Redis    `dependency:"redis"` // 缓存
-    MQ    *dependencies.Broker   `dependency:"mq"`    // 消息队列
+    DB    *dependencies.Database `dependency:"db"`    // Database
+    Redis *dependencies.Redis    `dependency:"redis"` // Cache
+    MQ    *dependencies.Broker   `dependency:"mq"`    // Message queue
 }
 
-// 3. 初始化流程
+// 3. Initialization flow
 func main() {
     var cfg Config
     
-    // 步骤1: 加载配置文件
+    // Step 1: Load config file
     config.Init(ctx, "file://config.yaml", &cfg)
     // cfg.Dependencies = map[string]string{
     //     "db": "mongodb://localhost:27017/mydb",
     //     "redis": "redis://localhost:6379/0",
     // }
     
-    // 步骤2: 初始化依赖（根据 map 中的 URI）
+    // Step 2: Initialize dependencies (based on URIs in the map)
     var dep Dependencies
     dependencies.Init(ctx, &dep, cfg.Dependencies)
-    // dep.DB, dep.Redis 已自动连接并可使用
+    // dep.DB, dep.Redis are automatically connected and ready to use
     
-    // 步骤3: 使用依赖
+    // Step 3: Use dependencies
     userRepo := repository.NewUserRepository(dep.DB)
 }
 ```
 
-**支持的依赖类型**：
+**Supported dependency types**:
 
-| 键名 | URI 格式 | 说明 |
-|------|----------|------|
+| Key | URI Format | Description |
+|-----|-----------|-------------|
 | `db` | `mysql://user:pass@host:3306/db` | MySQL |
 | `db` | `postgres://user:pass@host:5432/db` | PostgreSQL |
 | `db` | `mongodb://user:pass@host:27017/db` | MongoDB |
 | `redis` | `redis://[:pass]@host:6379/db` | Redis |
 | `mq` | `kafka://broker1:9092,broker2:9092` | Kafka |
-| `http` | `http://api.example.com` | HTTP 客户端 |
+| `http` | `http://api.example.com` | HTTP Client |
 
-### 日志
+### Logging
 
 ```go
-// 简单日志
+// Simple logging
 log.Action("CreateUser").Info("User created", "userId", userId)
 
-// 上下文日志
+// Context logging
 ctx = log.NewContext(ctx, map[string]any{"requestId": uuid.New()})
 log.Extract(ctx).Action("ProcessOrder").Warn("Low inventory")
 ```
 
 ---
 
-## 🎨 最佳实践
+## Best Practices
 
-### 1. 配置和依赖初始化
+### 1. Configuration and Dependency Initialization
 
 ```go
-// ✅ 推荐的初始化流程
+// Recommended initialization flow
 func main() {
     ctx := context.Background()
     
-    // 步骤1: 加载配置
+    // Step 1: Load config
     var cfg Config
     if err := config.Init(ctx, "file://config.yaml", &cfg); err != nil {
         log.Fatal("Config init failed", "err", err)
     }
     
-    // 步骤2: 初始化依赖
+    // Step 2: Initialize dependencies
     var dep Dependencies
     if err := dependencies.Init(ctx, &dep, cfg.Dependencies); err != nil {
         log.Fatal("Dependencies init failed", "err", err)
     }
     
-    // 步骤3: 创建服务
+    // Step 3: Create service
     service := NewService(&dep)
     
-    // 步骤4: 启动服务器
+    // Step 4: Start server
     server := grpcmux.NewServer(grpcmux.WithConfig(&cfg.Apis))
     server.Start()
 }
 ```
 
-### 2. 配置结构设计
+### 2. Configuration Structure Design
 
 ```go
-// ✅ 使用 map[string]string 管理依赖 URI
+// Use map[string]string for dependency URIs
 type Config struct {
     Apis         grpcmux.Config    `json:"apis"`
     Dependencies map[string]string `json:"dependencies"`
 }
 
-// ✅ 依赖结构使用 dependency 标签
+// Use dependency tags for dependency structure
 type Dependencies struct {
     DB    *dependencies.Database `dependency:"db"`
     Redis *dependencies.Redis    `dependency:"redis"`
 }
 
-// ❌ 避免在 Config 中直接定义依赖实例
-// 原因：依赖需要通过 dependencies.Init() 统一初始化
+// Avoid defining dependency instances directly in Config
+// Reason: Dependencies need to be uniformly initialized via dependencies.Init()
 ```
 
-### 3. Proto-First 开发流程
+### 3. Proto-First Development Flow
 
 ```
-Proto 定义 → 代码生成 → 数据库映射 → Repository → Service → API
+Proto Definition -> Code Generation -> Database Mapping -> Repository -> Service -> API
 ```
 
-### 4. 优先使用流式查询
+### 4. Prefer Stream Queries
 
 ```go
-// ✅ 推荐：流式查询（大数据量）
+// Recommended: Stream query (large datasets)
 var user User
 rows, _ := db.FindRows(ctx, "users", conditions, sortBy, 0, &user)
 defer rows.Close()
 
 for rows.Next() {
     rows.Scan(&user)
-    processUser(&user) // 逐条处理，内存友好
+    processUser(&user) // Process one by one, memory-friendly
 }
 
-// ⚠️ 仅小数据量：分页查询
+// Small datasets only: Pagination query
 resp, _ := sql.PageQuery[User](ctx, db, "users", pageReq)
 ```
 
-**场景选择**：
-- **流式查询**：数据导出、批量处理、报表生成、大数据量查询（推荐）
-- **分页查询**：API 列表接口、小数据量展示（<1000 条）
+**Use case selection**:
+- **Stream query**: Data export, batch processing, report generation, large dataset queries (recommended)
+- **Pagination query**: API list endpoints, small dataset display (<1000 records)
 
-### 5. Repository 模式
+### 5. Repository Pattern
 
 ```go
 type UserRepository struct {
@@ -760,7 +760,7 @@ func (r *UserRepository) Create(ctx, user) error {
 }
 ```
 
-### 6. 统一错误处理
+### 6. Unified Error Handling
 
 ```go
 if err != nil {
@@ -771,7 +771,7 @@ if err != nil {
 }
 ```
 
-### 7. 上下文传播
+### 7. Context Propagation
 
 ```go
 ctx = log.NewContext(ctx, map[string]any{"action": "CreateUser"})
@@ -780,43 +780,43 @@ log.Extract(ctx).Info("Processing...")
 
 ---
 
-## 📚 更多文档
+## More Documentation
 
-- [JSON 格式配置](docs/JSON_FORMAT.md) - HTTP JSON 响应格式配置（下划线/驼峰）
-- [Buf 编译指南](docs/BUF_GUIDE.md) - Proto 编译工具
-- [数据库接口](dependencies/database/README.md) - Database 接口详解
-- [SQL 适配器](dependencies/sql/README.md) - MySQL/PostgreSQL 使用
-- [优化记录](docs/OPTIMIZATION_SUMMARY.md) - 项目优化历史
+- [JSON Format Configuration](docs/JSON_FORMAT.md) - HTTP JSON response format configuration (snake_case/camelCase)
+- [Buf Compilation Guide](docs/BUF_GUIDE.md) - Proto compilation tool
+- [Database Interface](dependencies/database/README.md) - Database interface details
+- [SQL Adapter](dependencies/sql/README.md) - MySQL/PostgreSQL usage
+- [Optimization Records](docs/OPTIMIZATION_SUMMARY.md) - Project optimization history
 
 ---
 
-## 🛠️ Proto 编译
+## Proto Compilation
 
 ```bash
-# 安装 buf
+# Install buf
 go install github.com/bufbuild/buf/cmd/buf@latest
 
-# 编译 proto
+# Compile proto
 buf generate
 ```
 
-详见 [Buf 编译指南](docs/BUF_GUIDE.md)
+See [Buf Compilation Guide](docs/BUF_GUIDE.md) for details.
 
 ---
 
-## 🤝 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Contributions via Issues and Pull Requests are welcome!
 
 ---
 
-## 📄 许可证
+## License
 
 MIT License
 
 ---
 
-## 🙏 致谢
+## Acknowledgments
 
 - [gRPC](https://grpc.io/)
 - [gRPC-Gateway](https://github.com/grpc-ecosystem/grpc-gateway)
@@ -825,4 +825,4 @@ MIT License
 
 ---
 
-**Happy Coding! 🚀**
+**Happy Coding!**
