@@ -1,45 +1,45 @@
 # ConnectRPC + gRPC-Gateway + gRPC
 
-在 `camelCase` 的基础上，增加 ConnectRPC 协议支持。同一个服务同时提供三种 API 风格。
+Built on top of the `camelCase` example, this adds ConnectRPC protocol support. A single service provides three API styles simultaneously.
 
-## 架构
+## Architecture
 
 ```
 Browser (HTTP/1.1 JSON)
-    ↓ Vite proxy (dev) / Envoy (prod)
+    | Vite proxy (dev) / Envoy (prod)
 Go grpcmux server (h2c, port 8080)
-    ├── /pb.UserService/*   → ConnectRPC (JSON over HTTP POST)
-    ├── /v1/users/**        → gRPC-Gateway REST
-    └── /healthz            → health check
+    |-- /pb.UserService/*   -> ConnectRPC (JSON over HTTP POST)
+    |-- /v1/users/**        -> gRPC-Gateway REST
+    +-- /healthz            -> health check
 Go gRPC server (port 8081)
-    └── native gRPC (binary, HTTP/2)
+    +-- native gRPC (binary, HTTP/2)
 ```
 
-## 使用方式
+## Usage
 
 ```go
 gs := grpcmux.NewServer(...)
 
-// ConnectRPC: 自动注册所有 unary 方法到 /pb.UserService/*
+// ConnectRPC: Automatically registers all unary methods to /pb.UserService/*
 grpcmux.RegisterConnectService(gs, &pb.UserService_ServiceDesc, userSrv)
 
-// gRPC-Gateway REST (可选): /v1/users/*
+// gRPC-Gateway REST (optional): /v1/users/*
 _ = pb.RegisterUserServiceHandlerServer(ctx, gs.ServeMux(), userSrv)
 
 gs.Start()
 ```
 
-`RegisterConnectService` 通过反射自动遍历 `ServiceDesc` 中的所有方法，为每个方法生成 HTTP POST handler。
-无需手动编写 adapter 代码，无需 `protoc-gen-connect-go`，无需 `connectrpc.com/connect` 依赖。
+`RegisterConnectService` uses reflection to automatically iterate over all methods in `ServiceDesc`, generating an HTTP POST handler for each method.
+No need to manually write adapter code, no need for `protoc-gen-connect-go`, no dependency on `connectrpc.com/connect`.
 
-## 运行
+## Running
 
 ```bash
 go build -o bin/connectrpc ./docs/tutorial/restful/cmd/connectrpc
 ./bin/connectrpc
 ```
 
-## 测试
+## Testing
 
 ### ConnectRPC
 
@@ -70,18 +70,18 @@ curl -X POST http://127.0.0.1:8080/v1/users \
 curl http://127.0.0.1:8080/v1/users
 ```
 
-### 前端
+### Frontend
 
 ```bash
 cd docs/tutorial/restful/frontend/connectrpc
 npm install && npm run dev
 ```
 
-## TLS 配置
+## TLS Configuration
 
-默认 h2c（cleartext HTTP/2），适合部署在 Envoy Gateway 等反向代理之后。
+Default is h2c (cleartext HTTP/2), suitable for deployment behind a reverse proxy like Envoy Gateway.
 
-如需 Go 服务直接处理 TLS，在 `config.yaml` 中配置：
+If the Go service needs to handle TLS directly, configure in `config.yaml`:
 
 ```yaml
 apis:

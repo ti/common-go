@@ -1,31 +1,31 @@
 # SQL Module
 
-MySQL 和 PostgreSQL 数据库适配器，实现 `database.Database` 接口。
+MySQL and PostgreSQL database adapters, implementing the `database.Database` interface.
 
-## 特性
+## Features
 
-- ✅ 自动 Schema 生成
-- 📊 JSON 字段支持
-- 🔢 数组索引（PostgreSQL）
-- 🎯 NULL 值处理
-- 📦 批量插入优化
-- 🔄 完整事务支持
-- 📄 流式查询
-- 🚀 连接池管理
+- Auto Schema generation
+- JSON field support
+- Array indexing (PostgreSQL)
+- NULL value handling
+- Batch insert optimization
+- Full transaction support
+- Stream query
+- Connection pool management
 
-## 初始化
+## Initialization
 
 ### MySQL
 
 ```go
 import "github.com/ti/common-go/dependencies"
 
-// 方式 1: 使用依赖注入
+// Method 1: Using dependency injection
 type Config struct {
     DB *dependencies.SQL `uri:"mysql://user:password@localhost:3306/mydb?charset=utf8mb4&parseTime=true"`
 }
 
-// 方式 2: 手动创建
+// Method 2: Manual creation
 db, err := dependencies.NewSQL(ctx, "mysql://user:password@localhost:3306/mydb?charset=utf8mb4&parseTime=true")
 ```
 
@@ -35,22 +35,22 @@ db, err := dependencies.NewSQL(ctx, "mysql://user:password@localhost:3306/mydb?c
 db, err := dependencies.NewSQL(ctx, "postgres://user:password@localhost:5432/mydb?sslmode=disable")
 ```
 
-### 连接参数
+### Connection Parameters
 
 **MySQL:**
-- `charset=utf8mb4` - 字符集（推荐）
-- `parseTime=true` - 解析 TIME/DATETIME
-- `loc=Asia%2FShanghai` - 时区
-- `maxAllowedPacket=67108864` - 最大包大小
+- `charset=utf8mb4` - Character set (recommended)
+- `parseTime=true` - Parse TIME/DATETIME
+- `loc=Asia%2FShanghai` - Timezone
+- `maxAllowedPacket=67108864` - Maximum packet size
 
 **PostgreSQL:**
-- `sslmode=disable` - SSL 模式（require/disable）
-- `connect_timeout=10` - 连接超时
-- `application_name=myapp` - 应用名称
+- `sslmode=disable` - SSL mode (require/disable)
+- `connect_timeout=10` - Connection timeout
+- `application_name=myapp` - Application name
 
-## Schema 定义
+## Schema Definition
 
-### 结构体标签
+### Struct Tags
 
 ```go
 type User struct {
@@ -71,28 +71,28 @@ type Settings struct {
 }
 ```
 
-### 标签说明
+### Tag Description
 
-| 标签 | 说明 | 示例 |
-|------|------|------|
-| `primary` | 主键 | `db:"id,primary"` |
-| `auto_increment` | 自增（MySQL） | `db:"id,primary,auto_increment"` |
-| `unique` | 唯一约束 | `db:"email,unique"` |
-| `index` | 普通索引 | `db:"city,index"` |
-| `size:N` | 字符串长度 | `db:"name,size:100"` |
-| `default:X` | 默认值 | `db:"age,default:0"` |
-| `json` | JSON 类型 | `db:"settings,json"` |
-| `null` | 允许 NULL | `db:"avatar,null"` |
-| `omitempty` | 空值忽略 | `db:"avatar,omitempty"` |
+| Tag | Description | Example |
+|-----|-------------|---------|
+| `primary` | Primary key | `db:"id,primary"` |
+| `auto_increment` | Auto increment (MySQL) | `db:"id,primary,auto_increment"` |
+| `unique` | Unique constraint | `db:"email,unique"` |
+| `index` | Regular index | `db:"city,index"` |
+| `size:N` | String length | `db:"name,size:100"` |
+| `default:X` | Default value | `db:"age,default:0"` |
+| `json` | JSON type | `db:"settings,json"` |
+| `null` | Allow NULL | `db:"avatar,null"` |
+| `omitempty` | Ignore empty values | `db:"avatar,omitempty"` |
 
-### 自动生成 Schema
+### Auto-generate Schema
 
 ```go
 schema := sql.GenerateScheme("users", User{})
 fmt.Println(schema)
 ```
 
-输出（MySQL）:
+Output (MySQL):
 ```sql
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-输出（PostgreSQL）:
+Output (PostgreSQL):
 ```sql
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
@@ -124,9 +124,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 ```
 
-## CRUD 操作
+## CRUD Operations
 
-### 插入
+### Insert
 
 ```go
 user := &User{
@@ -137,10 +137,10 @@ user := &User{
 }
 
 err := db.Insert(ctx, "users", user)
-// user.ID 会被自动填充
+// user.ID will be automatically populated
 ```
 
-### 查询单条
+### Query Single Record
 
 ```go
 var user User
@@ -149,11 +149,11 @@ err := db.FindOne(ctx, "users",
     &user)
 
 if errors.Is(err, database.ErrNotFound) {
-    // 用户不存在
+    // User does not exist
 }
 ```
 
-### 查询多条
+### Query Multiple Records
 
 ```go
 var users []User
@@ -162,12 +162,12 @@ err := db.Find(ctx, "users",
         {Key: "age", Value: 18, C: database.Gte},
         {Key: "status", Value: "active"},
     },
-    []string{"-created_at", "name"}, // 排序
-    100, // 限制
+    []string{"-created_at", "name"}, // Sort
+    100, // Limit
     &users)
 ```
 
-### 更新
+### Update
 
 ```go
 err := db.Update(ctx, "users",
@@ -178,23 +178,23 @@ err := db.Update(ctx, "users",
     })
 ```
 
-### 删除
+### Delete
 
 ```go
 err := db.Delete(ctx, "users",
     database.C{{Key: "id", Value: userId}})
 ```
 
-### 计数
+### Count
 
 ```go
 count, err := db.Count(ctx, "users",
     database.C{{Key: "status", Value: "active"}})
 ```
 
-## 高级查询
+## Advanced Queries
 
-### 分页查询
+### Pagination Query
 
 ```go
 req := &database.PageQueryRequest{
@@ -210,20 +210,20 @@ resp, err := sql.PageQuery[User](ctx, db, "users", req)
 fmt.Printf("Total: %d, Data: %d\n", resp.Total, len(resp.Data))
 ```
 
-### LIKE 查询
+### LIKE Query
 
 ```go
-// MySQL/PostgreSQL 支持 LIKE
+// MySQL/PostgreSQL support LIKE
 var users []User
 db.Find(ctx, "users",
     database.C{
-        {Key: "name", Value: "John%", C: database.Like}, // 前缀匹配
-        {Key: "email", Value: "%@gmail.com", C: database.Like}, // 后缀匹配
+        {Key: "name", Value: "John%", C: database.Like}, // Prefix match
+        {Key: "email", Value: "%@gmail.com", C: database.Like}, // Suffix match
     },
     nil, 100, &users)
 ```
 
-### IN 查询
+### IN Query
 
 ```go
 userIds := []int64{1, 2, 3, 4, 5}
@@ -233,7 +233,7 @@ db.Find(ctx, "users",
     nil, 0, &users)
 ```
 
-### 范围查询
+### Range Query
 
 ```go
 var products []Product
@@ -245,16 +245,16 @@ db.Find(ctx, "products",
     nil, 0, &products)
 ```
 
-## 流式查询
+## Stream Query
 
-处理大量数据时使用流式查询避免内存溢出：
+Use stream queries to avoid memory overflow when processing large amounts of data:
 
 ```go
 var user User
 rows, err := db.FindRows(ctx, "users",
     database.C{{Key: "status", Value: "active"}},
     []string{"-id"},
-    0, // 无限制
+    0, // No limit
     &user)
 if err != nil {
     return err
@@ -267,16 +267,16 @@ for rows.Next() {
         continue
     }
     
-    // 处理单条记录
+    // Process single record
     if err := processUser(ctx, &user); err != nil {
         log.Error("Process error", "err", err)
     }
 }
 ```
 
-## 批量操作
+## Batch Operations
 
-### 批量插入
+### Batch Insert
 
 ```go
 users := []any{
@@ -288,18 +288,18 @@ users := []any{
 err := db.BatchInsert(ctx, "users", users)
 ```
 
-### 批量更新
+### Batch Update
 
 ```go
-// 更新所有符合条件的记录
+// Update all records matching conditions
 err := db.BatchUpdate(ctx, "users",
     database.C{{Key: "status", Value: "inactive"}},
     database.D{{Key: "deleted_at", Value: time.Now()}})
 ```
 
-## 事务处理
+## Transaction Handling
 
-### 基本事务
+### Basic Transaction
 
 ```go
 tx, err := db.StartTransaction(ctx)
@@ -307,10 +307,10 @@ if err != nil {
     return err
 }
 
-// 创建事务数据库实例
+// Create transaction database instance
 txDB := db.WithTransaction(ctx, tx)
 
-// 执行操作
+// Execute operations
 if err := txDB.Insert(ctx, "orders", order); err != nil {
     tx.Rollback()
     return err
@@ -323,11 +323,11 @@ if err := txDB.Update(ctx, "inventory",
     return err
 }
 
-// 提交事务
+// Commit transaction
 return tx.Commit()
 ```
 
-### 事务辅助函数
+### Transaction Helper Function
 
 ```go
 func WithTransaction(ctx context.Context, db database.Database, fn func(database.Database) error) error {
@@ -346,7 +346,7 @@ func WithTransaction(ctx context.Context, db database.Database, fn func(database
     return tx.Commit()
 }
 
-// 使用
+// Usage
 err := WithTransaction(ctx, db, func(txDB database.Database) error {
     if err := txDB.Insert(ctx, "orders", order); err != nil {
         return err
@@ -358,9 +358,9 @@ err := WithTransaction(ctx, db, func(txDB database.Database) error {
 })
 ```
 
-## JSON 字段
+## JSON Fields
 
-### 定义 JSON 字段
+### Define JSON Fields
 
 ```go
 type User struct {
@@ -377,7 +377,7 @@ type UserSettings struct {
 }
 ```
 
-### 插入 JSON
+### Insert JSON
 
 ```go
 user := &User{
@@ -396,11 +396,11 @@ user := &User{
 db.Insert(ctx, "users", user)
 ```
 
-### 查询 JSON 字段
+### Query JSON Fields
 
 **MySQL (JSON_EXTRACT):**
 ```go
-// 查询 settings.theme = 'dark' 的用户
+// Query users where settings.theme = 'dark'
 db.Find(ctx, "users",
     database.C{{Key: "settings->theme", Value: "dark"}},
     nil, 0, &users)
@@ -408,15 +408,15 @@ db.Find(ctx, "users",
 
 **PostgreSQL (JSONB):**
 ```go
-// 查询 settings.theme = 'dark' 的用户
+// Query users where settings.theme = 'dark'
 db.Find(ctx, "users",
     database.C{{Key: "settings->>'theme'", Value: "dark"}},
     nil, 0, &users)
 ```
 
-## NULL 值处理
+## NULL Value Handling
 
-### 使用指针
+### Using Pointers
 
 ```go
 type User struct {
@@ -428,12 +428,12 @@ user := &User{
     Avatar: nil, // NULL
 }
 
-// 设置值
+// Set value
 avatar := "https://example.com/avatar.jpg"
 user.Avatar = &avatar
 ```
 
-### 使用 sql.Null* 类型
+### Using sql.Null* Types
 
 ```go
 import "database/sql"
@@ -450,9 +450,9 @@ user := &User{
 }
 ```
 
-## 数据库特定功能
+## Database-specific Features
 
-### PostgreSQL 数组
+### PostgreSQL Arrays
 
 ```go
 type Article struct {
@@ -460,78 +460,78 @@ type Article struct {
     Tags []string `db:"tags,array"` // PostgreSQL ARRAY
 }
 
-// 查询包含特定标签的文章
+// Query articles containing a specific tag
 db.Find(ctx, "articles",
     database.C{{Key: "tags", Value: "golang", C: database.Contains}},
     nil, 0, &articles)
 ```
 
-### MySQL 全文索引
+### MySQL Full-text Index
 
 ```sql
--- 手动创建全文索引
+-- Manually create full-text index
 ALTER TABLE articles ADD FULLTEXT INDEX ft_content (content);
 ```
 
 ```go
-// 全文搜索
+// Full-text search
 db.Find(ctx, "articles",
     database.C{{Key: "MATCH(content) AGAINST(?)", Value: "golang tutorial"}},
     nil, 0, &articles)
 ```
 
-## 性能优化
+## Performance Optimization
 
-### 1. 使用批量插入
+### 1. Use Batch Insert
 
 ```go
-// 不好：逐条插入
+// Bad: Insert one by one
 for _, user := range users {
-    db.Insert(ctx, "users", user) // N 次数据库调用
+    db.Insert(ctx, "users", user) // N database calls
 }
 
-// 好：批量插入
-db.BatchInsert(ctx, "users", usersAsAny) // 1 次数据库调用
+// Good: Batch insert
+db.BatchInsert(ctx, "users", usersAsAny) // 1 database call
 ```
 
-### 2. 使用索引
+### 2. Use Indexes
 
 ```go
 type User struct {
-    Email string `db:"email,unique,index"` // 查询优化
-    City  string `db:"city,index"`         // 查询优化
+    Email string `db:"email,unique,index"` // Query optimization
+    City  string `db:"city,index"`         // Query optimization
 }
 ```
 
-### 3. 限制返回字段
+### 3. Limit Return Fields
 
 ```go
 req := &database.PageQueryRequest{
     PageIndex: 1,
     PageSize:  10,
-    Select: []string{"id", "name", "email"}, // 仅返回需要的字段
+    Select: []string{"id", "name", "email"}, // Only return needed fields
 }
 ```
 
-### 4. 使用流式查询
+### 4. Use Stream Queries
 
 ```go
-// 处理大量数据时使用流式查询
+// Use stream queries when processing large amounts of data
 rows, _ := db.FindRows(ctx, "users", nil, nil, 0, &User{})
 defer rows.Close()
 for rows.Next() {
-    // 逐条处理，内存占用低
+    // Process one by one, low memory footprint
 }
 ```
 
-### 5. 连接池配置
+### 5. Connection Pool Configuration
 
 ```go
-// 通过 URI 参数配置
+// Configure via URI parameters
 uri := "mysql://user:pass@host/db?maxOpenConns=100&maxIdleConns=10&connMaxLifetime=3600"
 ```
 
-## 错误处理
+## Error Handling
 
 ```go
 err := db.FindOne(ctx, "users", conds, &user)
@@ -544,7 +544,7 @@ if err != nil {
         return ErrTimeout
     }
     
-    // 检查数据库错误
+    // Check database error
     if strings.Contains(err.Error(), "Duplicate entry") {
         return ErrDuplicateKey
     }
@@ -553,23 +553,23 @@ if err != nil {
 }
 ```
 
-## 迁移和维护
+## Migration and Maintenance
 
-### 自动迁移
+### Auto Migration
 
 ```go
 type User struct {
-    // ... 字段定义
+    // ... field definitions
 }
 
-// 生成建表语句
+// Generate CREATE TABLE statement
 schema := sql.GenerateScheme("users", User{})
 
-// 执行建表
+// Execute CREATE TABLE
 _, err := db.Exec(ctx, schema)
 ```
 
-### 手动迁移
+### Manual Migration
 
 ```go
 migrations := []string{
@@ -585,41 +585,41 @@ for _, migration := range migrations {
 }
 ```
 
-## 最佳实践
+## Best Practices
 
-1. **使用上下文超时**
+1. **Use context timeout**
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 ```
 
-2. **处理 NULL 值**
+2. **Handle NULL values**
 ```go
 type User struct {
     DeletedAt *time.Time `db:"deleted_at,null"`
 }
 ```
 
-3. **使用事务保证一致性**
+3. **Use transactions to ensure consistency**
 ```go
 WithTransaction(ctx, db, func(txDB database.Database) error {
-    // 所有操作在同一个事务中
+    // All operations within the same transaction
 })
 ```
 
-4. **避免 SQL 注入**
+4. **Avoid SQL injection**
 ```go
-// 框架自动处理参数化查询，不要手动拼接 SQL
+// The framework automatically handles parameterized queries; do not manually concatenate SQL
 ```
 
-5. **合理使用索引**
+5. **Use indexes wisely**
 ```go
 type User struct {
-    Email string `db:"email,unique,index"` // 频繁查询的字段加索引
+    Email string `db:"email,unique,index"` // Add index to frequently queried fields
 }
 ```
 
-## 参考
+## Reference
 
-- [Database 接口文档](../database/README.md)
-- [主 README](../../README.md)
+- [Database Interface Documentation](../database/README.md)
+- [Main README](../../README.md)

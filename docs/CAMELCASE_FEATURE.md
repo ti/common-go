@@ -1,40 +1,40 @@
-# CamelCase JSON 格式支持实现总结
+# CamelCase JSON Format Support Implementation Summary
 
-## 功能概述
+## Feature Overview
 
-为 grpcmux 添加了 JSON 格式配置选项，支持在**下划线格式（snake_case）** 和 **驼峰格式（camelCase）** 之间切换。
+Added JSON format configuration options to grpcmux, supporting switching between **snake_case** and **camelCase** formats.
 
-## 实现文件
+## Implementation Files
 
 ### 1. grpcmux/options.go
-- 添加 `useCamelCase bool` 字段到 `options` 结构体
-- 添加 `UseCamelCase bool` 字段到 `Config` 结构体
-- 在 `WithConfig()` 函数中添加对 `UseCamelCase` 的处理
-- 新增 `WithUseCamelCase()` 函数，用于启用驼峰格式
+- Added `useCamelCase bool` field to the `options` struct
+- Added `UseCamelCase bool` field to the `Config` struct
+- Added handling of `UseCamelCase` in the `WithConfig()` function
+- Added `WithUseCamelCase()` function to enable camelCase format
 
 ### 2. grpcmux/server.go
-- 在 `NewServer()` 函数中，将 `useCamelCase` 选项传递给 mux 层
-- 使用 `mux.WithUseCamelCase()` 传递配置
+- In the `NewServer()` function, pass the `useCamelCase` option to the mux layer
+- Use `mux.WithUseCamelCase()` to pass the configuration
 
 ### 3. grpcmux/mux/options.go
-- 添加 `useCamelCase bool` 字段到 `options` 结构体
-- 实现 `WithUseCamelCase()` 函数，核心逻辑：
-  - 设置 `UseProtoNames: false` 以启用驼峰格式
-  - 更新 `bodyMarshaler` 用于正常响应
-  - 更新 `errorMarshaler` 用于错误响应
-  - 确保响应和错误格式一致
+- Added `useCamelCase bool` field to the `options` struct
+- Implemented `WithUseCamelCase()` function with core logic:
+  - Set `UseProtoNames: false` to enable camelCase format
+  - Update `bodyMarshaler` for normal responses
+  - Update `errorMarshaler` for error responses
+  - Ensure response and error formats are consistent
 
 ### 4. grpcmux/mux/errorhandler.go
-- 添加 `fallbackCamelCase` 常量
-- 新增 `getFallback()` 函数，根据配置返回相应格式的 fallback 错误消息
-- 更新 `httpErrorHandler()` 和 `routingErrorHandler()` 使用 `getFallback()`
+- Added `fallbackCamelCase` constant
+- Added `getFallback()` function that returns the appropriate format fallback error message based on configuration
+- Updated `httpErrorHandler()` and `routingErrorHandler()` to use `getFallback()`
 
 ### 5. grpcmux/mux/middleware.go
-- 更新 `WriteHTTPErrorResponseWithMarshaler()` 使用 `getFallback(false)` 作为默认值
+- Updated `WriteHTTPErrorResponseWithMarshaler()` to use `getFallback(false)` as the default value
 
-## 使用方式
+## Usage
 
-### 方式一：通过配置文件（推荐）
+### Method 1: Via Configuration File (Recommended)
 
 ```yaml
 # config.yaml
@@ -42,7 +42,7 @@ apis:
   grpcAddr: :8081
   httpAddr: :8080
   metricsAddr: :9090
-  useCamelCase: true  # 启用驼峰格式
+  useCamelCase: true  # Enable camelCase format
 ```
 
 ```go
@@ -51,19 +51,19 @@ server := grpcmux.NewServer(
 )
 ```
 
-### 方式二：通过函数选项
+### Method 2: Via Function Options
 
 ```go
 server := grpcmux.NewServer(
     grpcmux.WithHTTPAddr(":8080"),
     grpcmux.WithGrpcAddr(":8081"),
-    grpcmux.WithUseCamelCase(),  // 启用驼峰格式
+    grpcmux.WithUseCamelCase(),  // Enable camelCase format
 )
 ```
 
-## 格式对比
+## Format Comparison
 
-### 默认格式（下划线）
+### Default Format (snake_case)
 
 ```json
 {
@@ -73,7 +73,7 @@ server := grpcmux.NewServer(
 }
 ```
 
-错误响应：
+Error response:
 ```json
 {
   "error": "invalid_argument",
@@ -82,7 +82,7 @@ server := grpcmux.NewServer(
 }
 ```
 
-### 驼峰格式
+### CamelCase Format
 
 ```json
 {
@@ -92,7 +92,7 @@ server := grpcmux.NewServer(
 }
 ```
 
-错误响应：
+Error response:
 ```json
 {
   "error": "invalid_argument",
@@ -101,98 +101,98 @@ server := grpcmux.NewServer(
 }
 ```
 
-## 技术细节
+## Technical Details
 
-### 关键配置项
+### Key Configuration Options
 
-- `UseProtoNames: true` → 使用 Proto 字段名（下划线格式）
-- `UseProtoNames: false` → 使用 JSON 字段名（驼峰格式）
+- `UseProtoNames: true` - Uses Proto field names (snake_case format)
+- `UseProtoNames: false` - Uses JSON field names (camelCase format)
 
-### 影响范围
+### Scope of Impact
 
-1. **正常 API 响应**：通过 `bodyMarshaler` 控制
-2. **错误响应**：通过 `errorMarshaler` 控制
-3. **Fallback 错误消息**：通过 `getFallback()` 函数控制
+1. **Normal API responses**: Controlled by `bodyMarshaler`
+2. **Error responses**: Controlled by `errorMarshaler`
+3. **Fallback error messages**: Controlled by the `getFallback()` function
 
-### 数据流
+### Data Flow
 
 ```
-用户请求
-    ↓
+User request
+    |
 grpcmux.NewServer (options.go)
-    ↓
-WithUseCamelCase() 选项
-    ↓
+    |
+WithUseCamelCase() option
+    |
 mux.NewServeMux (mux/mux.go)
-    ↓
+    |
 mux.WithUseCamelCase() (mux/options.go)
-    ↓
-设置 marshalOptions (UseProtoNames: false)
-    ↓
-更新 bodyMarshaler 和 errorMarshaler
-    ↓
-HTTP 响应 (驼峰格式)
+    |
+Set marshalOptions (UseProtoNames: false)
+    |
+Update bodyMarshaler and errorMarshaler
+    |
+HTTP response (camelCase format)
 ```
 
-## 向后兼容性
+## Backward Compatibility
 
-- ✅ **完全向后兼容**：默认行为不变（下划线格式）
-- ✅ **可选启用**：只有明确设置时才启用驼峰格式
-- ✅ **无性能影响**：两种格式性能基本相同
+- Fully backward compatible: Default behavior unchanged (snake_case format)
+- Opt-in only: CamelCase format is enabled only when explicitly set
+- No performance impact: Both formats have essentially the same performance
 
-## 测试建议
+## Testing Suggestions
 
-### 测试下划线格式（默认）
+### Test snake_case Format (Default)
 ```bash
 curl -X POST http://localhost:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"email_address": "test@example.com", "user_name": "Test"}'
 ```
 
-### 测试驼峰格式
+### Test camelCase Format
 ```bash
-# 配置 useCamelCase: true 后
+# After configuring useCamelCase: true
 curl -X POST http://localhost:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"emailAddress": "test@example.com", "userName": "Test"}'
 ```
 
-### 测试错误响应
+### Test Error Responses
 ```bash
-# 触发一个错误
+# Trigger an error
 curl -X POST http://localhost:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"invalid_field": "value"}'
 
-# 观察错误响应格式
+# Observe the error response format
 ```
 
-## 文档
+## Documentation
 
-- 详细使用指南：`docs/JSON_FORMAT.md`
-- 代码示例：`docs/examples/json_format_example.go`
-- 主 README 已更新，添加了配置说明
+- Detailed usage guide: `docs/JSON_FORMAT.md`
+- Code example: `docs/examples/json_format_example.go`
+- Main README updated with configuration instructions
 
-## 注意事项
+## Notes
 
-1. **一致性**：建议在整个项目中使用统一的格式
-2. **Proto 定义不变**：Proto 文件始终使用 snake_case
-3. **gRPC 不受影响**：此设置仅影响 HTTP JSON，不影响 gRPC 协议
-4. **前后端协调**：修改格式后，确保前端代码也做相应调整
+1. **Consistency**: It is recommended to use a uniform format throughout the entire project
+2. **Proto definitions unchanged**: Proto files always use snake_case
+3. **gRPC unaffected**: This setting only affects HTTP JSON, not the gRPC protocol
+4. **Frontend coordination**: After changing the format, ensure the frontend code is updated accordingly
 
-## 实现完成清单
+## Implementation Checklist
 
-- [x] 在 grpcmux/options.go 中添加 UseCamelCase 选项
-- [x] 在 grpcmux/server.go 中传递 UseCamelCase 选项
-- [x] 在 grpcmux/mux/options.go 中实现 UseCamelCase 逻辑
-- [x] 在 grpcmux/Config 中添加 UseCamelCase 配置项
-- [x] 更新 fallback 错误消息支持驼峰格式
-- [x] 创建详细的使用文档
-- [x] 创建代码示例
-- [x] 更新 README.md
-- [x] 验证代码语法正确性
+- [x] Add UseCamelCase option in grpcmux/options.go
+- [x] Pass UseCamelCase option in grpcmux/server.go
+- [x] Implement UseCamelCase logic in grpcmux/mux/options.go
+- [x] Add UseCamelCase configuration item in grpcmux/Config
+- [x] Update fallback error messages to support camelCase format
+- [x] Create detailed usage documentation
+- [x] Create code examples
+- [x] Update README.md
+- [x] Verify code syntax correctness
 
-## 参考链接
+## References
 
-- [protojson.MarshalOptions 文档](https://pkg.go.dev/google.golang.org/protobuf/encoding/protojson#MarshalOptions)
-- [grpc-gateway 文档](https://github.com/grpc-ecosystem/grpc-gateway)
+- [protojson.MarshalOptions documentation](https://pkg.go.dev/google.golang.org/protobuf/encoding/protojson#MarshalOptions)
+- [grpc-gateway documentation](https://github.com/grpc-ecosystem/grpc-gateway)

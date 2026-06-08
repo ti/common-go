@@ -1,37 +1,37 @@
-# RESTful API 命令行程序
+# RESTful API Command Line Programs
 
-本目录包含三个示例程序，展示如何使用不同的 JSON 命名格式和协议启动 API 服务器。
+This directory contains three example programs demonstrating how to start API servers with different JSON naming formats and protocols.
 
-## 目录结构
+## Directory Structure
 
 ```
 cmd/
-├── camelCase/          # camelCase JSON 格式服务器
+├── camelCase/          # camelCase JSON format server
 │   └── main.go
-├── snakeCase/          # snake_case JSON 格式服务器（默认）
+├── snakeCase/          # snake_case JSON format server (default)
 │   └── main.go
-├── connectrpc/         # ConnectRPC + gRPC-Gateway + gRPC 多协议服务器
+├── connectrpc/         # ConnectRPC + gRPC-Gateway + gRPC multi-protocol server
 │   ├── main.go
 │   ├── handler.go
 │   └── README.md
-├── README.md           # 本文档
-└── JSON_FORMAT_COMPARISON.md  # 格式对比测试报告
+├── README.md           # This document
+└── JSON_FORMAT_COMPARISON.md  # Format comparison test report
 ```
 
-## 程序说明
+## Program Descriptions
 
-### 1. camelCase 服务器
+### 1. camelCase Server
 
-**位置**: `cmd/camelCase/main.go`
+**Location**: `cmd/camelCase/main.go`
 
-**特点**:
-- 使用 camelCase JSON 格式（驼峰命名）
-- HTTP 端口: `8080`
-- gRPC 端口: `8081`
-- Metrics 端口: `9090`
-- 启用 `grpcmux.WithUseCamelCase()` 选项
+**Features**:
+- Uses camelCase JSON format
+- HTTP port: `8080`
+- gRPC port: `8081`
+- Metrics port: `9090`
+- Enables `grpcmux.WithUseCamelCase()` option
 
-**JSON 格式示例**:
+**JSON Format Example**:
 ```json
 {
     "user": {
@@ -42,25 +42,25 @@ cmd/
 }
 ```
 
-**适用场景**:
-- JavaScript/TypeScript 前端项目
-- 移动端应用（iOS/Android）
-- 需要与 camelCase API 保持一致的项目
+**Use Cases**:
+- JavaScript/TypeScript frontend projects
+- Mobile applications (iOS/Android)
+- Projects that need to maintain consistency with camelCase APIs
 
 ---
 
-### 2. snakeCase 服务器
+### 2. snakeCase Server
 
-**位置**: `cmd/snakeCase/main.go`
+**Location**: `cmd/snakeCase/main.go`
 
-**特点**:
-- 使用 snake_case JSON 格式（下划线命名）
-- HTTP 端口: `8082`
-- gRPC 端口: `8083`
-- Metrics 端口: `9091`
-- 默认格式，无需额外配置
+**Features**:
+- Uses snake_case JSON format (underscore naming)
+- HTTP port: `8082`
+- gRPC port: `8083`
+- Metrics port: `9091`
+- Default format, no additional configuration needed
 
-**JSON 格式示例**:
+**JSON Format Example**:
 ```json
 {
     "user": {
@@ -71,83 +71,83 @@ cmd/
 }
 ```
 
-**适用场景**:
-- Python 后端项目
-- 数据库字段直接映射
-- 传统 RESTful API 标准
+**Use Cases**:
+- Python backend projects
+- Direct database field mapping
+- Traditional RESTful API standards
 
 ---
 
-### 3. ConnectRPC 服务器
+### 3. ConnectRPC Server
 
-**位置**: `cmd/connectrpc/`
+**Location**: `cmd/connectrpc/`
 
-**特点**:
-- 在 camelCase 基础上增加 ConnectRPC 协议支持
-- HTTP 端口: `8080`（REST + ConnectRPC 共存）
-- gRPC 端口: `8081`
-- Metrics 端口: `9090`
-- 支持 Connect、gRPC、gRPC-Web 三种协议
-- TLS 通过 config.yaml 配置（默认 h2c）
+**Features**:
+- Adds ConnectRPC protocol support on top of camelCase
+- HTTP port: `8080` (REST + ConnectRPC coexist)
+- gRPC port: `8081`
+- Metrics port: `9090`
+- Supports Connect, gRPC, and gRPC-Web protocols
+- TLS configured via config.yaml (default h2c)
 
-**路由**:
-- `/v1/users/*` — gRPC-Gateway REST
-- `/pb.UserService/*` — ConnectRPC
-- `:8081` — native gRPC
+**Routes**:
+- `/v1/users/*` - gRPC-Gateway REST
+- `/pb.UserService/*` - ConnectRPC
+- `:8081` - native gRPC
 
-详见 [connectrpc/README.md](./connectrpc/README.md)。
+See [connectrpc/README.md](./connectrpc/README.md) for details.
 
 ---
 
-## 编译和运行
+## Build and Run
 
-### 编译程序
+### Build Programs
 
-从项目根目录运行：
+Run from the project root directory:
 
 ```bash
-# 编译 camelCase 服务器
+# Build camelCase server
 go build -o bin/server_camelCase ./docs/tutorial/restful/cmd/camelCase
 
-# 编译 snakeCase 服务器
+# Build snakeCase server
 go build -o bin/server_snakeCase ./docs/tutorial/restful/cmd/snakeCase
 
-# 或者同时编译两个
+# Or build both simultaneously
 go build -o bin/server_camelCase ./docs/tutorial/restful/cmd/camelCase && \
 go build -o bin/server_snakeCase ./docs/tutorial/restful/cmd/snakeCase
 ```
 
-### 运行服务器
+### Run Servers
 
-#### 运行 camelCase 服务器
+#### Run camelCase Server
 
 ```bash
-# 从项目根目录运行
+# Run from project root directory
 cd docs/tutorial/restful
 ./bin/server_camelCase
 
-# 或者直接运行
+# Or run directly
 ./bin/server_camelCase -config=docs/tutorial/restful/configs/config.yaml
 ```
 
-服务器启动后会显示：
+After startup, the server displays:
 ```
 INFO Starting server with camelCase JSON format
 INFO Server ready with camelCase JSON format httpAddr=:8080 grpcAddr=:8081 format=camelCase
 ```
 
-#### 运行 snakeCase 服务器
+#### Run snakeCase Server
 
 ```bash
-# 从项目根目录运行
+# Run from project root directory
 cd docs/tutorial/restful
 ./bin/server_snakeCase
 
-# 或者直接运行
+# Or run directly
 ./bin/server_snakeCase -config=docs/tutorial/restful/configs/config.yaml
 ```
 
-服务器启动后会显示：
+After startup, the server displays:
 ```
 INFO Starting server with snake_case JSON format (default)
 INFO Server ready with snake_case JSON format (default) httpAddr=:8082 grpcAddr=:8083 format=snake_case
@@ -155,18 +155,18 @@ INFO Server ready with snake_case JSON format (default) httpAddr=:8082 grpcAddr=
 
 ---
 
-## 测试 API
+## Test API
 
-### camelCase 格式测试
+### camelCase Format Tests
 
-#### 创建用户
+#### Create User
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"Alice","email":"alice@example.com","age":25}'
 ```
 
-**响应**:
+**Response**:
 ```json
 {
     "user": {
@@ -180,40 +180,40 @@ curl -X POST http://127.0.0.1:8080/v1/users \
 }
 ```
 
-#### 获取用户
+#### Get User
 ```bash
 curl -X GET "http://127.0.0.1:8080/v1/users/1769868266642494615"
 ```
 
-#### 更新用户
+#### Update User
 ```bash
 curl -X PUT "http://127.0.0.1:8080/v1/users/1769868266642494615" \
   -H "Content-Type: application/json" \
   -d '{"userId":"1769868266642494615","name":"Alice Updated","email":"alice.new@example.com","age":26}'
 ```
 
-#### 列出用户（注意使用 pageSize）
+#### List Users (note: uses pageSize)
 ```bash
 curl -X GET "http://127.0.0.1:8080/v1/users?page=1&pageSize=10"
 ```
 
-#### 删除用户
+#### Delete User
 ```bash
 curl -X DELETE "http://127.0.0.1:8080/v1/users/1769868266642494615"
 ```
 
 ---
 
-### snake_case 格式测试
+### snake_case Format Tests
 
-#### 创建用户
+#### Create User
 ```bash
 curl -X POST http://127.0.0.1:8082/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"Bob","email":"bob@example.com","age":30}'
 ```
 
-**响应**:
+**Response**:
 ```json
 {
     "user": {
@@ -227,54 +227,54 @@ curl -X POST http://127.0.0.1:8082/v1/users \
 }
 ```
 
-#### 获取用户
+#### Get User
 ```bash
 curl -X GET "http://127.0.0.1:8082/v1/users/1769874547784032306"
 ```
 
-#### 更新用户
+#### Update User
 ```bash
 curl -X PUT "http://127.0.0.1:8082/v1/users/1769874547784032306" \
   -H "Content-Type: application/json" \
   -d '{"user_id":"1769874547784032306","name":"Bob Updated","email":"bob.new@example.com","age":31}'
 ```
 
-#### 列出用户（注意使用 page_size）
+#### List Users (note: uses page_size)
 ```bash
 curl -X GET "http://127.0.0.1:8082/v1/users?page=1&page_size=10"
 ```
 
-#### 删除用户
+#### Delete User
 ```bash
 curl -X DELETE "http://127.0.0.1:8082/v1/users/1769874547784032306"
 ```
 
 ---
 
-## 同时运行两个服务器
+## Running Both Servers Simultaneously
 
-由于两个服务器使用不同的端口，你可以同时运行它们来对比测试：
+Since the two servers use different ports, you can run them simultaneously for comparison testing:
 
-**终端 1 - camelCase 服务器**:
+**Terminal 1 - camelCase server**:
 ```bash
 cd docs/tutorial/restful
 ./bin/server_camelCase
 ```
 
-**终端 2 - snakeCase 服务器**:
+**Terminal 2 - snakeCase server**:
 ```bash
 cd docs/tutorial/restful
 ./bin/server_snakeCase
 ```
 
-**终端 3 - 测试**:
+**Terminal 3 - Testing**:
 ```bash
-# 测试 camelCase 服务器（端口 8080）
+# Test camelCase server (port 8080)
 curl -X POST http://127.0.0.1:8080/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"Alice","email":"alice@example.com","age":25}'
 
-# 测试 snakeCase 服务器（端口 8082）
+# Test snakeCase server (port 8082)
 curl -X POST http://127.0.0.1:8082/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"Bob","email":"bob@example.com","age":30}'
@@ -282,16 +282,16 @@ curl -X POST http://127.0.0.1:8082/v1/users \
 
 ---
 
-## 配置文件
+## Configuration File
 
-两个程序共享相同的配置文件：`docs/tutorial/restful/configs/config.yaml`
+Both programs share the same configuration file: `docs/tutorial/restful/configs/config.yaml`
 
 ```yaml
 dependencies:
     # Mock Database for testing
     db: "mock://local/restful_tutorial"
 
-    # 可选：切换到其他数据库
+    # Optional: Switch to other databases
     # db: "mongodb://localhost:27017/myapp"
     # db: "mysql://root:password@tcp(localhost:3306)/myapp?charset=utf8mb4&parseTime=True"
     # db: "postgres://user:pass@localhost:5432/myapp?sslmode=disable"
@@ -299,59 +299,59 @@ dependencies:
 
 ---
 
-## 关键代码差异
+## Key Code Differences
 
-### camelCase 服务器
+### camelCase Server
 
 ```go
-// 启用 camelCase 格式
+// Enable camelCase format
 gs := grpcmux.NewServer(
     grpcmux.WithHTTPAddr(":8080"),
     grpcmux.WithGrpcAddr(":8081"),
     grpcmux.WithMetricsAddr(":9090"),
-    grpcmux.WithUseCamelCase(), // 关键：启用 camelCase
+    grpcmux.WithUseCamelCase(), // Key: enable camelCase
 )
 ```
 
-### snakeCase 服务器
+### snakeCase Server
 
 ```go
-// 使用默认 snake_case 格式
+// Use default snake_case format
 gs := grpcmux.NewServer(
     grpcmux.WithHTTPAddr(":8082"),
     grpcmux.WithGrpcAddr(":8083"),
     grpcmux.WithMetricsAddr(":9091"),
-    // 无 WithUseCamelCase() - 使用默认 snake_case
+    // No WithUseCamelCase() - uses default snake_case
 )
 ```
 
 ---
 
-## 注意事项
+## Notes
 
-1. **端口冲突**: 确保端口未被占用
+1. **Port conflicts**: Ensure ports are not in use
    - camelCase: 8080 (HTTP), 8081 (gRPC), 9090 (Metrics)
    - snakeCase: 8082 (HTTP), 8083 (gRPC), 9091 (Metrics)
 
-2. **字段命名一致性**: 请求体的字段名应该与服务器格式匹配
-   - camelCase 服务器: 使用 `userId`, `createdAt`
-   - snakeCase 服务器: 使用 `user_id`, `created_at`
+2. **Field naming consistency**: Request body field names should match the server format
+   - camelCase server: use `userId`, `createdAt`
+   - snakeCase server: use `user_id`, `created_at`
 
-3. **查询参数**: URL 查询参数也遵循相同的命名规则
+3. **Query parameters**: URL query parameters follow the same naming rules
    - camelCase: `?page=1&pageSize=10`
    - snakeCase: `?page=1&page_size=10`
 
-4. **数据库兼容性**: Mock Database 的自动字段标准化功能确保了两种格式都能正常工作
+4. **Database compatibility**: Mock Database's automatic field normalization feature ensures both formats work correctly
 
 ---
 
-## 相关文档
+## Related Documentation
 
-- [JSON_FORMAT_COMPARISON.md](./JSON_FORMAT_COMPARISON.md) - 详细的格式对比测试报告
-- [DATABASE_CONFIG.md](../DATABASE_CONFIG.md) - 数据库配置指南
-- [README.md](../README.md) - 项目主 README
+- [JSON_FORMAT_COMPARISON.md](./JSON_FORMAT_COMPARISON.md) - Detailed format comparison test report
+- [DATABASE_CONFIG.md](../DATABASE_CONFIG.md) - Database configuration guide
+- [README.md](../README.md) - Project main README
 
 ---
 
-**更新日期**: 2026-01-31
-**测试状态**: ✅ 所有 CRUD 操作通过测试
+**Updated**: 2026-01-31
+**Test status**: All CRUD operations passed testing

@@ -1,23 +1,23 @@
-# 调用stream模式
+# Stream Mode
 
-使用方法
+## Usage
 
-1. 运行服务
+1. Run the service
 
 ```bash
 go run main.go
 ```
 
-2. 运行grpc到http代理
+2. Run the gRPC to HTTP proxy
 
 ```bash
 cd stream
 envoy -c envoy.yaml
 ```
 
-3. 执行curl stream测试。
+3. Execute the curl stream test.
 
-> curl中的`-N`参数表示是以字节流的方式读取后端数据。
+> The `-N` parameter in curl means reading backend data as a byte stream.
 
 ```bash
 curl -i -N -X POST \
@@ -27,7 +27,7 @@ curl -i -N -X POST \
  'http://127.0.0.1:9080/v1/stream'
 ```
 
-### 本地 Stream 模式请求
+### Local Stream Mode Request
 
 ```bash
 curl -i -N -X POST \

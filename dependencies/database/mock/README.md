@@ -1,42 +1,42 @@
 # Mock Database
 
-Mock Database 是一个内存数据库实现，用于测试和开发环境。它实现了 `database.Database` 接口的所有方法，数据存储在内存中。
+Mock Database is an in-memory database implementation for testing and development environments. It implements all methods of the `database.Database` interface, with data stored in memory.
 
-## 特性
+## Features
 
-- ✅ 完整实现 database.Database 接口
-- ✅ 内存存储，无需外部依赖
-- ✅ 支持所有 CRUD 操作
-- ✅ 支持条件查询（Eq, Ne, Gt, Gte, Lt, Lte, In, Nin）
-- ✅ 支持排序和限制
-- ✅ 支持计数器操作
-- ✅ 支持事务（模拟）
-- ✅ 线程安全
-- ✅ 结构化错误，JSON 格式使用 snake_case（下划线）
-- ✅ **自动 Key 标准化**：自动将 camelCase 转换为 snake_case，兼容两种命名风格
-- ✅ 适合单元测试
+- Complete implementation of database.Database interface
+- In-memory storage, no external dependencies required
+- Supports all CRUD operations
+- Supports conditional queries (Eq, Ne, Gt, Gte, Lt, Lte, In, Nin)
+- Supports sorting and limits
+- Supports counter operations
+- Supports transactions (simulated)
+- Thread-safe
+- Structured errors, JSON format uses snake_case
+- **Automatic Key Normalization**: Automatically converts camelCase to snake_case, compatible with both naming styles
+- Suitable for unit tests
 
-## 安装
+## Installation
 
-Mock database 会自动通过 `database.RegisterImplements` 注册。
+Mock database is automatically registered via `database.RegisterImplements`.
 
 ```go
 import _ "github.com/ti/common-go/dependencies/database/mock"
 ```
 
-## URL 格式
+## URL Format
 
 ```
 mock://host/database_name
 ```
 
-示例：
+Examples:
 - `mock://local/testdb`
 - `mock://memory/myapp`
 
-## 使用示例
+## Usage Examples
 
-### 基本用法
+### Basic Usage
 
 ```go
 package main
@@ -58,14 +58,14 @@ type User struct {
 func main() {
     ctx := context.Background()
 
-    // 创建 mock database
+    // Create mock database
     db, err := database.New(ctx, "mock://local/testdb")
     if err != nil {
         panic(err)
     }
     defer db.Close(ctx)
 
-    // 插入数据
+    // Insert data
     user := &User{
         ID:    1,
         Name:  "Alice",
@@ -78,7 +78,7 @@ func main() {
         panic(err)
     }
 
-    // 查询数据
+    // Query data
     var result User
     err = db.FindOne(ctx, "users",
         database.C{{Key: "id", Value: int64(1)}},
@@ -91,22 +91,22 @@ func main() {
 }
 ```
 
-### 条件查询
+### Conditional Query
 
 ```go
-// 查找年龄大于 18 的所有用户
+// Find all users older than 18
 var users []User
 err := db.Find(ctx, "users",
     database.C{{Key: "age", Value: 18, C: database.Gt}},
-    []string{"-age"}, // 按年龄降序
-    10, // 限制 10 条
+    []string{"-age"}, // Sort by age descending
+    10, // Limit to 10 records
     &users)
 ```
 
-### 更新操作
+### Update Operation
 
 ```go
-// 更新单个文档
+// Update a single document
 count, err := db.UpdateOne(ctx, "users",
     database.C{{Key: "id", Value: int64(1)}},
     database.D{
@@ -115,35 +115,35 @@ count, err := db.UpdateOne(ctx, "users",
     })
 ```
 
-### 删除操作
+### Delete Operation
 
 ```go
-// 删除单个文档
+// Delete a single document
 count, err := db.DeleteOne(ctx, "users",
     database.C{{Key: "id", Value: int64(1)}})
 
-// 删除多个文档
+// Delete multiple documents
 count, err := db.Delete(ctx, "users",
     database.C{{Key: "age", Value: 18, C: database.Lt}})
 ```
 
-### 计数操作
+### Count Operation
 
 ```go
-// 统计符合条件的文档数
+// Count documents matching conditions
 count, err := db.Count(ctx, "users",
     database.C{{Key: "age", Value: 18, C: database.Gte}})
 fmt.Printf("Users aged 18+: %d\n", count)
 
-// 检查是否存在
+// Check existence
 exists, err := db.Exist(ctx, "users",
     database.C{{Key: "email", Value: "alice@example.com"}})
 ```
 
-### 流式查询
+### Stream Query
 
 ```go
-// 适合处理大量数据
+// Suitable for processing large amounts of data
 var user User
 rows, err := db.FindRows(ctx, "users", nil, nil, 0, &user)
 if err != nil {
@@ -157,38 +157,38 @@ for rows.Next() {
         continue
     }
 
-    // 将 map 转换为 struct
+    // Convert map to struct
     userMap := data.(map[string]any)
     fmt.Printf("User: %v\n", userMap["name"])
 }
 ```
 
-### 计数器操作
+### Counter Operations
 
 ```go
-// 初始化计数器并增加
+// Initialize counter and increment
 err := db.IncrCounter(ctx, "counters", "page_views", 0, 1)
 
-// 减少计数器
+// Decrement counter
 err := db.DecrCounter(ctx, "counters", "page_views", 1)
 
-// 获取计数器值
+// Get counter value
 value, err := db.GetCounter(ctx, "counters", "page_views")
 ```
 
-### 事务（模拟）
+### Transaction (Simulated)
 
 ```go
-// 开始事务
+// Start transaction
 tx, err := db.StartTransaction(ctx)
 if err != nil {
     panic(err)
 }
 
-// 使用事务数据库实例
+// Use transaction database instance
 txDB := db.WithTransaction(ctx, tx)
 
-// 执行操作
+// Execute operations
 err = txDB.InsertOne(ctx, "orders", order)
 if err != nil {
     tx.Rollback()
@@ -203,11 +203,11 @@ if err != nil {
     return err
 }
 
-// 提交事务
+// Commit transaction
 err = tx.Commit()
 ```
 
-## 在单元测试中使用
+## Usage in Unit Tests
 
 ```go
 package myapp_test
@@ -223,24 +223,24 @@ import (
 func TestUserRepository(t *testing.T) {
     ctx := context.Background()
 
-    // 使用 mock database
+    // Use mock database
     db, err := database.New(ctx, "mock://test/mydb")
     if err != nil {
         t.Fatal(err)
     }
     defer db.Close(ctx)
 
-    // 创建 repository
+    // Create repository
     repo := NewUserRepository(db)
 
-    // 测试插入
+    // Test insert
     user := &User{ID: 1, Name: "Test"}
     err = repo.Create(ctx, user)
     if err != nil {
         t.Fatal(err)
     }
 
-    // 测试查询
+    // Test query
     found, err := repo.GetByID(ctx, 1)
     if err != nil {
         t.Fatal(err)
@@ -252,34 +252,34 @@ func TestUserRepository(t *testing.T) {
 }
 ```
 
-## 支持的条件运算符
+## Supported Condition Operators
 
-| 运算符 | 说明 | 示例 |
-|--------|------|------|
-| `Eq` | 等于 | `{Key: "age", Value: 18, C: Eq}` |
-| `Ne` | 不等于 | `{Key: "status", Value: "deleted", C: Ne}` |
-| `Gt` | 大于 | `{Key: "price", Value: 100, C: Gt}` |
-| `Gte` | 大于等于 | `{Key: "score", Value: 60, C: Gte}` |
-| `Lt` | 小于 | `{Key: "age", Value: 65, C: Lt}` |
-| `Lte` | 小于等于 | `{Key: "amount", Value: 1000, C: Lte}` |
-| `In` | 包含于 | `{Key: "status", Value: []string{"active", "pending"}, C: In}` |
-| `Nin` | 不包含于 | `{Key: "role", Value: []string{"admin"}, C: Nin}` |
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `Eq` | Equal to | `{Key: "age", Value: 18, C: Eq}` |
+| `Ne` | Not equal to | `{Key: "status", Value: "deleted", C: Ne}` |
+| `Gt` | Greater than | `{Key: "price", Value: 100, C: Gt}` |
+| `Gte` | Greater than or equal to | `{Key: "score", Value: 60, C: Gte}` |
+| `Lt` | Less than | `{Key: "age", Value: 65, C: Lt}` |
+| `Lte` | Less than or equal to | `{Key: "amount", Value: 1000, C: Lte}` |
+| `In` | Contained in | `{Key: "status", Value: []string{"active", "pending"}, C: In}` |
+| `Nin` | Not contained in | `{Key: "role", Value: []string{"admin"}, C: Nin}` |
 
-## 错误处理
+## Error Handling
 
-Mock database 的所有错误都使用结构化的 JSON 格式，字段名采用 **snake_case** 格式（下划线）：
+All errors from Mock database use structured JSON format with **snake_case** field names:
 
-### 错误结构
+### Error Structure
 
 ```go
 type Error struct {
-    ErrorCode        string `json:"error_code"`         // 错误代码
-    ErrorMessage     string `json:"error_message"`      // 错误消息
-    ErrorDescription string `json:"error_description"`  // 详细描述（可选）
+    ErrorCode        string `json:"error_code"`         // Error code
+    ErrorMessage     string `json:"error_message"`      // Error message
+    ErrorDescription string `json:"error_description"`  // Detailed description (optional)
 }
 ```
 
-### JSON 格式示例
+### JSON Format Example
 
 ```json
 {
@@ -289,18 +289,18 @@ type Error struct {
 }
 ```
 
-### 常见错误类型
+### Common Error Types
 
-| 错误代码 | 说明 | 使用场景 |
-|----------|------|----------|
-| `not_found` | 记录未找到 | FindOne 未找到匹配记录 |
-| `invalid_argument` | 无效参数 | 参数验证失败 |
-| `transaction_error` | 事务错误 | 事务操作失败 |
-| `database_error` | 数据库错误 | 通用数据库错误 |
-| `already_exists` | 记录已存在 | 插入重复记录 |
-| `invalid_operation` | 无效操作 | 不支持的操作 |
+| Error Code | Description | Use Case |
+|------------|-------------|----------|
+| `not_found` | Record not found | FindOne found no matching record |
+| `invalid_argument` | Invalid argument | Parameter validation failed |
+| `transaction_error` | Transaction error | Transaction operation failed |
+| `database_error` | Database error | General database error |
+| `already_exists` | Record already exists | Inserting duplicate record |
+| `invalid_operation` | Invalid operation | Unsupported operation |
 
-### 错误处理示例
+### Error Handling Example
 
 ```go
 var user User
@@ -309,104 +309,104 @@ err := db.FindOne(ctx, "users",
     &user)
 
 if err != nil {
-    // 类型断言获取结构化错误
+    // Type assertion to get structured error
     if mockErr, ok := err.(*mock.Error); ok {
         fmt.Printf("Error code: %s\n", mockErr.ErrorCode)
         fmt.Printf("Error message: %s\n", mockErr.ErrorMessage)
 
-        // 转换为 JSON
+        // Convert to JSON
         jsonBytes, _ := json.Marshal(mockErr)
-        // 输出: {"error_code":"not_found","error_message":"record not found",...}
+        // Output: {"error_code":"not_found","error_message":"record not found",...}
         fmt.Println(string(jsonBytes))
     }
 }
 ```
 
-**注意**：所有错误字段均使用 `snake_case` 格式（如 `error_code`、`error_message`），不使用 `camelCase` 格式（如 `errorCode`、`errorMessage`）。
+**Note**: All error fields use `snake_case` format (e.g., `error_code`, `error_message`), not `camelCase` format (e.g., `errorCode`, `errorMessage`).
 
-## Key 自动标准化
+## Automatic Key Normalization
 
-Mock Database 自动将所有字段名标准化为 `snake_case` 格式，这意味着你可以混合使用 `camelCase` 和 `snake_case`：
+Mock Database automatically normalizes all field names to `snake_case` format, meaning you can mix `camelCase` and `snake_case`:
 
-### 工作原理
+### How It Works
 
-所有的字段名（无论是在 struct tag、条件查询、更新操作还是排序字段中）都会自动转换为 `snake_case` 进行存储和匹配：
+All field names (whether in struct tags, conditional queries, update operations, or sort fields) are automatically converted to `snake_case` for storage and matching:
 
-- `userId` → `user_id`
-- `firstName` → `first_name`
-- `UserAge` → `user_age`
-- `HTTPResponse` → `http_response`
-- `user_id` → `user_id` (已经是 snake_case，保持不变)
+- `userId` -> `user_id`
+- `firstName` -> `first_name`
+- `UserAge` -> `user_age`
+- `HTTPResponse` -> `http_response`
+- `user_id` -> `user_id` (already snake_case, unchanged)
 
-### 使用示例
+### Usage Examples
 
-#### 1. 混合命名风格的 Struct
+#### 1. Mixed Naming Style Structs
 
 ```go
-// 使用 camelCase JSON tags
+// Using camelCase JSON tags
 type User struct {
     ID        int64  `json:"userId"`
     FirstName string `json:"firstName"`
     Age       int    `json:"userAge"`
 }
 
-// 或使用 snake_case JSON tags
+// Or using snake_case JSON tags
 type User struct {
     ID        int64  `json:"user_id"`
     FirstName string `json:"first_name"`
     Age       int    `json:"user_age"`
 }
 
-// 两种方式都能正常工作！
+// Both approaches work correctly!
 ```
 
-#### 2. 查询条件兼容
+#### 2. Query Condition Compatibility
 
 ```go
-// 使用 camelCase 查询
+// Query using camelCase
 db.FindOne(ctx, "users",
     database.C{{Key: "userId", Value: int64(1)}},
     &user)
 
-// 或使用 snake_case 查询（效果相同）
+// Or query using snake_case (same effect)
 db.FindOne(ctx, "users",
     database.C{{Key: "user_id", Value: int64(1)}},
     &user)
 
-// 两种方式查询的是同一个字段！
+// Both methods query the same field!
 ```
 
-#### 3. 更新操作兼容
+#### 3. Update Operation Compatibility
 
 ```go
-// 使用 camelCase 更新
+// Update using camelCase
 db.UpdateOne(ctx, "users",
     database.C{{Key: "userId", Value: int64(1)}},
     database.D{{Key: "userAge", Value: 26}})
 
-// 或使用 snake_case 更新
+// Or update using snake_case
 db.UpdateOne(ctx, "users",
     database.C{{Key: "user_id", Value: int64(1)}},
     database.D{{Key: "user_age", Value: 26}})
 ```
 
-#### 4. 排序字段兼容
+#### 4. Sort Field Compatibility
 
 ```go
-// 使用 camelCase 排序
+// Sort using camelCase
 db.Find(ctx, "users", nil, []string{"userAge"}, 10, &users)
 
-// 或使用 snake_case 排序
+// Or sort using snake_case
 db.Find(ctx, "users", nil, []string{"user_age"}, 10, &users)
 
-// 使用 '-' 前缀表示降序
+// Use '-' prefix for descending order
 db.Find(ctx, "users", nil, []string{"-userAge"}, 10, &users)
 ```
 
-#### 5. 跨风格兼容
+#### 5. Cross-style Compatibility
 
 ```go
-// 用 camelCase struct 插入
+// Insert with camelCase struct
 type CamelUser struct {
     ID   int64  `json:"userId"`
     Name string `json:"userName"`
@@ -414,7 +414,7 @@ type CamelUser struct {
 camelUser := &CamelUser{ID: 1, Name: "Alice"}
 db.InsertOne(ctx, "users", camelUser)
 
-// 用 snake_case struct 查询（依然能找到！）
+// Query with snake_case struct (still found!)
 type SnakeUser struct {
     ID   int64  `json:"user_id"`
     Name string `json:"user_name"`
@@ -423,62 +423,62 @@ var snakeUser SnakeUser
 db.FindOne(ctx, "users",
     database.C{{Key: "user_id", Value: int64(1)}},
     &snakeUser)
-// snakeUser.Name == "Alice" ✓
+// snakeUser.Name == "Alice"
 ```
 
-### 转换规则
+### Conversion Rules
 
-| 输入 | 输出 | 说明 |
-|------|------|------|
-| `userId` | `user_id` | 标准 camelCase |
-| `firstName` | `first_name` | 多个单词 |
+| Input | Output | Description |
+|-------|--------|-------------|
+| `userId` | `user_id` | Standard camelCase |
+| `firstName` | `first_name` | Multiple words |
 | `UserID` | `user_id` | PascalCase |
-| `HTTPResponse` | `http_response` | 连续大写 |
-| `parseHTMLDoc` | `parse_html_doc` | 混合缩写 |
-| `user_id` | `user_id` | 已经是 snake_case |
-| `Age` | `age` | 单个大写字母 |
+| `HTTPResponse` | `http_response` | Consecutive uppercase |
+| `parseHTMLDoc` | `parse_html_doc` | Mixed abbreviations |
+| `user_id` | `user_id` | Already snake_case |
+| `Age` | `age` | Single uppercase letter |
 
-### 优势
+### Advantages
 
-1. **灵活性**：前端可以使用 camelCase，后端可以使用 snake_case
-2. **兼容性**：可以混用不同命名风格的代码
-3. **统一性**：内部存储统一使用 snake_case
-4. **简单性**：无需手动转换字段名
+1. **Flexibility**: Frontend can use camelCase, backend can use snake_case
+2. **Compatibility**: Can mix different naming style code
+3. **Uniformity**: Internal storage uniformly uses snake_case
+4. **Simplicity**: No need to manually convert field names
 
-### 最佳实践
+### Best Practices
 
-虽然系统支持混合命名风格，建议在项目中保持一致：
+Although the system supports mixed naming styles, it is recommended to stay consistent within a project:
 
-- **推荐**：统一使用 `snake_case` JSON tags（与数据库标准一致）
-- **可接受**：统一使用 `camelCase` JSON tags（前端友好）
-- **避免**：在同一个项目中混用两种风格
+- **Recommended**: Uniformly use `snake_case` JSON tags (consistent with database standards)
+- **Acceptable**: Uniformly use `camelCase` JSON tags (frontend-friendly)
+- **Avoid**: Mixing both styles in the same project
 
-## 注意事项
+## Notes
 
-1. **数据持久性**：Mock database 的数据存储在内存中，程序重启后数据会丢失
-2. **事务隔离**：事务是模拟的，不提供真正的隔离级别
-3. **性能**：适合测试，不适合生产环境大数据量场景
-4. **并发安全**：使用 sync.RWMutex 保证线程安全
-5. **字段映射**：优先使用 `json` tag，其次使用 `bson` tag，最后使用字段名
-6. **Key 标准化**：所有字段名自动转换为 `snake_case`，支持 camelCase 和 snake_case 混用
+1. **Data Persistence**: Mock database data is stored in memory; data is lost after program restart
+2. **Transaction Isolation**: Transactions are simulated and do not provide true isolation levels
+3. **Performance**: Suitable for testing, not for production with large datasets
+4. **Concurrency Safety**: Uses sync.RWMutex to ensure thread safety
+5. **Field Mapping**: Prioritizes `json` tag, then `bson` tag, finally field name
+6. **Key Normalization**: All field names are automatically converted to `snake_case`, supporting mixed camelCase and snake_case usage
 
-## 与其他数据库的兼容性
+## Compatibility with Other Databases
 
-Mock database 实现了与 MySQL、PostgreSQL 和 MongoDB 相同的接口，因此代码可以在不同数据库之间无缝切换：
+Mock database implements the same interface as MySQL, PostgreSQL, and MongoDB, so code can seamlessly switch between different databases:
 
 ```go
-// 开发环境使用 mock
+// Development environment uses mock
 db, _ := database.New(ctx, "mock://local/myapp")
 
-// 生产环境使用 MongoDB
+// Production environment uses MongoDB
 db, _ := database.New(ctx, "mongodb://localhost:27017/myapp")
 
-// 生产环境使用 MySQL
+// Production environment uses MySQL
 db, _ := database.New(ctx, "mysql://user:pass@localhost:3306/myapp")
 ```
 
-相同的代码可以在所有这些数据库上运行！
+The same code can run on all these databases!
 
-## API 参考
+## API Reference
 
-完整的 API 参考请查看 [database README](../README.md)。
+For complete API reference, see [database README](../README.md).
