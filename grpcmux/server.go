@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"golang.org/x/net/http2"
 
 	"github.com/ti/common-go/log"
 
@@ -245,6 +246,7 @@ func (s *Server) initMemConnListener(opts ...grpc.ServerOption) {
 	if err != nil {
 		panic(errors.New("Conn buf failed for " + err.Error()))
 	}
+	s.memConn.Connect()
 	s.bufServer = grpc.NewServer(opts...)
 }
 
@@ -396,6 +398,11 @@ func (s *Server) startHTTP(ctx context.Context) error {
 		IdleTimeout:       5 * time.Minute,
 		MaxHeaderBytes:    1 << 20,
 	}
+	h2s := &http2.Server{
+		IdleTimeout:          time.Minute,
+		MaxConcurrentStreams: 1000,
+	}
+	_ = http2.ConfigureServer(s.HTTPServer, h2s)
 	s.Logger.Log(ctx, logging.LevelInfo, "Start http at "+s.opts.httpAddr)
 	err := s.HTTPServer.ListenAndServe()
 	if !errors.Is(err, http.ErrServerClosed) {
