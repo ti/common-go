@@ -2,54 +2,62 @@ package main
 
 import (
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
-	// 解析出目标服务器的URL
-	url, err := url.Parse(req.RequestURI)
+	// Resolve the target server URL.
+	target, err := url.Parse(req.RequestURI)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// 创建一个新的请求，用于向目标服务器发送
+	// Build a new request used to forward to the target server.
 	outReq := new(http.Request)
-	*outReq = *req // 复制请求的内容
+	*outReq = *req // copy the request content
 
-	outReq.URL = url
+	outReq.URL = target
 	outReq.URL.Scheme = req.URL.Scheme
 	outReq.URL.Host = req.URL.Host
 
-	// 发送请求
+	// Send the request.
 	resp, err := http.DefaultTransport.RoundTrip(outReq)
 	if err != nil {
 		http.Error(res, err.Error(), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
-	// 将目标服务器返回的头信息复制到响应中
+	// Copy the headers returned by the target server into the response.
 	for key, value := range resp.Header {
 		for _, v := range value {
 			res.Header().Add(key, v)
 		}
 	}
 
-	// 设置响应状态码
+	// Set the response status code.
 	res.WriteHeader(resp.StatusCode)
 
-	// 将目标服务器返回的内容复制到响应体中
-	io.Copy(res, resp.Body)
+	// Copy the body returned by the target server into the response.
+	if _, err = io.Copy(res, resp.Body); err != nil {
+		slog.Error("proxy copy response failed", "error", err)
+	}
 }
 
 func main() {
-	// 设置监听的端口
+	// Configure the listening port.
 	http.HandleFunc("/", handleRequestAndRedirect)
-	err := http.ListenAndServe("127.0.0.1:1180", nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+	server := &http.Server{
+		Addr:              "127.0.0.1:1180",
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
+		slog.Error("ListenAndServe failed", "error", err)
 	}
 }

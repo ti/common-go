@@ -3,7 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"reflect"
 	"strings"
 
@@ -45,7 +45,7 @@ func (m *Mongo) Insert(ctx context.Context, table string, docs any) (count int, 
 	}
 	col := m.Collection(table)
 	mgoDocs := make([]any, dataLen)
-	for i := 0; i < dataLen; i++ {
+	for i := range dataLen {
 		mgoDocs[i] = m.transformData(data.Index(i).Interface(), false)
 	}
 	ret, err := col.InsertMany(ctx, mgoDocs, options.InsertMany().SetOrdered(false))
@@ -172,7 +172,7 @@ func (m *Mongo) Replace(ctx context.Context, table string, indexKeys []string, d
 		indexKeys = []string{"_id"}
 	}
 	bulkModels := make([]mongo.WriteModel, dataLen)
-	for i := 0; i < dataLen; i++ {
+	for i := range dataLen {
 		filter, doc := m.getFilterByIndexKeys(indexKeys, docs)
 		model := mongo.NewReplaceOneModel().SetFilter(filter).SetReplacement(doc)
 		bulkModels[i] = model
@@ -256,7 +256,9 @@ func (m *Mongo) Find(ctx context.Context, table string, conds database.C, order 
 	if err != nil {
 		return convertToStatusError(table, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		rowData, err := rows.Decode()
 		if err != nil {
@@ -461,7 +463,7 @@ func (m *Mongo) GetCounter(ctx context.Context, counterTable, key string) (int64
 
 // StartTransaction start transaction
 func (m *Mongo) StartTransaction(ctx context.Context) (database.Transaction, error) {
-	session, err := m.Client.StartSession()
+	session, err := m.StartSession()
 	if err != nil {
 		return nil, err
 	}
@@ -525,11 +527,12 @@ func getCondition(projectID string, conds database.C) bson.D {
 	for _, v := range conds {
 		key := fixQueryKey(v.Key)
 		value := v.Value
-		if v.C == database.In {
+		switch v.C {
+		case database.In:
 			value = bson.D{{Key: "$in", Value: value}}
-		} else if v.C == database.Nin {
+		case database.Nin:
 			value = bson.D{{Key: "$nin", Value: value}}
-		} else if v.C == database.Ne {
+		case database.Ne:
 			value = bson.D{{Key: "$ne", Value: value}}
 		}
 		cond = append(cond, bson.E{
@@ -549,7 +552,7 @@ func convertDocs(src database.D) bson.D {
 			dot := strings.Index(v.Key, ".")
 			subArrayIndex := strings.Index(v.Key, "[")
 			if dot < 0 || subArrayIndex < 0 {
-				log.Printf("can not conver to %s to -key[*].subKey pattern", v.Key)
+				slog.Warn("cannot convert to -key[*].subKey pattern", "key", v.Key)
 				continue
 			}
 			jsonKey := v.Key[1:subArrayIndex]

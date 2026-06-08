@@ -20,7 +20,7 @@ func main() {
 	var cfg Config
 	err := config.Init(context.Background(), "", &cfg, dependencies.WithNewFns(database.New))
 	if err != nil {
-		log.Action("InitConfig").Fatal(err.Error())
+		log.Action("InitConfig").Fatal("%s", err.Error())
 	}
 
 	log.Action("Start").Info("Starting server with camelCase JSON format")
@@ -40,11 +40,7 @@ func main() {
 	pb.RegisterUserServiceServer(gs, userSrv)
 	_ = pb.RegisterUserServiceHandlerServer(context.Background(), gs.ServeMux(), userSrv)
 
-	log.Action("Start").Info("Server ready with camelCase JSON format",
-		"httpAddr", ":8080",
-		"grpcAddr", ":8081",
-		"format", "camelCase",
-		"service", "UserService")
+	log.Action("Start").Info("Server ready with camelCase JSON format")
 
 	// 5. Start server
 	gs.Start()

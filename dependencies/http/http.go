@@ -223,13 +223,15 @@ func (h *HTTP) Request(ctx context.Context, method,
 			break
 		}
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	}
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	statusCode = resp.StatusCode
 	respBody, err = io.ReadAll(resp.Body)
 	if respDataPtr != nil {
@@ -289,8 +291,10 @@ func (h *HTTP) Download(ctx context.Context, downloadURL string, writer io.Write
 	if errGet != nil {
 		return 0, errGet
 	}
-	defer resp.Body.Close()
-	if !(resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices) {
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return 0, status.Errorf(codes.Code(resp.StatusCode), "http status code is %d", resp.StatusCode)
 	}
 	buf := make([]byte, h.bufSize)
@@ -379,9 +383,9 @@ func (h *HTTP) onRequestClose(ctx context.Context,
 		}
 		logger := log.Extract(ctx).With(logData)
 		if err != nil {
-			logger.Warn(err.Error())
+			logger.Warn("%s", err.Error())
 		} else {
-			logger.Info(method)
+			logger.Info("%s", method)
 		}
 	}
 	if h.metrics != nil {

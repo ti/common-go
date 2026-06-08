@@ -23,7 +23,9 @@ func TestMockDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create mock database:", err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	t.Run("InsertOne", func(t *testing.T) {
 		user := &TestUser{
@@ -121,7 +123,7 @@ func TestMockDatabase(t *testing.T) {
 
 		// Verify update
 		var user TestUser
-		db.FindOne(ctx, "users",
+		_ = db.FindOne(ctx, "users",
 			database.C{{Key: "id", Value: int64(1)}},
 			&user)
 
@@ -226,7 +228,7 @@ func TestMockDatabase(t *testing.T) {
 
 		err = txDB.InsertOne(ctx, "users", user)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			t.Fatal("Insert in transaction failed:", err)
 		}
 
@@ -257,7 +259,9 @@ func TestReplaceOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	t.Run("Replace existing document", func(t *testing.T) {
 		_ = db.InsertOne(ctx, "users", &TestUser{ID: 1, Name: "Alice", Email: "alice@example.com", Age: 25})
@@ -316,7 +320,9 @@ func TestReplace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Seed two users
 	_ = db.InsertOne(ctx, "users", &TestUser{ID: 1, Name: "Alice", Email: "alice@example.com", Age: 25})
@@ -386,7 +392,9 @@ func TestConditions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert test data
 	users := []*TestUser{
@@ -396,7 +404,7 @@ func TestConditions(t *testing.T) {
 		{ID: 4, Name: "David", Age: 35},
 	}
 
-	db.Insert(ctx, "users", users)
+	_, _ = db.Insert(ctx, "users", users)
 
 	tests := []struct {
 		name      string

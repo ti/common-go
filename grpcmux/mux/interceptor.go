@@ -244,7 +244,7 @@ func recoverRequest(l log.Logger, rec any, method string) error {
 		"stack": stack,
 		"code":  int(codes.Internal),
 		"error": rec,
-	}).Info(method)
+	}).Info("%s", method)
 	return status.Errorf(codes.Internal, "panic %s", rec)
 }
 
@@ -270,13 +270,13 @@ func logRequest(l log.Logger, statusCode int, msg string) {
 	})
 	switch level {
 	case logging.LevelInfo:
-		logger.Info(msg)
+		logger.Info("%s", msg)
 	case logging.LevelWarn:
-		logger.Warn(msg)
+		logger.Warn("%s", msg)
 	case logging.LevelError:
-		logger.Error(msg)
+		logger.Error("%s", msg)
 	default:
-		logger.Debug(msg)
+		logger.Debug("%s", msg)
 	}
 }
 

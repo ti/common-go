@@ -84,7 +84,7 @@ func (l *sLogger) Fatal(msgOrFormat string, args ...any) {
 		log.Fatalln(msgOrFormat)
 		return
 	}
-	log.Fatalln(fmt.Sprintf(msgOrFormat, args...))
+	log.Fatalf(msgOrFormat, args...)
 }
 
 // Action logger with just an action key.

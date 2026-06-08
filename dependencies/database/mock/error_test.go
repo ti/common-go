@@ -162,7 +162,7 @@ func TestCommonErrors(t *testing.T) {
 			}
 
 			var result map[string]interface{}
-			json.Unmarshal(jsonBytes, &result)
+			_ = json.Unmarshal(jsonBytes, &result)
 
 			if result["error_code"] != tt.expectedCode {
 				t.Errorf("Expected error_code '%s', got '%v'", tt.expectedCode, result["error_code"])

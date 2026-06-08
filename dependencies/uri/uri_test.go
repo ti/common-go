@@ -25,8 +25,14 @@ type data struct {
 }
 
 func TestUnmarshal(t *testing.T) {
-	uriValue, _ := url.Parse("https://user:pass@host1:80,host2.example.com:443/namespace" +
-		"?test=new&test2=3232&test3=3.1415&child.TestName=go&child.test=323&duration=10s")
+	// Construct URL directly because Go 1.26+ rejects commas in the host portion of url.Parse.
+	uriValue := &url.URL{
+		Scheme:   "https",
+		User:     url.UserPassword("user", "pass"),
+		Host:     "host1:80,host2.example.com:443",
+		Path:     "/namespace",
+		RawQuery: "test=new&test2=3232&test3=3.1415&child.TestName=go&child.test=323&duration=10s",
+	}
 	var testData data
 	err := Unmarshal(uriValue, &testData)
 	if err != nil {

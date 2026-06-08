@@ -9,7 +9,7 @@ import (
 
 // StartTransaction with database transaction
 func (s *SQL) StartTransaction(ctx context.Context) (tx database.Transaction, err error) {
-	dbTx, err := s.DB.BeginTx(ctx, nil)
+	dbTx, err := s.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

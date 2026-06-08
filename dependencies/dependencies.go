@@ -31,7 +31,7 @@ func Init(ctx context.Context, dependenciesPtr any, dependenciesConfig map[strin
 ) error {
 	o := evaluateOptions(opts)
 	dep := reflect.ValueOf(dependenciesPtr)
-	if dep.Kind() != reflect.Ptr {
+	if dep.Kind() != reflect.Pointer {
 		return errors.New("dependencies must be pointer")
 	}
 	return initDepField(ctx, dep.Elem(), dependenciesConfig, o)
@@ -73,7 +73,7 @@ func InitMulti(ctx context.Context, dependenciesPtr any, dependenciesConfigs map
 		depConfig[strings.ToLower(module)] = cnf
 	}
 	dep := reflect.ValueOf(dependenciesPtr)
-	if dep.Kind() != reflect.Ptr {
+	if dep.Kind() != reflect.Pointer {
 		return errors.New("dependencies must be pointer")
 	}
 	depStruct := reflect.ValueOf(reflect.Indirect(dep).Interface())
@@ -82,7 +82,7 @@ func InitMulti(ctx context.Context, dependenciesPtr any, dependenciesConfigs map
 		future = async.New(ctx)
 	}
 	var tmpDep Dependency
-	for i := 0; i < depStruct.NumField(); i++ {
+	for i := range depStruct.NumField() {
 		f := depStruct.Type().Field(i)
 		if f.Type.Kind() != reflect.Struct {
 			if depStruct.Type() == reflect.TypeOf(tmpDep) {
@@ -118,12 +118,12 @@ func initDepField(ctx context.Context, depElem reflect.Value, dependenciesConfig
 		future = async.New(ctx)
 	}
 	var tmpDep Dependency
-	for i := 0; i < depElem.NumField(); i++ {
+	for i := range depElem.NumField() {
 		f := depElem.Type().Field(i)
 		urlStr := config[strings.ToLower(f.Name)]
 		configData := depElem.Field(i)
 		kind := configData.Kind()
-		if !(kind == reflect.Ptr || kind == reflect.Interface) {
+		if kind != reflect.Pointer && kind != reflect.Interface {
 			if configData.Type() == reflect.TypeOf(tmpDep) {
 				continue
 			}
@@ -153,7 +153,7 @@ func initDepField(ctx context.Context, depElem reflect.Value, dependenciesConfig
 func initItem(ctx context.Context, depElem reflect.Value, f *reflect.StructField,
 	i int, uriStr string, o *options,
 ) error {
-	if f.Type.Kind() == reflect.Ptr {
+	if f.Type.Kind() == reflect.Pointer {
 		dependency, err := initPtrDependency(ctx, f.Name, f.Type, uriStr, o)
 		if err != nil {
 			return fmt.Errorf("init ptr dependency %s by uri %s error for %w", f.Name, uriStr, err)

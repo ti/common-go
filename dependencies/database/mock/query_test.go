@@ -22,7 +22,9 @@ func TestPageQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert test data
 	users := []*QueryUser{
@@ -173,7 +175,9 @@ func TestStreamQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert test data with sequential IDs
 	users := []*QueryUser{
@@ -357,7 +361,9 @@ func TestQueryWithCamelCaseKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert test data
 	users := []*CamelCaseUser{
@@ -365,7 +371,7 @@ func TestQueryWithCamelCaseKeys(t *testing.T) {
 		{ID: 2, FirstName: "Bob", Age: 30},
 		{ID: 3, FirstName: "Charlie", Age: 35},
 	}
-	db.Insert(ctx, "users", users)
+	_, _ = db.Insert(ctx, "users", users)
 
 	t.Run("PageQuery with camelCase filters", func(t *testing.T) {
 		req := &database.PageQueryRequest{

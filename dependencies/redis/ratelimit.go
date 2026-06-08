@@ -67,7 +67,7 @@ func (r *rateLimiter) rateLimitN(ctx context.Context, key string, limit int,
 		cc()
 	}
 	if err != nil {
-		log.Extract(ctx).Action("redis.RateLimit").Warn(err.Error())
+		log.Extract(ctx).Action("redis.RateLimit").Warn("%s", err.Error())
 		allowed = r.fallback(key, limit, period, n)
 		remaining = limit
 		reset = period

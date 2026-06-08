@@ -67,7 +67,9 @@ func TestInsertWithCamelCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert with camelCase tags
 	camelUser := &CamelCaseUser{
@@ -115,7 +117,9 @@ func TestQueryWithCamelCaseConditions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert test data
 	users := []*CamelCaseUser{
@@ -164,7 +168,9 @@ func TestUpdateWithCamelCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert
 	user := &CamelCaseUser{
@@ -173,7 +179,7 @@ func TestUpdateWithCamelCase(t *testing.T) {
 		LastName:  "Smith",
 		Age:       25,
 	}
-	db.InsertOne(ctx, "users", user)
+	_ = db.InsertOne(ctx, "users", user)
 
 	t.Run("Update with camelCase key", func(t *testing.T) {
 		_, err := db.UpdateOne(ctx, "users",
@@ -184,7 +190,7 @@ func TestUpdateWithCamelCase(t *testing.T) {
 		}
 
 		var result CamelCaseUser
-		db.FindOne(ctx, "users",
+		_ = db.FindOne(ctx, "users",
 			database.C{{Key: "userId", Value: int64(1)}},
 			&result)
 
@@ -202,7 +208,7 @@ func TestUpdateWithCamelCase(t *testing.T) {
 		}
 
 		var result CamelCaseUser
-		db.FindOne(ctx, "users",
+		_ = db.FindOne(ctx, "users",
 			database.C{{Key: "user_id", Value: int64(1)}},
 			&result)
 
@@ -218,7 +224,9 @@ func TestSortWithCamelCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert test data
 	users := []*CamelCaseUser{
@@ -226,7 +234,7 @@ func TestSortWithCamelCase(t *testing.T) {
 		{ID: 2, FirstName: "Alice", Age: 25},
 		{ID: 3, FirstName: "Bob", Age: 35},
 	}
-	db.Insert(ctx, "users", users)
+	_, _ = db.Insert(ctx, "users", users)
 
 	t.Run("Sort by camelCase field", func(t *testing.T) {
 		var results []CamelCaseUser
@@ -275,7 +283,9 @@ func TestMixedCaseCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert with camelCase
 	camelUser := &CamelCaseUser{
@@ -284,7 +294,7 @@ func TestMixedCaseCompatibility(t *testing.T) {
 		LastName:  "Doe",
 		Age:       30,
 	}
-	db.InsertOne(ctx, "users", camelUser)
+	_ = db.InsertOne(ctx, "users", camelUser)
 
 	// Read as snake_case struct
 	var snakeResult SnakeCaseUser
@@ -306,7 +316,7 @@ func TestMixedCaseCompatibility(t *testing.T) {
 		LastName:  "Smith",
 		Age:       28,
 	}
-	db.InsertOne(ctx, "users", snakeUser)
+	_ = db.InsertOne(ctx, "users", snakeUser)
 
 	// Read as camelCase struct
 	var camelResult CamelCaseUser
@@ -328,7 +338,9 @@ func TestPascalCaseFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert with PascalCase fields (no tags)
 	user := &PascalCaseUser{
@@ -337,7 +349,7 @@ func TestPascalCaseFields(t *testing.T) {
 		LastName:  "Smith",
 		UserAge:   30,
 	}
-	db.InsertOne(ctx, "users", user)
+	_ = db.InsertOne(ctx, "users", user)
 
 	// Query with snake_case (field names should be normalized)
 	var result PascalCaseUser

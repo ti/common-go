@@ -3,7 +3,7 @@ package snowflake
 import (
 	"crypto/rand"
 	"hash/fnv"
-	"log"
+	"log/slog"
 	"math/big"
 	"os"
 	"strconv"
@@ -43,7 +43,7 @@ func init() {
 		snowflakeNode, initErr = snowflake.NewNode(nodeNumber)
 		if initErr != nil {
 			// Log error instead of panic to allow graceful degradation
-			log.Printf("[WARN] Failed to initialize snowflake node %d: %v. ID generation will fail.", nodeNumber, initErr)
+			slog.Warn("failed to initialize snowflake node, ID generation will fail", "node", nodeNumber, "error", initErr)
 		}
 	})
 }
@@ -53,7 +53,7 @@ func init() {
 func ID() int64 {
 	if snowflakeNode == nil {
 		if initErr != nil {
-			log.Printf("[ERROR] Snowflake not initialized: %v", initErr)
+			slog.Error("snowflake not initialized", "error", initErr)
 		}
 		return 0
 	}
@@ -89,7 +89,7 @@ func getHostHashNumber(hostname string) int64 {
 	if hostname == "" {
 		randNumber, err := rand.Int(rand.Reader, big.NewInt(MaxNodeNumber))
 		if err != nil {
-			log.Printf("[WARN] Failed to generate random node number: %v", err)
+			slog.Warn("failed to generate random node number", "error", err)
 			return 0
 		}
 		return randNumber.Int64()

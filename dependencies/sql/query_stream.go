@@ -51,7 +51,9 @@ func StreamQuery[T any](ctx context.Context, s *SQL, table string,
 	var firstID int64
 	var lastID int64
 
-	defer dataRows.Close()
+	defer func() {
+		_ = dataRows.Close()
+	}()
 	for dataRows.Next() {
 		rowData, id, errDec := dataRows.DecodeWithID()
 		if errDec != nil {

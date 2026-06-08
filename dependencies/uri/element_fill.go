@@ -85,7 +85,7 @@ func (f filler) fill(field reflect.Value, node *node) error {
 		return setFloat(field, node.Value, 64)
 	case reflect.Struct:
 		return f.setStruct(field, node)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return f.setPtr(field, node)
 	case reflect.Map:
 		return f.setMap(field, node)
@@ -128,7 +128,7 @@ func (f filler) setStruct(field reflect.Value, n *node) error {
 
 func (f filler) setSlice(field reflect.Value, n *node) error {
 	if field.Type().Elem().Kind() == reflect.Struct ||
-		field.Type().Elem().Kind() == reflect.Ptr && field.Type().Elem().Elem().Kind() == reflect.Struct {
+		field.Type().Elem().Kind() == reflect.Pointer && field.Type().Elem().Elem().Kind() == reflect.Struct {
 		return f.setSliceStruct(field, n)
 	}
 
@@ -205,7 +205,7 @@ func (f filler) setSliceStruct(field reflect.Value, node *node) error {
 
 	for i, child := range node.Children {
 		// use Ptr to allow [SetDefaults]
-		value := reflect.New(reflect.PtrTo(field.Type().Elem()))
+		value := reflect.New(reflect.PointerTo(field.Type().Elem()))
 		err := f.setPtr(value, child)
 		if err != nil {
 			return err
@@ -223,7 +223,7 @@ func (f filler) setSliceAsStruct(field reflect.Value, node *node) error {
 	}
 
 	// use Ptr to allow [SetDefaults]
-	value := reflect.New(reflect.PtrTo(field.Type().Elem()))
+	value := reflect.New(reflect.PointerTo(field.Type().Elem()))
 	if err := f.setPtr(value, node); err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (f filler) setMap(field reflect.Value, node *node) error {
 	}
 
 	for _, child := range node.Children {
-		ptrValue := reflect.New(reflect.PtrTo(field.Type().Elem()))
+		ptrValue := reflect.New(reflect.PointerTo(field.Type().Elem()))
 
 		err := f.fill(ptrValue, child)
 		if err != nil {

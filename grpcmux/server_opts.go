@@ -169,13 +169,13 @@ func interceptorLogger() logging.Logger {
 		logger := log.Extract(ctx).With(logTags)
 		switch lvl {
 		case logging.LevelDebug:
-			logger.Debug(msg)
+			logger.Debug("%s", msg)
 		case logging.LevelInfo:
-			logger.Info(msg)
+			logger.Info("%s", msg)
 		case logging.LevelWarn:
-			logger.Warn(msg)
+			logger.Warn("%s", msg)
 		case logging.LevelError:
-			logger.Error(msg)
+			logger.Error("%s", msg)
 		default:
 			panic(fmt.Sprintf("unknown level %v", lvl))
 		}

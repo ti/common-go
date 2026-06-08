@@ -27,6 +27,7 @@ import (
 	"github.com/ti/common-go/grpcmux/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -98,9 +99,9 @@ func NewClientConnWithURI(ctx context.Context, uri *url.URL, customOpts ...grpc.
 	opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"LoadBalancingPolicy":"%s"}`,
 		loadBalancingPolicy)))
 
-	if query.Get("block") == trueStr {
-		opts = append(opts, grpc.WithBlock())
-	}
+	// grpc.WithBlock is not supported by grpc.NewClient; the block behaviour is
+	// emulated below by explicitly connecting and waiting for a ready state.
+	block := query.Get("block") == trueStr
 
 	metaTags := []string{"client_id", "user_id", "device_id", "request_id"}
 	// log
@@ -158,7 +159,27 @@ func NewClientConnWithURI(ctx context.Context, uri *url.URL, customOpts ...grpc.
 		opts = append(opts, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
 	}
 	opts = append(opts, customOpts...)
-	return grpc.DialContext(ctx, target, opts...)
+	conn, err := grpc.NewClient(target, opts...)
+	if err != nil {
+		return nil, err
+	}
+	// Emulate the deprecated grpc.WithBlock behaviour: trigger connection and
+	// wait until the channel becomes ready or the context is done.
+	if block {
+		conn.Connect()
+		for {
+			state := conn.GetState()
+			if state == connectivity.Ready {
+				break
+			}
+			if !conn.WaitForStateChange(ctx, state) {
+				// ctx expired or was cancelled.
+				_ = conn.Close()
+				return nil, ctx.Err()
+			}
+		}
+	}
+	return conn, nil
 }
 
 func prefixUnaryClientInterceptor(prefix string) grpc.UnaryClientInterceptor {

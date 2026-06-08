@@ -37,7 +37,7 @@ func main() {
 	}
 
 	b, _ := json.Marshal(resp.Header)
-	log.Action("test").Info(string(b))
+	log.Action("test").Info("%s", string(b))
 }
 
 // RespInfo the response info

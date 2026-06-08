@@ -1,7 +1,7 @@
 package sql
 
 import (
-	"log"
+	"log/slog"
 	"reflect"
 	"strings"
 	"time"
@@ -18,7 +18,7 @@ func TransformDocument(scheme string, ptrVal any, keepEmpty bool) database.D {
 	v := reflect.ValueOf(ptrVal).Elem()
 	t := v.Type()
 	var docs database.D
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		sf := t.Field(i)
 		if !sf.IsExported() {
 			continue
@@ -60,7 +60,7 @@ func TransformSQLArgs(scheme string, ptrVal any, keepEmpty bool,
 ) (query []string, args []any) {
 	v := reflect.ValueOf(ptrVal).Elem()
 	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		sf := t.Field(i)
 		if !sf.IsExported() {
 			continue
@@ -119,7 +119,7 @@ type EX struct {
 func TransformSQLQuery(ptrVal any) (querys []string) {
 	v := reflect.ValueOf(ptrVal).Elem()
 	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		sf := t.Field(i)
 		if !sf.IsExported() {
 			continue
@@ -155,7 +155,7 @@ func TransformSQLDocument(ptrVal any, hasQuery bool,
 ) (exs []*EX, query []string, args []any) {
 	v := reflect.ValueOf(ptrVal).Elem()
 	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		sf := t.Field(i)
 		if !sf.IsExported() {
 			continue
@@ -233,18 +233,19 @@ func fillElements(scheme string, e *database.E, ft reflect.Type, sv any) (skip b
 		if reflect.ValueOf(sv).IsNil() {
 			break
 		}
-		if ft == timestampPtrType {
+		switch ft {
+		case timestampPtrType:
 			seconds := sv.(*timestamppb.Timestamp).Seconds
 			if seconds == 0 {
 				return true
 			}
 			e.Value = time.Unix(seconds, 0)
-		} else if ft == boolPtrType {
+		case boolPtrType:
 			e.Value = sv.(*wrapperspb.BoolValue).Value
-		} else {
+		default:
 			json, err := marshal(scheme, sv)
 			if err != nil {
-				log.Printf("marshal %s error %s\n", ft.Kind(), err)
+				slog.Warn("marshal error", "kind", ft.Kind(), "error", err)
 				return true
 			}
 			e.Value = string(json)
@@ -252,7 +253,7 @@ func fillElements(scheme string, e *database.E, ft reflect.Type, sv any) (skip b
 	case reflect.Array, reflect.Map, reflect.Slice:
 		json, err := marshal(scheme, sv)
 		if err != nil {
-			log.Printf("marshal %s error %s\n", ft.Kind(), err)
+			slog.Warn("marshal error", "kind", ft.Kind(), "error", err)
 			return true
 		}
 		e.Value = string(json)
@@ -265,7 +266,7 @@ func fillElements(scheme string, e *database.E, ft reflect.Type, sv any) (skip b
 		} else {
 			json, err := marshal(scheme, sv)
 			if err != nil {
-				log.Printf("marshal %s error %s\n", ft.Kind(), err)
+				slog.Warn("marshal error", "kind", ft.Kind(), "error", err)
 				return true
 			}
 			e.Value = string(json)

@@ -21,7 +21,7 @@ func main() {
 	var cfg Config
 	err := config.Init(context.Background(), "", &cfg, dependencies.WithNewFns(database.New))
 	if err != nil {
-		log.Action("InitConfig").Fatal(err.Error())
+		log.Action("InitConfig").Fatal("%s", err.Error())
 	}
 
 	log.Action("Start").Info("Starting server with snake_case JSON format (default)")
@@ -65,11 +65,7 @@ func main() {
 	pb.RegisterUserServiceServer(gs, userSrv)
 	_ = pb.RegisterUserServiceHandlerServer(context.Background(), gs.ServeMux(), userSrv)
 
-	log.Action("Start").Info("Server ready with snake_case JSON format (default)",
-		"httpAddr", ":8082",
-		"grpcAddr", ":8083",
-		"format", "snake_case",
-		"service", "UserService")
+	log.Action("Start").Info("Server ready with snake_case JSON format (default)")
 
 	// 6. Start server
 	gs.Start()

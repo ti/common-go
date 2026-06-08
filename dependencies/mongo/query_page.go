@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -86,7 +86,9 @@ func PageQuery[T any](ctx context.Context, s *Mongo, table string,
 
 func parseData[T any](ctx context.Context, out *database.PageQueryResponse[T], cur *mongo.Cursor,
 ) error {
-	defer cur.Close(ctx)
+	defer func() {
+		_ = cur.Close(ctx)
+	}()
 	for cur.Next(ctx) {
 		result := new(T)
 		err := cur.Decode(result)
@@ -142,7 +144,7 @@ func parseDistinct[T any](ctx context.Context, collection *mongo.Collection,
 	case string:
 		retJSON = toJSONArray(ret, distinct, func(v any) string { return `"` + v.(string) + `"` })
 	default:
-		log.Println("MgoQuery unknown type ", t)
+		slog.Warn("MgoQuery unknown type", "type", t)
 	}
 	retDistinct.Total = int64(len(ret))
 	var result []*T
@@ -174,7 +176,7 @@ func filterToMongo(project string, filterData []kv) bson.D {
 			if v == "" {
 				continue
 			}
-			if !(v[0] == '{' || v[0] == ']') {
+			if v[0] != '{' && v[0] != ']' {
 				if id, ok := getMongoID(v); ok {
 					filter = append(filter, bson.E{
 						Key:   k,

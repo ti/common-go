@@ -16,9 +16,6 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
-
 	"github.com/ti/common-go/log"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -116,7 +113,7 @@ type Server struct {
 	Logger        logging.Logger
 	mux           *mux.ServeMux
 	httpServerMux *http.ServeMux
-	wsServeMux    *http.ServeMux // WebSocket handlers — bypasses h2c
+	wsServeMux    *http.ServeMux // WebSocket handlers
 	HTTPServer    *http.Server
 	healthServer  *simpleHealthServer
 	// GrpcServer the *grpc..Server
@@ -240,7 +237,7 @@ func (s *Server) Conn() *grpc.ClientConn {
 func (s *Server) initMemConnListener(opts ...grpc.ServerOption) {
 	bufListener := newListener()
 	var err error
-	s.memConn, err = grpc.DialContext(context.Background(), "buf",
+	s.memConn, err = grpc.NewClient("passthrough:///buf",
 		grpc.WithContextDialer(bufListener.DialContext),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -278,9 +275,8 @@ func (s *Server) Handle(pattern string, handler http.Handler) {
 
 // HandleWebSocket registers a WebSocket handler for the given pattern.
 // Unlike Handle/HandleFunc, WebSocket handlers registered here are served
-// by a dedicated mux that sits OUTSIDE the h2c wrapper. This is required
-// because h2c.NewHandler intercepts "Connection: Upgrade" before any routing
-// occurs, which prevents the standard WebSocket handshake from succeeding.
+// by a dedicated mux that intercepts upgrade requests before the main handler.
+// This ensures WebSocket upgrade requests bypass HTTP/2 routing.
 //
 // The handler receives plain HTTP/1.1 upgrade requests and should perform
 // the WebSocket handshake itself (e.g. via gorilla/websocket Upgrader).
@@ -338,10 +334,9 @@ func (s *Server) startHTTP(ctx context.Context) error {
 	}
 
 	// If WebSocket handlers are registered, wrap the outermost handler so that
-	// WebSocket upgrade requests are dispatched to wsServeMux BEFORE h2c sees
-	// them. h2c.NewHandler intercepts "Connection: Upgrade" and prevents the
-	// HTTP/1.1 → WebSocket handshake from completing, so we must short-circuit
-	// it here.
+	// WebSocket upgrade requests are dispatched to wsServeMux before the main
+	// HTTP/2 handler processes them. This ensures the HTTP/1.1 WebSocket
+	// handshake completes correctly.
 	if s.wsServeMux != nil {
 		wsMux := s.wsServeMux
 		inner := handler
@@ -390,13 +385,13 @@ func (s *Server) startHTTP(ctx context.Context) error {
 	// are long-lived connections. Setting a WriteTimeout kills streaming
 	// connections abruptly, causing ConnectError: missing EndStreamResponse.
 	// ReadHeaderTimeout is safe: it only applies to the initial headers phase.
-	h2Handler := h2c.NewHandler(handler, &http2.Server{
-		IdleTimeout:          time.Minute,
-		MaxConcurrentStreams: 1000,
-	})
+	protocols := &http.Protocols{}
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
 	s.HTTPServer = &http.Server{
 		Addr:              s.opts.httpAddr,
-		Handler:           h2Handler,
+		Handler:           handler,
+		Protocols:         protocols,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       5 * time.Minute,
 		MaxHeaderBytes:    1 << 20,
