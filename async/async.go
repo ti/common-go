@@ -3,8 +3,8 @@ package async
 import (
 	"context"
 	"reflect"
-	"sync"
-	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Future is a function design pattern for async/await
@@ -12,19 +12,17 @@ import (
 // Examples in async_test.go
 // Refer: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
 type Future struct {
-	ctx     context.Context
-	errChan chan error
-	wg      *sync.WaitGroup
+	ctx context.Context
+	eg  *errgroup.Group
 }
 
 // New promise.
 func New(ctx context.Context) *Future {
-	fu := &Future{
-		ctx: ctx,
-		wg:  &sync.WaitGroup{},
+	eg, egCtx := errgroup.WithContext(ctx)
+	return &Future{
+		ctx: egCtx,
+		eg:  eg,
 	}
-	fu.errChan = make(chan error)
-	return fu
 }
 
 // Async execute some fn in async
@@ -34,22 +32,20 @@ func New(ctx context.Context) *Future {
 //
 // the context.Context is the global context.
 func Async[I, O any](f *Future, fn func(ctx context.Context, in I) (O, error), in I) (out O) {
-	f.wg.Add(1)
 	if outType := reflect.TypeOf(out); outType != nil {
 		out = reflect.New(outType.Elem()).Interface().(O)
 	}
-	go func(ctx context.Context, wg *sync.WaitGroup, i I, o O) {
-		fnOut, err := fn(ctx, i)
+	o := out
+	f.eg.Go(func() error {
+		fnOut, err := fn(f.ctx, in)
 		if err != nil {
-			f.errChan <- err
-		} else {
-			outValue := reflect.ValueOf(o)
-			if outValue.IsValid() {
-				reflect.ValueOf(o).Elem().Set(reflect.ValueOf(fnOut).Elem())
-			}
+			return err
 		}
-		wg.Done()
-	}(f.ctx, f.wg, in, out)
+		if outValue := reflect.ValueOf(o); outValue.IsValid() {
+			outValue.Elem().Set(reflect.ValueOf(fnOut).Elem())
+		}
+		return nil
+	})
 	return out
 }
 
@@ -119,22 +115,7 @@ func fnGeneric(ctx context.Context, fnIn *fnGenericIn) (o any, err error) {
 var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
 
 // Await wait for all pipeline functions done or context.Done()
-// Await return latest error, or ctx.Err() or nil
+// Await returns the first error from any pipeline function, or ctx.Err() or nil.
 func (f *Future) Await() (err error) {
-	go func() {
-		f.wg.Wait()
-		f.errChan <- nil
-	}()
-	select {
-	case err = <-f.errChan:
-	case <-f.ctx.Done():
-		// wait for the latest error
-		time.Sleep(time.Millisecond)
-		select {
-		case err = <-f.errChan:
-		default:
-			err = f.ctx.Err()
-		}
-	}
-	return err
+	return f.eg.Wait()
 }
