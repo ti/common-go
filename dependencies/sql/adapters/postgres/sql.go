@@ -33,7 +33,7 @@ func ScanArrayToJSON(src string) (string, error) {
 func replaceQuestionMarks(sql string) string {
 	re := regexp.MustCompile(`\?`)
 	count := 0
-	// 替换 ? 为 $n，其中 n 为递增的数字
+	// Replace ? with $n, where n is an incrementing number
 	sql = re.ReplaceAllStringFunc(sql, func(match string) string {
 		count++
 		return "$" + strconv.Itoa(count)

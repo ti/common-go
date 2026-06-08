@@ -9,19 +9,19 @@ import (
 	pb "yourproject/pkg/go/proto"
 )
 
-// Example 1: 使用默认下划线格式 (snake_case)
+// Example 1: Using the default snake_case format
 func ExampleDefaultSnakeCase() {
 	server := grpcmux.NewServer(
 		grpcmux.WithHTTPAddr(":8080"),
 		grpcmux.WithGrpcAddr(":8081"),
-		// 不设置 UseCamelCase，默认使用下划线格式
+		// Without setting UseCamelCase, defaults to snake_case format
 	)
 
-	// 注册服务
+	// Register service
 	pb.RegisterYourServiceServer(server, yourService)
 	pb.RegisterYourServiceHandlerServer(context.Background(), server.ServeMux(), yourService)
 
-	// API 响应示例:
+	// API response example:
 	// {
 	//   "user_id": 123,
 	//   "user_name": "Alice",
@@ -29,7 +29,7 @@ func ExampleDefaultSnakeCase() {
 	//   "created_at": "2024-01-01T00:00:00Z"
 	// }
 	//
-	// 错误响应示例:
+	// Error response example:
 	// {
 	//   "error": "invalid_argument",
 	//   "error_code": 3,
@@ -39,19 +39,19 @@ func ExampleDefaultSnakeCase() {
 	server.Start()
 }
 
-// Example 2: 使用驼峰格式 (camelCase)
+// Example 2: Using camelCase format
 func ExampleCamelCase() {
 	server := grpcmux.NewServer(
 		grpcmux.WithHTTPAddr(":8080"),
 		grpcmux.WithGrpcAddr(":8081"),
-		grpcmux.WithUseCamelCase(), // 启用驼峰格式
+		grpcmux.WithUseCamelCase(), // Enable camelCase format
 	)
 
-	// 注册服务
+	// Register service
 	pb.RegisterYourServiceServer(server, yourService)
 	pb.RegisterYourServiceHandlerServer(context.Background(), server.ServeMux(), yourService)
 
-	// API 响应示例:
+	// API response example:
 	// {
 	//   "userId": 123,
 	//   "userName": "Alice",
@@ -59,7 +59,7 @@ func ExampleCamelCase() {
 	//   "createdAt": "2024-01-01T00:00:00Z"
 	// }
 	//
-	// 错误响应示例:
+	// Error response example:
 	// {
 	//   "error": "invalid_argument",
 	//   "errorCode": 3,
@@ -69,7 +69,7 @@ func ExampleCamelCase() {
 	server.Start()
 }
 
-// Example 3: 通过配置文件设置格式
+// Example 3: Setting format via config file
 type Config struct {
 	Apis grpcmux.Config
 }
@@ -81,40 +81,40 @@ func ExampleWithConfigFile() {
 	//   grpcAddr: :8081
 	//   httpAddr: :8080
 	//   metricsAddr: :9090
-	//   useCamelCase: true  # 启用驼峰格式
+	//   useCamelCase: true  # Enable camelCase format
 
-	// 加载配置（假设已经通过 config.Init 加载）
+	// Load config (assuming already loaded via config.Init)
 	// cfg.Apis.UseCamelCase = true
 
 	server := grpcmux.NewServer(
 		grpcmux.WithConfig(&cfg.Apis),
 	)
 
-	// 注册服务
+	// Register service
 	pb.RegisterYourServiceServer(server, yourService)
 	pb.RegisterYourServiceHandlerServer(context.Background(), server.ServeMux(), yourService)
 
 	server.Start()
 }
 
-// Example 4: 混合使用选项
+// Example 4: Using mixed options
 func ExampleMixedOptions() {
 	server := grpcmux.NewServer(
 		grpcmux.WithHTTPAddr(":8080"),
 		grpcmux.WithGrpcAddr(":8081"),
-		grpcmux.WithUseCamelCase(), // 启用驼峰格式
-		grpcmux.WithLoggingOptions( /* 日志选项 */ ),
-		grpcmux.WithAuthFunc( /* 认证函数 */ ),
+		grpcmux.WithUseCamelCase(), // Enable camelCase format
+		grpcmux.WithLoggingOptions( /* logging options */ ),
+		grpcmux.WithAuthFunc( /* auth function */ ),
 	)
 
-	// 注册服务
+	// Register service
 	pb.RegisterYourServiceServer(server, yourService)
 	pb.RegisterYourServiceHandlerServer(context.Background(), server.ServeMux(), yourService)
 
 	server.Start()
 }
 
-// Proto 定义示例
+// Proto definition example
 // message User {
 //   int64 user_id = 1;
 //   string user_name = 2;
@@ -129,10 +129,10 @@ func ExampleMixedOptions() {
 //   USER_STATUS_INACTIVE = 2;
 // }
 
-// 格式对比表:
+// Format comparison table:
 //
-// | Proto 字段名      | 下划线格式 (默认)  | 驼峰格式        |
-// |------------------|-------------------|----------------|
+// | Proto Field Name  | snake_case (default) | camelCase        |
+// |------------------|---------------------|----------------|
 // | user_id          | user_id           | userId         |
 // | user_name        | user_name         | userName       |
 // | email_address    | email_address     | emailAddress   |
@@ -141,16 +141,16 @@ func ExampleMixedOptions() {
 // | error_code       | error_code        | errorCode      |
 // | error_description| error_description | errorDescription|
 
-// 测试命令:
+// Test commands:
 //
-// # 测试下划线格式
+// # Test snake_case format
 // curl -X POST http://localhost:8080/v1/users \
 //   -H "Content-Type: application/json" \
 //   -d '{"email_address": "alice@example.com", "user_name": "Alice"}'
 //
-// # 测试驼峰格式
+// # Test camelCase format
 // curl -X POST http://localhost:8080/v1/users \
 //   -H "Content-Type: application/json" \
 //   -d '{"emailAddress": "alice@example.com", "userName": "Alice"}'
 //
-// 注意: 请求体的格式应与服务器配置的格式一致
+// Note: The request body format should match the server configuration
