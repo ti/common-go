@@ -411,6 +411,16 @@ func (h *HTTP) request(ctx context.Context, method, uri string,
 		return nil, err
 	}
 	request.Header = header
+	if proxyURL, ok := ProxyFromContext(ctx); ok {
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		}
+		client := &http.Client{
+			Timeout:   h.client.Timeout,
+			Transport: transport,
+		}
+		return client.Do(request)
+	}
 	return h.client.Do(request)
 }
 
