@@ -146,7 +146,7 @@ func (m metadata) findTypedField(rType reflect.Type, node *node) (reflect.Struct
 		return reflect.StructField{}, fmt.Errorf("field not found, node: %s", node.Name)
 	}
 
-	for i := 0; i < rType.NumField(); i++ {
+	for i := range rType.NumField() {
 		cField := rType.Field(i)
 
 		fieldName := cField.Tag.Get(TagLabelSliceAsStruct)

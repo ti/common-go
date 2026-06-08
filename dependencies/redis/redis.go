@@ -99,6 +99,8 @@ func (r *Redis) Init(ctx context.Context, u *url.URL) error {
 
 // Close redis
 func (r *Redis) Close(_ context.Context) error {
+	r.rateLimiter.cleanup.Stop()
+	close(r.rateLimiter.done)
 	r.locker.Close()
 	r.client.Close()
 	return nil

@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/base64"
+	"runtime"
 	"sync"
 	"time"
 
@@ -27,29 +28,42 @@ func (r *Redis) RateLimitN(ctx context.Context, key string, limit int,
 func newRateLimiter(redisClient rueidis.Client,
 	checkInterval, cleanupDuration time.Duration,
 ) *rateLimiter {
+	done := make(chan struct{})
+	limiters := &sync.Map{}
 	r := &rateLimiter{
 		redis:    redisrate.NewLimiter(redisClient),
-		limiters: &sync.Map{},
+		limiters: limiters,
+		done:     done,
 	}
+	ticker := time.NewTicker(checkInterval)
 	go func() {
-		ticker := time.NewTicker(checkInterval)
 		for {
-			<-ticker.C
-			r.limiters.Range(func(key, value any) bool {
-				v := value.(*timerRate)
-				if time.Since(v.lastSeen) > cleanupDuration {
-					r.limiters.Delete(key)
-				}
-				return true
-			})
+			select {
+			case <-ticker.C:
+				limiters.Range(func(key, value any) bool {
+					v := value.(*timerRate)
+					if time.Since(v.lastSeen) > cleanupDuration {
+						limiters.Delete(key)
+					}
+					return true
+				})
+			case <-done:
+				ticker.Stop()
+				return
+			}
 		}
 	}()
+	r.cleanup = runtime.AddCleanup(r, func(ch chan struct{}) {
+		close(ch)
+	}, done)
 	return r
 }
 
 type rateLimiter struct {
 	redis    *redisrate.Limiter
 	limiters *sync.Map
+	done     chan struct{}
+	cleanup  runtime.Cleanup
 }
 
 func (r *rateLimiter) rateLimitN(ctx context.Context, key string, limit int,

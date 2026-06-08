@@ -46,7 +46,7 @@ func (b *bodyEncoder) clearValueBytes(m pref.Message, val pref.Value, fd pref.Fi
 	switch {
 	case fd.IsList():
 		list := val.List()
-		for i := 0; i < list.Len(); i++ {
+		for i := range list.Len() {
 			item := list.Get(i)
 			b.clearMessageBytes(item.Message())
 		}

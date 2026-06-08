@@ -16,6 +16,14 @@ import (
 func PageQuery[T any](ctx context.Context, d database.Database, table string,
 	in *database.PageQueryRequest,
 ) (*database.PageQueryResponse[T], error) {
+	if q, ok := d.(database.PageQuerier); ok {
+		out := &database.PageQueryResponse[T]{}
+		if err := q.DoPageQuery(ctx, table, in, out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+	// Fallback to type assertions for backward compatibility.
 	if client, ok := d.(*sql.SQL); ok {
 		return sql.PageQuery[T](ctx, client, table, in)
 	}
@@ -33,6 +41,14 @@ func PageQuery[T any](ctx context.Context, d database.Database, table string,
 func StreamQuery[T any](ctx context.Context, d database.Database, table string,
 	in *database.StreamQueryRequest,
 ) (*database.StreamResponse[T], error) {
+	if q, ok := d.(database.StreamQuerier); ok {
+		out := &database.StreamResponse[T]{}
+		if err := q.DoStreamQuery(ctx, table, in, out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+	// Fallback to type assertions for backward compatibility.
 	if client, ok := d.(*sql.SQL); ok {
 		return sql.StreamQuery[T](ctx, client, table, in)
 	}

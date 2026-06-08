@@ -35,3 +35,9 @@ type StreamResponse[T any] struct {
 	Data      []*T   `json:"data,omitempty"`
 	Total     int64  `json:"total,omitempty"`
 }
+
+// PageResult is a shorter alias for PageQueryResponse.
+type PageResult[T any] = PageQueryResponse[T]
+
+// StreamResult is a shorter alias for StreamResponse.
+type StreamResult[T any] = StreamResponse[T]
