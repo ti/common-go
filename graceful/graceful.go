@@ -20,7 +20,26 @@ import (
 var (
 	closers []func(ctx context.Context) error
 	signals = make(chan os.Signal, 10)
+
+	// mainGoroutineID is captured once during init(), which always runs on the main goroutine.
+	mainGoroutineID uint64
 )
+
+func init() {
+	mainGoroutineID = goroutineID()
+}
+
+// goroutineID returns the current goroutine's ID by parsing runtime.Stack output.
+func goroutineID() uint64 {
+	buf := make([]byte, 64)
+	runtime.Stack(buf, false)
+	field := bytes.Fields(buf)[1]
+	id, err := strconv.ParseUint(string(field), 10, 64)
+	if err != nil {
+		panic("graceful: failed to parse goroutine ID: " + err.Error())
+	}
+	return id
+}
 
 // Fn is a function with error.
 type Fn func(context.Context) error
@@ -45,13 +64,8 @@ func Start(ctx context.Context, fn ...Fn) {
 		warnJSONLog(err.Error())
 		signals <- nil
 	}
-	// check if in main thread
-	buf := make([]byte, 16)
-	runtime.Stack(buf, false)
-	gr := bytes.Fields(buf)[1]
-	id, _ := strconv.Atoi(string(gr))
-	// the main goroutine’s id is 1
-	if id == 1 {
+	// check if in main goroutine
+	if goroutineID() == mainGoroutineID {
 		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 		if sig := <-signals; sig != nil {
 			warnJSONLog(fmt.Sprintf("closed by %s", sig.String()))

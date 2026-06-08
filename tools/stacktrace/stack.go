@@ -23,8 +23,8 @@ func Callers(skip int) (result string) {
 
 func getLastNPathElements(path string, n int) string {
 	var subPath string
-	// 使用循环获取最后 n 个子路径
-	for i := 0; i < n; i++ {
+	// Use a loop to get the last n sub-path elements
+	for i := range n {
 		if len(path) < 2 {
 			return subPath
 		}

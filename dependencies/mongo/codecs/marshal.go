@@ -73,7 +73,7 @@ func encodeToJSON(data any) ([]byte, error) {
 func marshalProtoArray(data any) ([]byte, error) {
 	arrValue := reflect.ValueOf(data)
 	raw := make([]json.RawMessage, arrValue.Len())
-	for i := 0; i < arrValue.Len(); i++ {
+	for i := range arrValue.Len() {
 		elemValue := arrValue.Index(i)
 		r, err := protojson.Marshal(elemValue.Interface().(proto.Message))
 		if err != nil {

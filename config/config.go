@@ -64,7 +64,7 @@ func initDeps(ctx context.Context, configURI string, configPtr any,
 ) error {
 	configType := reflect.TypeOf(configPtr).Elem()
 	depType := reflect.TypeOf(dependencies.Dependency{})
-	for i := 0; i < configType.NumField(); i++ {
+	for i := range configType.NumField() {
 		field := configType.Field(i)
 		fieldType := field.Type
 		if fieldType.Kind() != reflect.Struct {

@@ -138,7 +138,7 @@ func (f filler) setSlice(field reflect.Value, n *node) error {
 	values := strings.Split(n.Value, ",")
 	slice := reflect.MakeSlice(field.Type(), len(values), len(values))
 	field.Set(slice)
-	for i := 0; i < len(values); i++ {
+	for i := range len(values) {
 		err := f.setAllType(field, i, values)
 		if err != nil {
 			return err
