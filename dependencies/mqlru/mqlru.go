@@ -98,7 +98,7 @@ func (l *Lru) Init(ctx context.Context, u *url.URL) error {
 				logger.With(map[string]any{
 					"action":  "lru.Subscribe",
 					"referer": key,
-				}).Error("%s", errTTL.Error())
+				}).Error(errTTL.Error())
 				return nil
 			}
 			if ttl == 0 || len(msg.Body) == 0 {

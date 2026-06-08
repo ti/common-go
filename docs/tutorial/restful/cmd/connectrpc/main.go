@@ -20,7 +20,7 @@ func main() {
 	var cfg Config
 	err := config.Init(context.Background(), "", &cfg, dependencies.WithNewFns(database.New))
 	if err != nil {
-		log.Action("InitConfig").Fatal("%s", err.Error())
+		log.Action("InitConfig").Fatal(err.Error())
 	}
 
 	// 2. Initialize the UserService

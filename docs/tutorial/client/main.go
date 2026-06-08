@@ -23,5 +23,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	log.Action("grpc.Test").Info("%s", resp.String())
+	log.Action("grpc.Test").Info(resp.String())
 }

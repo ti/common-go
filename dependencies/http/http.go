@@ -383,9 +383,9 @@ func (h *HTTP) onRequestClose(ctx context.Context,
 		}
 		logger := log.Extract(ctx).With(logData)
 		if err != nil {
-			logger.Warn("%s", err.Error())
+			logger.Warn(err.Error())
 		} else {
-			logger.Info("%s", method)
+			logger.Info(method)
 		}
 	}
 	if h.metrics != nil {

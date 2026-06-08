@@ -165,7 +165,7 @@ func (s sqlLogger) Log(ctx context.Context, level sqldblogger.Level, msg string,
 		paramsBytes, _ := json.Marshal(data)
 		params = string(paramsBytes)
 	}
-	log.Extract(ctx).Action("sql." + msg).Info("%s", params)
+	log.Extract(ctx).Action("sql." + msg).Info(params)
 }
 
 // Close Sql close
