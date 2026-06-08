@@ -60,6 +60,7 @@ func Async[I, O any](f *Future, fn func(ctx context.Context, in I) (O, error), i
 //	Async[O any](fn func(ctx context.Context) (O, error)) O
 //
 // the ctx is global context by default.
+// Deprecated: awaiting Go 1.27 generic method type parameters support. Use the generic function Async[I, O] instead.
 func (f *Future) Async(fn any, params ...any) any {
 	t := reflect.TypeOf(fn)
 	nOut := t.NumOut()

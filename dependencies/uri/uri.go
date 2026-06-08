@@ -9,13 +9,16 @@ import (
 
 // Unmarshal parses the URL-encoded data and stores the result.
 func Unmarshal(uri *url.URL, v any) error {
+	if uri == nil {
+		return errors.New("uri must not be nil")
+	}
 	target := reflect.ValueOf(v)
-	if target.Kind() != reflect.Ptr {
+	if target.Kind() != reflect.Pointer {
 		return errors.New("dependencies must be pointer")
 	}
 	e := target.Elem()
 	tagsMap := map[string]bool{}
-	for i := 0; i < e.NumField(); i++ {
+	for i := range e.NumField() {
 		f := e.Type().Field(i)
 		tagsMap[strings.ToLower(f.Name)] = true
 	}

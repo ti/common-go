@@ -50,7 +50,7 @@ func (s *SQL) InsertOne(ctx context.Context, table string, data any) (err error)
 	if s.project != "" {
 		query += fmt.Sprintf("'%s',", s.project)
 	}
-	for i := 0; i < len(args); i++ {
+	for i := range len(args) {
 		if i > 0 {
 			query += ","
 		}
@@ -85,7 +85,7 @@ func (s *SQL) Insert(ctx context.Context, table string, docs any) (count int, er
 	if s.project != "" {
 		queryValues += fmt.Sprintf(`'%s',`, s.project)
 	}
-	for i := 0; i < len(args); i++ {
+	for i := range len(args) {
 		if i > 0 {
 			queryValues += ","
 		}
@@ -193,7 +193,7 @@ func (s *SQL) Replace(ctx context.Context, table string, indexKeys []string, doc
 	if dataLen == 0 {
 		return 0, errors.New("no insert data found")
 	}
-	for i := 0; i < dataLen; i++ {
+	for i := range dataLen {
 		conds, doc := s.getFilterByIndexKeys(indexKeysMap, data.Index(i).Interface())
 		// TODO: performance optimization
 		_, err = s.update(ctx, table, conds, doc, true)
@@ -261,7 +261,9 @@ func (s *SQL) Find(ctx context.Context, table string, conds database.C, order []
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		rowData, err := rows.Decode()
 		if err != nil {
@@ -422,7 +424,9 @@ func (s *SQL) Run(ctx context.Context, query string, args []any, arrayPtr any) e
 		selectFields: make(map[string]bool),
 		timeLoc:      s.loc,
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		rowData, errDecode := rows.Decode()
 		if errDecode != nil {
@@ -599,9 +603,10 @@ func convertSQLError(scheme string, err error) error {
 	} else if errors.Is(err, sql.ErrNoRows) {
 		code = codes.NotFound
 	} else {
-		if scheme == schemeMysql {
+		switch scheme {
+		case schemeMysql:
 			return mysql.ConvertError(err)
-		} else if scheme == schemePostgres {
+		case schemePostgres:
 			return postgres.ConvertError(err)
 		}
 	}

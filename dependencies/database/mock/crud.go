@@ -19,13 +19,13 @@ func (m *Mock) Insert(ctx context.Context, tableName string, docs any) (count in
 
 	// Check if docs is a slice
 	v := reflect.ValueOf(docs)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
 	if v.Kind() == reflect.Slice {
 		// Multiple documents
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			doc := v.Index(i).Interface()
 			row, err := structToMap(doc)
 			if err != nil {
@@ -141,7 +141,7 @@ func (m *Mock) Replace(ctx context.Context, tableName string, indexKeys []string
 	table := m.getOrCreateTable(tableName)
 
 	v := reflect.ValueOf(docs)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -151,7 +151,7 @@ func (m *Mock) Replace(ctx context.Context, tableName string, indexKeys []string
 			return 0, fmt.Errorf("no insert data found")
 		}
 		items = make([]any, v.Len())
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			items[i] = v.Index(i).Interface()
 		}
 	} else {
@@ -403,7 +403,7 @@ func sortRows(rows []map[string]any, sortBy []string) {
 // sliceToArray converts slice of maps to array of structs
 func sliceToArray(matches []map[string]any, arrayPtr any) error {
 	v := reflect.ValueOf(arrayPtr)
-	if v.Kind() != reflect.Ptr {
+	if v.Kind() != reflect.Pointer {
 		return fmt.Errorf("arrayPtr must be a pointer to slice")
 	}
 

@@ -126,7 +126,7 @@ func normalizeKey(key string) string {
 // structToMap converts a struct to map
 func structToMap(data any) (map[string]any, error) {
 	v := reflect.ValueOf(data)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -137,7 +137,7 @@ func structToMap(data any) (map[string]any, error) {
 	result := make(map[string]any)
 	t := v.Type()
 
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		field := t.Field(i)
 		value := v.Field(i)
 
@@ -173,7 +173,7 @@ func structToMap(data any) (map[string]any, error) {
 // mapToStruct converts a map to struct
 func mapToStruct(m map[string]any, dest any) error {
 	v := reflect.ValueOf(dest)
-	if v.Kind() != reflect.Ptr {
+	if v.Kind() != reflect.Pointer {
 		return fmt.Errorf("dest must be a pointer")
 	}
 
@@ -184,7 +184,7 @@ func mapToStruct(m map[string]any, dest any) error {
 
 	t := v.Type()
 
-	for i := 0; i < v.NumField(); i++ {
+	for i := range v.NumField() {
 		field := t.Field(i)
 		if !field.IsExported() {
 			continue
@@ -310,7 +310,7 @@ func containsValue(value any, slice any) bool {
 		return false
 	}
 
-	for i := 0; i < sliceValue.Len(); i++ {
+	for i := range sliceValue.Len() {
 		if reflect.DeepEqual(value, sliceValue.Index(i).Interface()) {
 			return true
 		}

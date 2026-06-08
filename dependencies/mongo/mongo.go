@@ -101,7 +101,7 @@ func isFirstFieldAnonymous(val any) (firstField, newValue reflect.Value, isPoint
 		return
 	}
 	firstField = v.Field(0)
-	if firstField.Kind() == reflect.Ptr {
+	if firstField.Kind() == reflect.Pointer {
 		newValue = reflect.New(sf.Type.Elem())
 		isPointer = true
 	} else {
@@ -139,7 +139,7 @@ func (m *Mongo) DefaultDatabase() *mongo.Database {
 
 // Close database.
 func (m *Mongo) Close(ctx context.Context) error {
-	err := m.Client.Disconnect(ctx)
+	err := m.Disconnect(ctx)
 	m.Client = nil
 	return err
 }

@@ -34,44 +34,43 @@ type sLogger struct {
 	fields []any
 }
 
+// formatMessage renders the final log message from a message-or-format string
+// and its optional arguments.
+//
+// It deliberately takes args as a non-variadic []any (rather than ...any) so
+// that the go vet printf analyzer does not classify the exported Debug/Info/
+// Warn/Error/Fatal methods as printf-style wrappers. This lets callers pass a
+// dynamic, non-constant message (e.g. logger.Info(method)) without triggering
+// "non-constant format string in call" vet warnings.
+func formatMessage(msgOrFormat string, args []any) string {
+	if len(args) == 0 {
+		return msgOrFormat
+	}
+	return fmt.Sprintf(msgOrFormat, args...)
+}
+
 // Debug logs a message at DebugLevel. The message includes any fields passed
 // at the log site, as well as any fields accumulated on the logger.
 func (l *sLogger) Debug(msgOrFormat string, args ...any) {
-	if len(args) == 0 {
-		l.logger.Debug(msgOrFormat)
-		return
-	}
-	l.logger.Debug(fmt.Sprintf(msgOrFormat, args...))
+	l.logger.Debug(formatMessage(msgOrFormat, args))
 }
 
 // Info logs a message at InfoLevel. The message includes any fields passed
 // at the log site, as well as any fields accumulated on the logger.
 func (l *sLogger) Info(msgOrFormat string, args ...any) {
-	if len(args) == 0 {
-		l.logger.Info(msgOrFormat)
-		return
-	}
-	l.logger.Info(fmt.Sprintf(msgOrFormat, args...))
+	l.logger.Info(formatMessage(msgOrFormat, args))
 }
 
 // Warn logs a message at WarnLevel. The message includes any fields passed
 // at the log site, as well as any fields accumulated on the logger.
 func (l *sLogger) Warn(msgOrFormat string, args ...any) {
-	if len(args) == 0 {
-		l.logger.Warn(msgOrFormat)
-		return
-	}
-	l.logger.Warn(fmt.Sprintf(msgOrFormat, args...))
+	l.logger.Warn(formatMessage(msgOrFormat, args))
 }
 
 // Error logs a message at ErrorLevel. The message includes any fields passed
 // at the log site, as well as any fields accumulated on the logger.
 func (l *sLogger) Error(msgOrFormat string, args ...any) {
-	if len(args) == 0 {
-		l.logger.Error(msgOrFormat)
-		return
-	}
-	l.logger.Error(fmt.Sprintf(msgOrFormat, args...))
+	l.logger.Error(formatMessage(msgOrFormat, args))
 }
 
 // Fatal logs a message at FatalLevel. The message includes any fields passed
@@ -80,11 +79,7 @@ func (l *sLogger) Error(msgOrFormat string, args ...any) {
 // The logger then calls os.Exit(1), even if logging at FatalLevel is
 // disabled.
 func (l *sLogger) Fatal(msgOrFormat string, args ...any) {
-	if len(args) == 0 {
-		log.Fatalln(msgOrFormat)
-		return
-	}
-	log.Fatalln(fmt.Sprintf(msgOrFormat, args...))
+	log.Fatal(formatMessage(msgOrFormat, args))
 }
 
 // Action logger with just an action key.

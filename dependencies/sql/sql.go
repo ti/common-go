@@ -44,7 +44,7 @@ func New(ctx context.Context, uri string) (database.Database, error) {
 }
 
 const (
-	schemeMysql    = "msyql"
+	schemeMysql    = "mysql"
 	schemePostgres = "postgres"
 )
 
@@ -100,7 +100,7 @@ func (s *SQL) Init(_ context.Context, u *url.URL) error {
 		s.loc = time.Now().Location()
 	}
 	s.scheme = u.Scheme
-	err = s.DB.Ping()
+	err = s.Ping()
 	if err != nil {
 		err = convertError(u.Scheme, err)
 		_ = s.DB.Close()
@@ -110,13 +110,14 @@ func (s *SQL) Init(_ context.Context, u *url.URL) error {
 }
 
 func convertError(scheme string, err error) error {
-	if scheme == schemeMysql {
+	switch scheme {
+	case schemeMysql:
 		return mysql.ConvertError(err)
-	}
-	if scheme == schemePostgres {
+	case schemePostgres:
 		return postgres.ConvertError(err)
+	default:
+		return err
 	}
-	return err
 }
 
 func newSQLClient(uri *url.URL, logMode string) (*sql.DB, error) {

@@ -46,7 +46,7 @@ func (c *reporter) PostCall(err error, duration time.Duration) {
 // PostMsgSend the implement for send
 func (c *reporter) PostMsgSend(payload any, err error, duration time.Duration) {
 	logLvl := codeToLevel(status.Code(err))
-	if c.CallMeta.IsClient {
+	if c.IsClient {
 		if c.decision.Start {
 			fields := c.fields
 			fields = append(fields, "duration", float32(duration.Nanoseconds()/1000)/1000)
@@ -63,7 +63,7 @@ func (c *reporter) PostMsgSend(payload any, err error, duration time.Duration) {
 // PostMsgReceive the implement for receive
 func (c *reporter) PostMsgReceive(payload any, err error, duration time.Duration) {
 	logLvl := codeToLevel(status.Code(err))
-	if !c.CallMeta.IsClient {
+	if !c.IsClient {
 		if c.decision.Request {
 			c.fields = append(c.fields, keyRequest, c.opts.bodyEncoder.Encode(payload, c.decision.ClearData))
 		}

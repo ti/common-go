@@ -41,7 +41,9 @@ func PageQuery[T any](ctx context.Context, s *SQL, table string,
 		selectFields: selectFields,
 		timeLoc:      s.loc,
 	}
-	defer dataRows.Close()
+	defer func() {
+		_ = dataRows.Close()
+	}()
 	for dataRows.Next() {
 		rowData, errDec := dataRows.Decode()
 		if errDec != nil {

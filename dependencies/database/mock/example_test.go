@@ -23,7 +23,9 @@ func ExampleMock() {
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert a user
 	user := &User{
@@ -54,7 +56,9 @@ func ExampleMock() {
 func ExampleMock_conditions() {
 	ctx := context.Background()
 	db, _ := database.New(ctx, "mock://local/testdb")
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert multiple users
 	users := []*User{
@@ -62,11 +66,11 @@ func ExampleMock_conditions() {
 		{ID: 2, Name: "Bob", Age: 25},
 		{ID: 3, Name: "Charlie", Age: 30},
 	}
-	db.Insert(ctx, "users", users)
+	_, _ = db.Insert(ctx, "users", users)
 
 	// Find users with age > 22
 	var results []User
-	db.Find(ctx, "users",
+	_ = db.Find(ctx, "users",
 		database.C{{Key: "age", Value: 22, C: database.Gt}},
 		[]string{"-age"}, // Sort by age descending
 		10,
@@ -83,20 +87,22 @@ func ExampleMock_conditions() {
 func ExampleMock_update() {
 	ctx := context.Background()
 	db, _ := database.New(ctx, "mock://local/testdb")
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Insert a user
 	user := &User{ID: 1, Name: "Alice", Age: 25}
-	db.InsertOne(ctx, "users", user)
+	_ = db.InsertOne(ctx, "users", user)
 
 	// Update the user's age
-	db.UpdateOne(ctx, "users",
+	_, _ = db.UpdateOne(ctx, "users",
 		database.C{{Key: "id", Value: int64(1)}},
 		database.D{{Key: "age", Value: 26}})
 
 	// Find and display
 	var result User
-	db.FindOne(ctx, "users",
+	_ = db.FindOne(ctx, "users",
 		database.C{{Key: "id", Value: int64(1)}},
 		&result)
 
@@ -107,12 +113,14 @@ func ExampleMock_update() {
 func ExampleMock_counter() {
 	ctx := context.Background()
 	db, _ := database.New(ctx, "mock://local/testdb")
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Initialize and increment counter
-	db.IncrCounter(ctx, "stats", "page_views", 0, 1)
-	db.IncrCounter(ctx, "stats", "page_views", 0, 1)
-	db.IncrCounter(ctx, "stats", "page_views", 0, 1)
+	_ = db.IncrCounter(ctx, "stats", "page_views", 0, 1)
+	_ = db.IncrCounter(ctx, "stats", "page_views", 0, 1)
+	_ = db.IncrCounter(ctx, "stats", "page_views", 0, 1)
 
 	// Get counter value
 	value, _ := db.GetCounter(ctx, "stats", "page_views")
@@ -124,7 +132,9 @@ func ExampleMock_counter() {
 func ExampleMock_transaction() {
 	ctx := context.Background()
 	db, _ := database.New(ctx, "mock://local/testdb")
-	defer db.Close(ctx)
+	defer func() {
+		_ = db.Close(ctx)
+	}()
 
 	// Start transaction
 	tx, _ := db.StartTransaction(ctx)
@@ -136,16 +146,16 @@ func ExampleMock_transaction() {
 	user := &User{ID: 1, Name: "Bob", Age: 30}
 	err := txDB.InsertOne(ctx, "users", user)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return
 	}
 
 	// Commit transaction
-	tx.Commit()
+	_ = tx.Commit()
 
 	// Verify
 	var result User
-	db.FindOne(ctx, "users",
+	_ = db.FindOne(ctx, "users",
 		database.C{{Key: "id", Value: int64(1)}},
 		&result)
 

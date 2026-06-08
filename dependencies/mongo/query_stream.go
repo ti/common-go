@@ -133,7 +133,9 @@ func decodeData[T any](ctx context.Context, in *database.StreamQueryRequest,
 	var i int
 	var last *mongo.Cursor
 	var lastResult any
-	defer cur.Close(ctx)
+	defer func() {
+		_ = cur.Close(ctx)
+	}()
 	var pageToken PageToken
 	for {
 		hasNext := cur.Next(ctx)

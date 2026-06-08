@@ -7,8 +7,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// demoCounter test counter
-var demoCounter = promauto.NewCounter(prometheus.CounterOpts{
+// demoCounter is a test counter for demonstration purposes.
+var _ = promauto.NewCounter(prometheus.CounterOpts{
 	Namespace: "cms",
 	Subsystem: "demo",
 	Name:      "total",

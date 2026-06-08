@@ -2,7 +2,7 @@ package sql
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"reflect"
 	"strings"
 	"time"
@@ -105,7 +105,7 @@ func TransformScheme(ptrVal any) database.D {
 	v := reflect.ValueOf(ptrVal).Elem()
 	t := v.Type()
 	var docs database.D
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		sf := t.Field(i)
 		if !sf.IsExported() {
 			continue
@@ -172,7 +172,7 @@ func convertDocsToSet(scheme string, d database.D) (query string, args []any) {
 			dot := strings.Index(v.Key, ".")
 			subArrayIndex := strings.Index(v.Key, "[")
 			if dot < 0 || subArrayIndex < 0 {
-				log.Printf("can not conver to %s to -key[*].subKey pattern", v.Key)
+				slog.Warn("cannot convert to -key[*].subKey pattern", "key", v.Key)
 				continue
 			}
 			jsonKey := v.Key[1:subArrayIndex]
@@ -206,7 +206,7 @@ func convertDocsToSet(scheme string, d database.D) (query string, args []any) {
 		}
 		jsonBytes, err := marshal(scheme, v.Value)
 		if err != nil {
-			log.Printf("can not conver to %s to json", v.Key)
+			slog.Warn("cannot convert to json", "key", v.Key)
 			continue
 		}
 		d[i].Value = string(jsonBytes)
@@ -225,7 +225,7 @@ func tidySQLConds(conds database.C, compactMode bool) (query string, args []any)
 		query += condQuery + " "
 		if v.C == database.In || v.C == database.Nin {
 			data := reflect.ValueOf(v.Value)
-			for i := 0; i < data.Len(); i++ {
+			for i := range data.Len() {
 				args = append(args, data.Index(i).Interface())
 			}
 		} else {
