@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/net/http2"
 
 	"github.com/ti/common-go/log"
@@ -349,6 +350,24 @@ func (s *Server) startHTTP(ctx context.Context) error {
 			}
 			inner.ServeHTTP(w, r)
 		})
+	}
+
+	// Tracing: wrap the HTTP handler with otelhttp so Connect/gRPC-web requests
+	// served over the HTTP path (which do NOT traverse the gRPC StatsHandler)
+	// produce spans too. Without this, only native gRPC (:grpcAddr) is traced
+	// and Connect RPCs from browsers are invisible in Tempo. The span is named
+	// after the request path (the RPC method, e.g. /auth.v1.AuthService/Token),
+	// which the trace drill-down dashboards filter on. No-op export unless an
+	// OTLP TracerProvider is installed by the application.
+	if s.opts.tracing {
+		handler = otelhttp.NewHandler(handler, "http.server",
+			otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+				if r.URL != nil && r.URL.Path != "" {
+					return r.Method + " " + r.URL.Path
+				}
+				return r.Method
+			}),
+		)
 	}
 
 	tlsCert := s.opts.tlsCertFile
