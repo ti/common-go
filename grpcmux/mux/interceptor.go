@@ -83,6 +83,11 @@ func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
 				}
 			}
 			ctx = medataCtx(ctx, r)
+			// Inject request-derived log fields (action/ip/peer/protocol/request_id)
+			// BEFORE auth so that auth rejections (401) still produce a full log
+			// line. Auth-derived fields (user_id/client_id/...) are added after a
+			// successful auth by injectAuthInfo below.
+			ctx = injectRequestInfo(ctx, r, logger)
 			if opts.authFunc != nil {
 				var noAuth bool
 				for _, v := range opts.noAuthPrefix {
@@ -99,7 +104,7 @@ func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
 					}
 				}
 			}
-			ctx = injectAuthInfo(ctx, r, logger)
+			ctx = injectAuthInfo(ctx, logger)
 			writer := &responseWriter{
 				W:                 w,
 				R:                 r,
@@ -198,31 +203,17 @@ func queryHeaderAdapter(r *http.Request) {
 	}
 }
 
-func injectAuthInfo(ctx context.Context, r *http.Request, logger log.Logger) context.Context {
+// injectRequestInfo injects request-derived log fields (action/ip/peer/protocol/
+// request_id) into the request-scoped logger and incoming metadata. It runs
+// BEFORE authentication so that even auth-rejected requests (401) emit a complete
+// log line. Handlers can add more fields later via log.Inject(ctx, ...).
+func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger) context.Context {
 	logData := map[string]any{
-		"action": r.URL.Path,
+		"action":   r.URL.Path,
+		"ip":       ip.GetIPFromHTTPRequest(r),
+		"protocol": r.Proto,
+		"peer":     r.RemoteAddr,
 	}
-	if authInfo, ok := AuthInfoFromContext(ctx); ok {
-		if id := authInfo.GetProjectID(); id != "" {
-			logData["project_id"] = id
-		}
-		if id := authInfo.GetClientID(); id != "" {
-			logData["client_id"] = id
-		}
-		if id := authInfo.GetDeviceID(); id != "" {
-			logData["device_id"] = id
-		}
-		if id := authInfo.GetUserID(); id != "" {
-			logData["user_id"] = id
-		}
-		if id := authInfo.GetOrganizationID(); id != "" {
-			logData["organization_id"] = id
-		}
-	}
-	ipAddr := ip.GetIPFromHTTPRequest(r)
-	logData["ip"] = ipAddr
-	logData["protocol"] = r.Proto
-	logData["peer"] = r.RemoteAddr
 	requestID := r.Header.Get(requestIDHeader)
 	if requestID == "" {
 		requestID = uuid.New().String()
@@ -234,8 +225,42 @@ func injectAuthInfo(ctx context.Context, r *http.Request, logger log.Logger) con
 	for k, v := range logData {
 		md.Set(k, v.(string))
 	}
-	ctx = md.ToIncoming(ctx)
-	return ctx
+	return md.ToIncoming(ctx)
+}
+
+// injectAuthInfo injects identity fields (project_id/client_id/device_id/user_id/
+// organization_id) into the request-scoped logger once authentication has
+// succeeded. Request-derived fields are already added by injectRequestInfo.
+func injectAuthInfo(ctx context.Context, logger log.Logger) context.Context {
+	authInfo, ok := AuthInfoFromContext(ctx)
+	if !ok {
+		return ctx
+	}
+	logData := map[string]any{}
+	if id := authInfo.GetProjectID(); id != "" {
+		logData["project_id"] = id
+	}
+	if id := authInfo.GetClientID(); id != "" {
+		logData["client_id"] = id
+	}
+	if id := authInfo.GetDeviceID(); id != "" {
+		logData["device_id"] = id
+	}
+	if id := authInfo.GetUserID(); id != "" {
+		logData["user_id"] = id
+	}
+	if id := authInfo.GetOrganizationID(); id != "" {
+		logData["organization_id"] = id
+	}
+	if len(logData) == 0 {
+		return ctx
+	}
+	logger.Inject(logData)
+	md := metadata.ExtractIncoming(ctx)
+	for k, v := range logData {
+		md.Set(k, v.(string))
+	}
+	return md.ToIncoming(ctx)
 }
 
 func recoverRequest(l log.Logger, rec any, method string) error {
