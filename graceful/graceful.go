@@ -58,7 +58,9 @@ func Close() {
 func Start(ctx context.Context, fn ...Fn) {
 	asyncPool := async.New(ctx)
 	for _, fv := range fn {
-		asyncPool.Async(fv)
+		asyncPool.Async(func(ctx context.Context, fv Fn) (struct{}, error) {
+			return struct{}{}, fv(ctx)
+		}, fv)
 	}
 	if err := asyncPool.Await(); err != nil {
 		warnJSONLog(err.Error())

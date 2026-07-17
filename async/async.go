@@ -25,14 +25,19 @@ func New(ctx context.Context) *Future {
 	}
 }
 
-// Async execute some fn in async
-// the fn is the executor, the async pattern must be:
+// Async execute fn asynchronously on the Future's errgroup.
 //
-//	Async[I, O any](fn func(ctx context.Context, params ...I) (O, error), params ...I) O
+// If O is a pointer type, Async allocates the pointee immediately and
+// returns the pointer before fn has finished running; the pointee is
+// populated once fn completes, so callers should only read it after
+// Await returns. For non-pointer O (e.g. a sentinel struct{}), the
+// returned value carries no meaning and should be ignored.
 //
-// the context.Context is the global context.
-func Async[I, O any](f *Future, fn func(ctx context.Context, in I) (O, error), in I) (out O) {
-	if outType := reflect.TypeOf(out); outType != nil {
+// Requires generic methods (Go 1.27, https://go.dev/issue/77273).
+func (f *Future) Async[I, O any](fn func(ctx context.Context, in I) (O, error), in I) (out O) {
+	outType := reflect.TypeOf(out)
+	isPtr := outType != nil && outType.Kind() == reflect.Pointer
+	if isPtr {
 		out = reflect.New(outType.Elem()).Interface().(O)
 	}
 	o := out
@@ -41,79 +46,15 @@ func Async[I, O any](f *Future, fn func(ctx context.Context, in I) (O, error), i
 		if err != nil {
 			return err
 		}
-		if outValue := reflect.ValueOf(o); outValue.IsValid() {
-			outValue.Elem().Set(reflect.ValueOf(fnOut).Elem())
+		if isPtr {
+			if outValue := reflect.ValueOf(o); outValue.IsValid() && !outValue.IsNil() {
+				outValue.Elem().Set(reflect.ValueOf(fnOut).Elem())
+			}
 		}
 		return nil
 	})
 	return out
 }
-
-// Async do functions in
-// Async execute some fn in async
-// the fn is the executor, the async pattern must one of the:
-//
-//	Async[I, O any](fn func(ctx context.Context, params ...I) (O, error), params ...I) O
-//	Async[I, O any](fn func(ctx context.Context, params ...I) O, params ...I) O
-//	Async[I any](fn func(ctx context.Context, params ...I) error, params ...I) void
-//	Async[O any](fn func(ctx context.Context) O) O
-//	Async[O any](fn func(ctx context.Context) (O, error)) O
-//
-// the ctx is global context by default.
-// Deprecated: awaiting Go 1.27 generic method type parameters support. Use the generic function Async[I, O] instead.
-func (f *Future) Async(fn any, params ...any) any {
-	t := reflect.TypeOf(fn)
-	nOut := t.NumOut()
-	if nOut > 2 {
-		panic("fn return value must less than 2")
-	}
-	returnValueWithOutError := !t.Out(0).Implements(errorInterface)
-	var out any
-	if nOut > 1 || (nOut == 1 && returnValueWithOutError) {
-		out = reflect.New(t.Out(0).Elem()).Interface()
-	}
-	fnIn := &fnGenericIn{
-		fn:                      fn,
-		in:                      params,
-		out:                     out,
-		returnValueWithOutError: returnValueWithOutError,
-	}
-	_ = Async(f, fnGeneric, fnIn)
-	return out
-}
-
-type fnGenericIn struct {
-	fn                      any
-	in                      []any
-	out                     any
-	returnValueWithOutError bool
-}
-
-func fnGeneric(ctx context.Context, fnIn *fnGenericIn) (o any, err error) {
-	callParams := make([]reflect.Value, len(fnIn.in)+1)
-	callParams[0] = reflect.ValueOf(ctx)
-	for i, v := range fnIn.in {
-		callParams[i+1] = reflect.ValueOf(v)
-	}
-	returnResults := reflect.ValueOf(fnIn.fn).Call(callParams)
-	if len(returnResults) > 0 {
-		resultLastValue := returnResults[len(returnResults)-1].Interface()
-		if !fnIn.returnValueWithOutError {
-			if resultLastValue != nil {
-				err = resultLastValue.(error)
-			} else if !returnResults[0].IsNil() {
-				// check if it is error
-				reflect.ValueOf(fnIn.out).Elem().Set(returnResults[0].Elem())
-				return
-			}
-		} else {
-			reflect.ValueOf(fnIn.out).Elem().Set(returnResults[0].Elem())
-		}
-	}
-	return
-}
-
-var errorInterface = reflect.TypeOf((*error)(nil)).Elem()
 
 // Await wait for all pipeline functions done or context.Done()
 // Await returns the first error from any pipeline function, or ctx.Err() or nil.

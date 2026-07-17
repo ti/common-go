@@ -44,6 +44,7 @@ type options struct {
 	tlsCertFile                  string
 	tlsKeyFile                   string
 	cors                         *mux.CORSConfig
+	disableClientPriority        bool
 }
 
 func evaluateOptions(opts []Option) *options {
@@ -280,6 +281,16 @@ func WithTLS(certFile, keyFile string) Option {
 	return func(o *options) {
 		o.tlsCertFile = certFile
 		o.tlsKeyFile = keyFile
+	}
+}
+
+// WithDisableClientPriority disables RFC 9218 HTTP/2 client-priority
+// handling (added in Go 1.27, https://go.dev/issue/75500). By default the
+// server prioritizes streams per the client's declared priority; setting
+// this serves requests round-robin instead, matching pre-Go-1.27 behavior.
+func WithDisableClientPriority() Option {
+	return func(o *options) {
+		o.disableClientPriority = true
 	}
 }
 

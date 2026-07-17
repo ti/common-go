@@ -1,7 +1,7 @@
 package mock_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 
 	"github.com/ti/common-go/dependencies/database/mock"

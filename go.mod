@@ -1,6 +1,6 @@
 module github.com/ti/common-go
 
-go 1.26
+go 1.27
 
 require (
 	connectrpc.com/connect v1.20.0
@@ -8,7 +8,6 @@ require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/envoyproxy/protoc-gen-validate v1.3.3
 	github.com/go-sql-driver/mysql v1.10.0
-	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0

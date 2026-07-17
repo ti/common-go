@@ -3,17 +3,17 @@ package mux
 import (
 	"bytes"
 	"context"
-	"github.com/ti/common-go/tools/stacktrace"
 	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
+	"uuid"
+
+	"github.com/ti/common-go/tools/stacktrace"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-
-	"github.com/google/uuid"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/metadata"
 	"github.com/ti/common-go/tools/ip"

@@ -2,9 +2,10 @@ package snowflake
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"hash/fnv"
 	"log/slog"
-	"math/big"
+	randv2 "math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -87,12 +88,15 @@ func getNodeNumber() int64 {
 
 func getHostHashNumber(hostname string) int64 {
 	if hostname == "" {
-		randNumber, err := rand.Int(rand.Reader, big.NewInt(MaxNodeNumber))
-		if err != nil {
+		var seed [16]byte
+		if _, err := rand.Read(seed[:]); err != nil {
 			slog.Warn("failed to generate random node number", "error", err)
 			return 0
 		}
-		return randNumber.Int64()
+		src := randv2.NewPCG(binary.LittleEndian.Uint64(seed[:8]), binary.LittleEndian.Uint64(seed[8:]))
+		// Rand.N is a generic method (Go 1.27, https://go.dev/issue/77273);
+		// previously only the top-level rand.N[Int] function supported this.
+		return randv2.New(src).N(int64(MaxNodeNumber))
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(hostname))

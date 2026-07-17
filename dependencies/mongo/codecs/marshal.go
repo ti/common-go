@@ -1,7 +1,8 @@
 package codecs
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"reflect"
 
@@ -72,7 +73,7 @@ func encodeToJSON(data any) ([]byte, error) {
 
 func marshalProtoArray(data any) ([]byte, error) {
 	arrValue := reflect.ValueOf(data)
-	raw := make([]json.RawMessage, arrValue.Len())
+	raw := make([]jsontext.Value, arrValue.Len())
 	for i := range arrValue.Len() {
 		elemValue := arrValue.Index(i)
 		r, err := protojson.Marshal(elemValue.Interface().(proto.Message))
@@ -85,7 +86,7 @@ func marshalProtoArray(data any) ([]byte, error) {
 }
 
 func unmarshalProtoArray(rawBytes []byte, data any) error {
-	var raw []json.RawMessage
+	var raw []jsontext.Value
 	err := json.Unmarshal(rawBytes, &raw)
 	if err != nil {
 		return err

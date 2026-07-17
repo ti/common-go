@@ -95,7 +95,9 @@ func InitMulti(ctx context.Context, dependenciesPtr any, dependenciesConfigs map
 			continue
 		}
 		if future != nil {
-			future.Async(initDepField, dep.Elem().Field(i), config, o)
+			future.Async(func(ctx context.Context, in initDepFieldArgs) (struct{}, error) {
+				return struct{}{}, initDepField(ctx, in.depElem, in.config, in.o)
+			}, initDepFieldArgs{dep.Elem().Field(i), config, o})
 		} else if err := initDepField(ctx, dep.Elem().Field(i), config, o); err != nil {
 			return err
 		}
@@ -107,6 +109,12 @@ func InitMulti(ctx context.Context, dependenciesPtr any, dependenciesConfigs map
 }
 
 const tagRequired = "required"
+
+type initDepFieldArgs struct {
+	depElem reflect.Value
+	config  map[string]string
+	o       *options
+}
 
 func initDepField(ctx context.Context, depElem reflect.Value, dependenciesConfig map[string]string, o *options) error {
 	config := make(map[string]string)
@@ -139,7 +147,9 @@ func initDepField(ctx context.Context, depElem reflect.Value, dependenciesConfig
 			continue
 		}
 		if future != nil {
-			_ = future.Async(initItem, depElem, &f, i, urlStr, o)
+			future.Async(func(ctx context.Context, in initItemArgs) (struct{}, error) {
+				return struct{}{}, initItem(ctx, in.depElem, in.f, in.i, in.uriStr, in.o)
+			}, initItemArgs{depElem, &f, i, urlStr, o})
 		} else if err := initItem(ctx, depElem, &f, i, urlStr, o); err != nil {
 			return err
 		}
@@ -148,6 +158,14 @@ func initDepField(ctx context.Context, depElem reflect.Value, dependenciesConfig
 		return future.Await()
 	}
 	return nil
+}
+
+type initItemArgs struct {
+	depElem reflect.Value
+	f       *reflect.StructField
+	i       int
+	uriStr  string
+	o       *options
 }
 
 func initItem(ctx context.Context, depElem reflect.Value, f *reflect.StructField,

@@ -384,11 +384,12 @@ func (s *Server) startHTTP(ctx context.Context) error {
 		// connections abruptly, causing ConnectError: missing EndStreamResponse.
 		// ReadHeaderTimeout is safe: it only applies to the initial headers phase.
 		s.HTTPServer = &http.Server{
-			Addr:              s.opts.httpAddr,
-			Handler:           handler,
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       5 * time.Minute,
-			MaxHeaderBytes:    1 << 20,
+			Addr:                  s.opts.httpAddr,
+			Handler:               handler,
+			ReadHeaderTimeout:     10 * time.Second,
+			IdleTimeout:           5 * time.Minute,
+			MaxHeaderBytes:        1 << 20,
+			DisableClientPriority: s.opts.disableClientPriority,
 		}
 		s.Logger.Log(ctx, logging.LevelInfo, "Start https (TLS) at "+s.opts.httpAddr)
 		err := s.HTTPServer.ListenAndServeTLS(tlsCert, tlsKey)
@@ -410,12 +411,13 @@ func (s *Server) startHTTP(ctx context.Context) error {
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)
 	s.HTTPServer = &http.Server{
-		Addr:              s.opts.httpAddr,
-		Handler:           handler,
-		Protocols:         protocols,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       5 * time.Minute,
-		MaxHeaderBytes:    1 << 20,
+		Addr:                  s.opts.httpAddr,
+		Handler:               handler,
+		Protocols:             protocols,
+		ReadHeaderTimeout:     10 * time.Second,
+		IdleTimeout:           5 * time.Minute,
+		MaxHeaderBytes:        1 << 20,
+		DisableClientPriority: s.opts.disableClientPriority,
 	}
 	h2s := &http2.Server{
 		IdleTimeout:          time.Minute,

@@ -2,14 +2,14 @@ package mqlru
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"net/url"
 	"os"
 	"reflect"
 	"strconv"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	ttlcache "github.com/jellydator/ttlcache/v3"
 	"github.com/ti/common-go/dependencies/broker"
 	"github.com/ti/common-go/log"

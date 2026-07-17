@@ -12,10 +12,8 @@ func TestAsync(t *testing.T) {
 	ctx, cc := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cc()
 	future := New(ctx)
-	// full generic version (suggest)
-	resp := Async(future, fn, &fnRequest{"test"})
-	// interface version
-	resp2 := future.Async(fn, &fnRequest{"test2"}).(*fnResponse)
+	resp := future.Async(fn, &fnRequest{"test"})
+	resp2 := future.Async(fn, &fnRequest{"test2"})
 	if err := future.Await(); err != nil {
 		t.Log(err)
 		t.Fail()
@@ -50,9 +48,9 @@ func TestAwaitReturnsFirstError(t *testing.T) {
 	future := New(ctx)
 
 	// Fails first: short delay, this error should win.
-	Async(future, failAfter, &failRequest{delay: 50 * time.Millisecond, msg: "first"})
+	future.Async(failAfter, &failRequest{delay: 50 * time.Millisecond, msg: "first"})
 	// Fails later: longer delay, this error should be ignored by Await.
-	Async(future, failAfter, &failRequest{delay: 500 * time.Millisecond, msg: "second"})
+	future.Async(failAfter, &failRequest{delay: 500 * time.Millisecond, msg: "second"})
 
 	err := future.Await()
 	if err == nil {

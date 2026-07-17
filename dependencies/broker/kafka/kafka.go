@@ -6,14 +6,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"sync"
+	"uuid"
 
 	"github.com/IBM/sarama"
-	"github.com/google/uuid"
 	"github.com/ti/common-go/dependencies/broker"
-	"log/slog"
 )
 
 type kafkaBroker struct {
