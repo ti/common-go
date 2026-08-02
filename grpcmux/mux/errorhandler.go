@@ -107,7 +107,7 @@ func routingErrorHandler(opts *options) runtime.RoutingErrorHandlerFunc {
 				grpclog.Infof("Failed to write response: %v", err)
 			}
 			log.Inject(r.Context(), map[string]any{
-				"action": r.URL.Path,
+				"action": rpcAction(r.URL.Path),
 				"code":   int(s.Code()),
 				"error":  s.Message(),
 			})

@@ -203,13 +203,44 @@ func queryHeaderAdapter(r *http.Request) {
 	}
 }
 
+// rpcAction reduces an HTTP request path to its first two segments so it can be
+// used as a low-cardinality "action" log field, matching the "/{Service}/{Method}"
+// shape the gRPC/ConnectRPC reporter already emits.
+//
+// A ConnectRPC/gRPC path IS "/pkg.Service/Method" (exactly two segments), so it
+// is returned unchanged. A hand-mounted HTTP route shaped as
+// "/pkg.Service/Method/{id}/…" collapses to "/pkg.Service/Method", dropping the
+// high-cardinality trailing parameters (project ids, task ids, file paths) that
+// would otherwise explode the distinct-action count in logs and any downstream
+// aggregation. Paths with fewer than two segments are returned as-is.
+func rpcAction(path string) string {
+	if path == "" {
+		return path
+	}
+	// Find the slash that ends the second segment: skip the leading slash, then
+	// the first segment, then look for the next slash.
+	first := strings.IndexByte(path[1:], '/')
+	if first < 0 {
+		return path // only one segment, e.g. "/healthz"
+	}
+	second := strings.IndexByte(path[1+first+1:], '/')
+	if second < 0 {
+		return path // exactly two segments, e.g. "/pkg.Service/Method"
+	}
+	return path[:1+first+1+second]
+}
+
 // injectRequestInfo injects request-derived log fields (action/ip/peer/protocol/
 // request_id) into the request-scoped logger and incoming metadata. It runs
 // BEFORE authentication so that even auth-rejected requests (401) emit a complete
 // log line. Handlers can add more fields later via log.Inject(ctx, ...).
+//
+// action is the request path reduced to its first two segments (rpcAction), so a
+// hand-mounted HTTP route with dynamic trailing parameters logs the same
+// low-cardinality "/{Service}/{Method}" shape the gRPC reporter emits.
 func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger) context.Context {
 	logData := map[string]any{
-		"action":   r.URL.Path,
+		"action":   rpcAction(r.URL.Path),
 		"ip":       ip.GetIPFromHTTPRequest(r),
 		"protocol": r.Proto,
 		"peer":     r.RemoteAddr,
