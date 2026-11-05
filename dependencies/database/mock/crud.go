@@ -327,10 +327,11 @@ func (m *Mock) FindRows(ctx context.Context, tableName string, condition databas
 		matches = matches[:limit]
 	}
 
-	return &mockRow{
-		data:    matches,
-		current: -1,
-	}, nil
+	row := &mockRow{data: matches, current: -1}
+	if t := reflect.TypeOf(oneData); t != nil && t.Kind() == reflect.Pointer {
+		row.dataType = t.Elem()
+	}
+	return row, nil
 }
 
 // Exist checks if any document matches the condition
@@ -420,8 +421,9 @@ func sliceToArray(matches []map[string]any, arrayPtr any) error {
 
 // mockRow implements database.Row interface
 type mockRow struct {
-	data    []map[string]any
-	current int
+	data     []map[string]any
+	current  int
+	dataType reflect.Type // element type of FindRows' oneData; nil keeps raw maps
 }
 
 func (r *mockRow) Next() bool {
@@ -433,7 +435,15 @@ func (r *mockRow) Decode() (any, error) {
 	if r.current < 0 || r.current >= len(r.data) {
 		return nil, NewInvalidArgumentError("row_position", "position out of range")
 	}
-	return r.data[r.current], nil
+	if r.dataType == nil {
+		return r.data[r.current], nil
+	}
+	// Like the SQL and Mongo rows: a new *T decoded from the row.
+	out := reflect.New(r.dataType).Interface()
+	if err := mapToStruct(r.data[r.current], out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *mockRow) Close() error {

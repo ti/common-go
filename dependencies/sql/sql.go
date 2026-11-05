@@ -69,17 +69,13 @@ func (s *SQL) Init(ctx context.Context, u *url.URL) error {
 	query := u.Query()
 	s.compactMode = query.Has(compactKey)
 	s.bustedIndex = query.Has(bustedIndexKey)
-	updateTimeFiled := query.Get(updateTime)
-	if updateTimeFiled != "" {
-		s.updateDifferent = true
+	s.logMode = query.Get(logKey) // debug, info, error or true
+	s.updateDifferent = query.Get(updateTime) != ""
+	// These are options of this package, not of the database driver.
+	for _, k := range []string{compactKey, bustedIndexKey, logKey, updateTime} {
+		query.Del(k)
 	}
-	if s.compactMode || s.bustedIndex || s.logMode != "" {
-		query.Del(compactKey)
-		query.Del(bustedIndexKey)
-		query.Del(logKey)
-		query.Del(updateTime)
-		u.RawQuery = query.Encode()
-	}
+	u.RawQuery = query.Encode()
 	var err error
 	s.DB, err = newSQLClient(u, s.logMode)
 	if err != nil {
@@ -145,9 +141,12 @@ func newSQLClient(uri *url.URL, logMode string) (*sql.DB, error) {
 	}
 	logLevel, ok := logLevelMap[logMode]
 	if !ok {
-		return nil, fmt.Errorf("log mode %s does not supported", logMode)
+		_ = db.Close()
+		return nil, fmt.Errorf("log mode %q is not supported (debug, info, error, true)", logMode)
 	}
-	return sqldblogger.OpenDriver(dsn, db.Driver(), &sqlLogger{
+	driver := db.Driver()
+	_ = db.Close() // only needed to obtain the driver
+	return sqldblogger.OpenDriver(dsn, driver, &sqlLogger{
 		Level: logLevel,
 	}), nil
 }

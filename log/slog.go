@@ -2,7 +2,6 @@ package log
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"sort"
@@ -76,10 +75,12 @@ func (l *sLogger) Error(msgOrFormat string, args ...any) {
 // Fatal logs a message at FatalLevel. The message includes any fields passed
 // at the log site, as well as any fields accumulated on the logger.
 //
-// The logger then calls os.Exit(1), even if logging at FatalLevel is
-// disabled.
+// It is written at error level as a structured line (with the logger's
+// fields, unlike the standard library's log.Fatal), then the process exits
+// with status 1.
 func (l *sLogger) Fatal(msgOrFormat string, args ...any) {
-	log.Fatal(formatMessage(msgOrFormat, args))
+	l.logger.Error(formatMessage(msgOrFormat, args), slog.Bool("fatal", true))
+	os.Exit(1)
 }
 
 // Action logger with just an action key.

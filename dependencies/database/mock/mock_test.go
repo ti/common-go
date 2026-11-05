@@ -482,3 +482,42 @@ func TestConditions(t *testing.T) {
 		})
 	}
 }
+
+// FindRows rows decode into new values of the type passed as oneData, like
+// the SQL and Mongo backends.
+func TestFindRowsDecodesToOneDataType(t *testing.T) {
+	type item struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	ctx := context.Background()
+	db, err := database.New(ctx, "mock://local/findrows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, n := range []string{"a", "b"} {
+		if err := db.InsertOne(ctx, "items", &item{ID: int64(i + 1), Name: n}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := db.FindRows(ctx, "items", database.C{}, []string{"id"}, 0, &item{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var names []string
+	for rows.Next() {
+		v, err := rows.Decode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		it, ok := v.(*item)
+		if !ok {
+			t.Fatalf("Decode returned %T, want *item", v)
+		}
+		names = append(names, it.Name)
+	}
+	if len(names) != 2 || names[0] != "a" || names[1] != "b" {
+		t.Fatalf("names = %v", names)
+	}
+}
