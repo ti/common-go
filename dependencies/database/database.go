@@ -24,7 +24,7 @@ type Database interface {
 	// Delete with condition
 	Delete(ctx context.Context, table string, condition C) (count int, err error)
 	DeleteOne(ctx context.Context, table string, condition C) (count int, err error)
-	// Find the data must be a slice, sortBy, ["age"] means age ASC, ["-age"] means age DESC，
+	// Find the data must be a slice, sortBy, ["age"] means age ASC, ["-age"] means age DESC,
 	Find(ctx context.Context, table string, condition C, sortBy []string, limit int, arrayPtr any) error
 	FindOne(ctx context.Context, table string, condition C, data any) error
 	FindRows(ctx context.Context, table string, condition C, sortBy []string, limit int, oneData any) (Row, error)
