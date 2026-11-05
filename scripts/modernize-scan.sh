@@ -31,7 +31,7 @@ cd "$ROOT" || exit 1
 # Tool versions are pinned so two scans a quarter apart are comparable.
 # Bump them deliberately as step 1 of each cycle (playbook §3.1).
 GOVULNCHECK="golang.org/x/vuln/cmd/govulncheck@latest"
-GOLANGCI="github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
+GOLANGCI="github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
 
 section() { printf '\n## %s\n\n' "$1"; }
 fence()   { printf '```text\n'; cat; printf '```\n'; }
@@ -82,7 +82,12 @@ if [ -z "${SKIP_NET:-}" ]; then
 
   section "5. Lint (golangci-lint)"
   if [ -f .golangci.yml ] || [ -f .golangci.yaml ]; then
-    go run "$GOLANGCI" run ./... >"$TMP/lint" 2>&1; rc=$?
+    if command -v golangci-lint >/dev/null; then
+      echo "golangci-lint $(golangci-lint version --short 2>/dev/null) (installed)"; echo
+      golangci-lint run ./... >"$TMP/lint" 2>&1; rc=$?
+    else
+      go run "$GOLANGCI" run ./... >"$TMP/lint" 2>&1; rc=$?
+    fi
     echo "golangci-lint: $(status $rc) — $(grep -cE '^[^ ].*:[0-9]+:[0-9]+:' "$TMP/lint" || true) issues"
     fence < <(tail -60 "$TMP/lint")
   else
@@ -123,13 +128,20 @@ section "9. Downstream: $(basename "$(dirname "$DOWNSTREAM")")/$(basename "$DOWN
 if [ -f "$DOWNSTREAM/go.mod" ]; then
   echo "- Pinned common-go: \`$(awk '/ti\/common-go /{print $2}' "$DOWNSTREAM/go.mod")\`"
   echo "- Downstream go.mod: \`$(awk '/^go /{print $2}' "$DOWNSTREAM/go.mod")\`"
-  printf 'go %s\n\nuse (\n\t%s\n\t%s\n)\n' "$(go env GOVERSION | sed 's/^go//')" "$DOWNSTREAM" "$ROOT" >"$TMP/go.work"
-  (cd "$DOWNSTREAM" && GOWORK="$TMP/go.work" go build ./... >"$TMP/ds-build" 2>&1); rc=$?
+  # Simulate the real upgrade: a temporary copy of the downstream go.mod with
+  # a replace to this checkout, tidied, then build/vet/test with -modfile.
+  # (A go.work is not used: workspace mode merges unpruned module graphs and
+  # reports ambiguous imports that a normal upgrade never hits.)
+  cp "$DOWNSTREAM/go.mod" "$TMP/ds.mod"; cp "$DOWNSTREAM/go.sum" "$TMP/ds.sum" 2>/dev/null || true
+  M="-modfile=$TMP/ds.mod"
+  (cd "$DOWNSTREAM" && go mod edit "$M" -replace "github.com/ti/common-go=$ROOT" && go mod tidy "$M" >"$TMP/ds-tidy" 2>&1); rc=$?
+  echo "- Tidy with local checkout: $(status $rc)"; [ $rc -ne 0 ] && fence < <(head -20 "$TMP/ds-tidy")
+  (cd "$DOWNSTREAM" && go build "$M" ./... >"$TMP/ds-build" 2>&1); rc=$?
   echo "- Build against local checkout: $(status $rc)"; [ $rc -ne 0 ] && fence < <(head -40 "$TMP/ds-build")
-  (cd "$DOWNSTREAM" && GOWORK="$TMP/go.work" go vet ./... >"$TMP/ds-vet" 2>&1); rc=$?
+  (cd "$DOWNSTREAM" && go vet "$M" ./... >"$TMP/ds-vet" 2>&1); rc=$?
   echo "- Vet against local checkout: $(status $rc)"; [ $rc -ne 0 ] && fence < <(head -40 "$TMP/ds-vet")
   if [ -z "${SKIP_TESTS:-}" ]; then
-    (cd "$DOWNSTREAM" && GOWORK="$TMP/go.work" go test -count=1 ./... >"$TMP/ds-test" 2>&1); rc=$?
+    (cd "$DOWNSTREAM" && go test "$M" -count=1 ./... >"$TMP/ds-test" 2>&1); rc=$?
     echo "- Tests against local checkout: $(status $rc)"
     [ $rc -ne 0 ] && fence < <(grep -E '^(FAIL|---|panic)' "$TMP/ds-test" | head -40)
   fi

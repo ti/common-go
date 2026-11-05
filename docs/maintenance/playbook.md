@@ -43,7 +43,7 @@ A cycle may change *how* these work, but never break them:
 ```bash
 scripts/modernize-scan.sh docs/maintenance/scans/$(date +%F).md
 ```
-The report covers build/vet, `go fix -diff` modernizers, dependency updates, reachable vulnerabilities, lint, race tests, non-English text, repository hygiene, and the auth build/vet/test against the local checkout, plus auth's usage of the common-go API. Commit the report. Diffing it against the previous scan *is* the quarter's to-do list.
+The report covers build/vet, `go fix -diff` modernizers, dependency updates, reachable vulnerabilities, lint, race tests, non-English text, repository hygiene, and the auth tidy/build/vet/test against the local checkout, plus auth's usage of the common-go API. Commit the report. Diffing it against the previous scan *is* the quarter's to-do list.
 
 ### 3.3 Review (走查) (≈½–1 day)
 Read the code against the checklist below. Every finding needs **evidence**: a failing test, a repro program, or a quoted line. Hypotheses go in a separate "to verify" list. Put one-off repro programs in a temp dir with a `replace` to the local checkout, never inside the repo.
@@ -92,12 +92,12 @@ Copy `docs/maintenance/cycles/TEMPLATE.md` to `docs/maintenance/cycles/<YYYY>-Q<
 7. A new scan is committed, and diffing it against the baseline shows every planned item closed.
 
 ### 3.8 Adopt in the reference consumer (auth)
-1. Develop against the local checkout with a throwaway workspace (never commit a `go.work` into auth):
+1. Develop against the local checkout without touching auth's files: use a temporary copy of auth's `go.mod` that has a `replace` to this checkout. This is what scan §9 does. Do not use a `go.work`: workspace mode merges unpruned module graphs and reports `ambiguous import` errors (old monolithic `google.golang.org/genproto`) that a real upgrade never hits.
    ```bash
    cd ~/Workspace/projects/auth/backend
-   W=$(mktemp -d)/go.work
-   printf 'go 1.27\n\nuse (\n\t%s\n\t%s\n)\n' "$PWD" "$HOME/Workspace/projects/common-go" > "$W"
-   GOWORK=$W go build ./... && GOWORK=$W go vet ./... && GOWORK=$W go test ./...
+   T=$(mktemp -d); cp go.mod go.sum "$T"/; M="-modfile=$T/go.mod"
+   go mod edit $M -replace github.com/ti/common-go=$HOME/Workspace/projects/common-go
+   go mod tidy $M && go build $M ./... && go vet $M ./... && go test $M ./...
    ```
 2. Adjust auth's code **only** where common-go deprecated something, changed behavior, or now provides what auth hand-rolled (list each change in the cycle plan). Follow auth's own `CLAUDE.md` conventions.
 3. After the common-go tag exists, run `go get github.com/ti/common-go@vX.Y.Z && go mod tidy` in auth and run auth's checks. Committing in auth is a separate step with the owner's approval. Deploying is out of scope for this playbook.
