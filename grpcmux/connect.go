@@ -481,7 +481,9 @@ func RegisterConnectHandler(s *Server, pattern string, handler http.Handler) {
 // WithMaxRequestBodyBytes. Register handlers before Start.
 func (s *Server) ConnectServer() *connect.Server {
 	s.connectOnce.Do(func() {
-		var interceptors []connect.ServerInterceptor
+		// Outermost: handlers return gRPC status errors (one implementation
+		// for every protocol); connect-go v2 only sends *connect.Error.
+		interceptors := []connect.ServerInterceptor{statusErrorInterceptor}
 		if s.httpUnary != nil {
 			interceptors = append(interceptors, connectUnaryInterceptor(s.httpUnary))
 		}
@@ -536,6 +538,22 @@ func (c *protoJSONCodec) UnmarshalRead(_ context.Context, src io.Reader, msg any
 		return nil
 	}
 	return c.unmarshal.Unmarshal(b, m)
+}
+
+// statusErrorInterceptor converts gRPC status errors returned by connect-go
+// handlers (unary and streaming) into *connect.Error with the same code,
+// message and details.
+func statusErrorInterceptor(next connect.ServerFunc) connect.ServerFunc {
+	return func(ctx context.Context, spec connect.Spec, stream connect.ServerStream) error {
+		err := next(ctx, spec, stream)
+		if err == nil {
+			return nil
+		}
+		if _, ok := errors.AsType[*connect.Error](err); ok {
+			return err
+		}
+		return statusToConnect(err)
+	}
 }
 
 // connectUnaryInterceptor runs a gRPC unary interceptor chain around

@@ -369,8 +369,12 @@ func TestConnectServerRunsInterceptors(t *testing.T) {
 			if err := stream.Receive(req); err != nil {
 				return err
 			}
-			if req.GetService() == "missing" {
+			switch req.GetService() {
+			case "missing":
 				return connect.NewError(connect.CodeNotFound, "no such thing")
+			case "status":
+				// Handlers may return gRPC status errors, like everywhere else.
+				return status.Error(codes.FailedPrecondition, "from a status error")
 			}
 			return stream.Send(&pbhealth.HealthCheckResponse{Status: pbhealth.HealthCheckResponse_SERVING})
 		},
@@ -393,8 +397,12 @@ func TestConnectServerRunsInterceptors(t *testing.T) {
 		if !errors.As(err, &cerr) || cerr.Code() != connect.CodeNotFound || cerr.Message() != "no such thing" {
 			t.Fatalf("handler error: %v", err)
 		}
+		_, _, err = cli.call(ctx, &pbhealth.HealthCheckRequest{Service: "status"})
+		if !errors.As(err, &cerr) || cerr.Code() != connect.CodeFailedPrecondition || cerr.Message() != "from a status error" {
+			t.Fatalf("status error: %v", err)
+		}
 	}
-	if calls != 6 {
-		t.Fatalf("handler calls = %d, want 6 (denied calls never reach it)", calls)
+	if calls != 9 {
+		t.Fatalf("handler calls = %d, want 9 (denied calls never reach it)", calls)
 	}
 }

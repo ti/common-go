@@ -13,6 +13,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/ti/common-go/log"
@@ -128,8 +129,23 @@ func handlerWithMiddleWares(h http.Handler, middleWares ...func(http.Handler) ht
 	return h
 }
 
+// forwardableMetadataKey reports whether gRPC metadata may be copied into an
+// HTTP response: the same rule as the outgoing header matcher (x-* and
+// standard header names), never reserved grpc-* keys, and never -bin keys,
+// whose raw binary values are not valid HTTP header values.
+func forwardableMetadataKey(k string) bool {
+	k = strings.ToLower(k)
+	if strings.HasPrefix(k, "grpc-") || strings.HasSuffix(k, "-bin") {
+		return false
+	}
+	return strings.HasPrefix(k, "x-") || isPermanentMetaKey(k)
+}
+
 func handleForwardResponseTrailerHeader(w http.ResponseWriter, md runtime.ServerMetadata) {
 	for k := range md.TrailerMD {
+		if !forwardableMetadataKey(k) {
+			continue
+		}
 		tKey := textproto.CanonicalMIMEHeaderKey(fmt.Sprintf("%s%s", runtime.MetadataTrailerPrefix, k))
 		w.Header().Add("Trailer", tKey)
 	}
@@ -137,6 +153,9 @@ func handleForwardResponseTrailerHeader(w http.ResponseWriter, md runtime.Server
 
 func handleForwardResponseTrailer(w http.ResponseWriter, md runtime.ServerMetadata) {
 	for k, vs := range md.TrailerMD {
+		if !forwardableMetadataKey(k) {
+			continue
+		}
 		tKey := runtime.MetadataTrailerPrefix + k
 		for _, v := range vs {
 			w.Header().Add(tKey, v)
@@ -144,8 +163,20 @@ func handleForwardResponseTrailer(w http.ResponseWriter, md runtime.ServerMetada
 	}
 }
 
+// handleForwardResponseServerMetadata copies the handler's header metadata
+// and its x-* trailer metadata into the error response headers (clients
+// rarely read HTTP trailers), with the same filtering as successful responses.
 func handleForwardResponseServerMetadata(w http.ResponseWriter, _ *runtime.ServeMux, md runtime.ServerMetadata) {
-	handleForwardResponseTrailer(w, md)
+	for _, src := range []metadata.MD{md.HeaderMD, md.TrailerMD} {
+		for k, vs := range src {
+			if !forwardableMetadataKey(k) {
+				continue
+			}
+			for _, v := range vs {
+				w.Header().Add(k, v)
+			}
+		}
+	}
 }
 
 const (

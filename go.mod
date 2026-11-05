@@ -10,7 +10,6 @@ require (
 	connectrpc.com/connect/v2 v2.0.2
 	github.com/IBM/sarama v1.61.1
 	github.com/bwmarrin/snowflake v0.3.0
-	github.com/envoyproxy/protoc-gen-validate v1.3.3
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.1
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.4
@@ -46,6 +45,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0 // indirect
+	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
