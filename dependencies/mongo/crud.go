@@ -7,13 +7,14 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ti/common-go/dependencies/database"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 // GetDatabase get database with project ns.
@@ -206,11 +207,10 @@ func (m *Mongo) getFilterByIndexKeys(indexKeys []string, data any) (bson.D, bson
 }
 
 func getBulkError(err error) (ok bool, errorBulk *database.BulkError) {
-	var bulkErr mongo.BulkWriteException
 	errorBulk = &database.BulkError{
 		Err: err,
 	}
-	if errors.As(err, &bulkErr) {
+	if bulkErr, ok0 := errors.AsType[mongo.BulkWriteException](err); ok0 {
 		errorBulk.Elements = make([]*database.BulkElement, len(bulkErr.WriteErrors))
 		for i, v := range bulkErr.WriteErrors {
 			errorBulk.Elements[i] = &database.BulkElement{
@@ -577,7 +577,7 @@ func convertDocs(src database.D) bson.D {
 	return result
 }
 
-var timestampPtrType = reflect.TypeOf(&timestamppb.Timestamp{})
+var timestampPtrType = reflect.TypeFor[*timestamppb.Timestamp]()
 
 type monogRow struct {
 	cur      *mongo.Cursor

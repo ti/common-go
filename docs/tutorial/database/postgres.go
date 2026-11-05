@@ -9,6 +9,7 @@ import (
 	_ "github.com/ti/common-go/dependencies/sql"
 
 	_ "github.com/lib/pq"
+
 	pb "github.com/ti/common-go/docs/tutorial/restful/pkg/go/proto"
 )
 

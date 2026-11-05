@@ -37,10 +37,7 @@ func PageQuery[T any](ctx context.Context, m *Mock, table string,
 	}
 
 	// Query more data than needed to handle offset+limit
-	queryLimit := offset + limit
-	if queryLimit > 2000 {
-		queryLimit = 2000
-	}
+	queryLimit := min(offset+limit, 2000)
 
 	// Query data using Find
 	var results []T

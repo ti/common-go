@@ -100,7 +100,7 @@ func (f filler) setPtr(field reflect.Value, n *node) error {
 	if field.IsNil() {
 		field.Set(reflect.New(field.Type().Elem()))
 
-		if field.Type().Implements(reflect.TypeOf((*initializer)(nil)).Elem()) {
+		if field.Type().Implements(reflect.TypeFor[initializer]()) {
 			method := field.MethodByName("SetDefaults")
 			if method.IsValid() {
 				method.Call([]reflect.Value{})
@@ -270,7 +270,7 @@ func (f filler) setMap(field reflect.Value, node *node) error {
 
 func setInt(field reflect.Value, value string, bitSize int) error {
 	switch field.Type() {
-	case reflect.TypeOf(time.Duration(0)):
+	case reflect.TypeFor[time.Duration]():
 		return setDuration(field, value, bitSize, time.Second)
 	default:
 		val, err := strconv.ParseInt(value, 10, bitSize)

@@ -149,14 +149,14 @@ func structToMap(data any) (map[string]any, error) {
 		// Get field name from json tag or use field name
 		fieldName := field.Name
 		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			if idx := strings.Index(tag, ","); idx >= 0 {
-				fieldName = tag[:idx]
+			if before, _, ok := strings.Cut(tag, ","); ok {
+				fieldName = before
 			} else {
 				fieldName = tag
 			}
 		} else if tag := field.Tag.Get("bson"); tag != "" && tag != "-" {
-			if idx := strings.Index(tag, ","); idx >= 0 {
-				fieldName = tag[:idx]
+			if before, _, ok := strings.Cut(tag, ","); ok {
+				fieldName = before
 			} else {
 				fieldName = tag
 			}
@@ -193,14 +193,14 @@ func mapToStruct(m map[string]any, dest any) error {
 		// Get field name from json tag or use field name
 		fieldName := field.Name
 		if tag := field.Tag.Get("json"); tag != "" && tag != "-" {
-			if idx := strings.Index(tag, ","); idx >= 0 {
-				fieldName = tag[:idx]
+			if before, _, ok := strings.Cut(tag, ","); ok {
+				fieldName = before
 			} else {
 				fieldName = tag
 			}
 		} else if tag := field.Tag.Get("bson"); tag != "" && tag != "-" {
-			if idx := strings.Index(tag, ","); idx >= 0 {
-				fieldName = tag[:idx]
+			if before, _, ok := strings.Cut(tag, ","); ok {
+				fieldName = before
 			} else {
 				fieldName = tag
 			}

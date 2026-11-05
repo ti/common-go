@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/redis/rueidis"
+	"golang.org/x/time/rate"
+
 	"github.com/ti/common-go/dependencies/redis/redisrate"
 	"github.com/ti/common-go/log"
-	"golang.org/x/time/rate"
 )
 
 // RateLimitN Rate limit by redis

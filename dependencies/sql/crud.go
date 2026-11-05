@@ -16,10 +16,11 @@ import (
 	"github.com/ti/common-go/dependencies/sql/adapters/mysql"
 	"github.com/ti/common-go/dependencies/sql/adapters/postgres"
 
-	"github.com/ti/common-go/dependencies/database"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 const (
@@ -33,31 +34,32 @@ const (
 )
 
 var (
-	timeType         = reflect.TypeOf(time.Time{})
-	timestampPtrType = reflect.TypeOf(&timestamppb.Timestamp{})
-	boolPtrType      = reflect.TypeOf(&wrapperspb.BoolValue{})
+	timeType         = reflect.TypeFor[time.Time]()
+	timestampPtrType = reflect.TypeFor[*timestamppb.Timestamp]()
+	boolPtrType      = reflect.TypeFor[*wrapperspb.BoolValue]()
 )
 
 // InsertOne insert one data
 func (s *SQL) InsertOne(ctx context.Context, table string, data any) (err error) {
-	query := fmt.Sprintf("INSERT INTO `%s` (", table)
+	var query strings.Builder
+	fmt.Fprintf(&query, "INSERT INTO `%s` (", table)
 	if s.project != "" {
-		query += queryFieldProject
+		query.WriteString(queryFieldProject)
 	}
 	querys, args := TransformSQLArgs(s.scheme, data, false, s.loc)
-	query += strings.Join(querys, ",")
-	query += queryAppendValues
+	query.WriteString(strings.Join(querys, ","))
+	query.WriteString(queryAppendValues)
 	if s.project != "" {
-		query += fmt.Sprintf("'%s',", s.project)
+		fmt.Fprintf(&query, "'%s',", s.project)
 	}
 	for i := range len(args) {
 		if i > 0 {
-			query += ","
+			query.WriteString(",")
 		}
-		query += "?"
+		query.WriteString("?")
 	}
-	query += `)`
-	_, err = s.ExecQuery(ctx, query, args...)
+	query.WriteString(`)`)
+	_, err = s.ExecQuery(ctx, query.String(), args...)
 	return
 }
 
@@ -75,36 +77,39 @@ func (s *SQL) Insert(ctx context.Context, table string, docs any) (count int, er
 	}
 	querys, args := TransformSQLArgs(s.scheme, data.Index(0).Interface(),
 		false, s.loc)
-	query := fmt.Sprintf("INSERT INTO `%s` (", table)
+	var query strings.Builder
+	fmt.Fprintf(&query, "INSERT INTO `%s` (", table)
 	if s.project != "" {
-		query += queryFieldProject
+		query.WriteString(queryFieldProject)
 	}
-	query += strings.Join(querys, ",")
-	query += ") VALUES "
-	queryValues := "("
+	query.WriteString(strings.Join(querys, ","))
+	query.WriteString(") VALUES ")
+	var values strings.Builder
+	values.WriteString("(")
 	if s.project != "" {
-		queryValues += fmt.Sprintf(`'%s',`, s.project)
+		fmt.Fprintf(&values, `'%s',`, s.project)
 	}
 	for i := range len(args) {
 		if i > 0 {
-			queryValues += ","
+			values.WriteString(",")
 		}
-		queryValues += "?"
+		values.WriteString("?")
 	}
-	queryValues += `)`
-	query += queryValues
+	values.WriteString(")")
+	queryValues := values.String()
+	query.WriteString(queryValues)
 	for i := 1; i < data.Len(); i++ {
 		_, dataArgs := TransformSQLArgs(s.scheme, data.Index(i).Interface(),
 			false, s.loc)
 		args = append(args, dataArgs...)
-		query += "," + queryValues
+		query.WriteString("," + queryValues)
 	}
-	return s.ExecQuery(ctx, query, args...)
+	return s.ExecQuery(ctx, query.String(), args...)
 }
 
 var (
-	databaseDocType = reflect.TypeOf(database.D{})
-	databaseMapType = reflect.TypeOf(map[string]any{})
+	databaseDocType = reflect.TypeFor[database.D]()
+	databaseMapType = reflect.TypeFor[map[string]any]()
 )
 
 // Update update all matched data
@@ -314,29 +319,30 @@ func (s *SQL) findRows(ctx context.Context, table string, conds database.C,
 	sortBy []string, limit int, eleType reflect.Type,
 ) (database.Row, error) {
 	querys := TransformSQLQuery(reflect.New(eleType).Interface())
-	query := "SELECT " + strings.Join(querys, ",")
-	query += fmt.Sprintf(" FROM `%s` WHERE ", table)
+	var query strings.Builder
+	query.WriteString("SELECT " + strings.Join(querys, ","))
+	fmt.Fprintf(&query, " FROM `%s` WHERE ", table)
 	if s.project != "" {
-		query += fmt.Sprintf("`project` = '%s' ", s.project)
+		fmt.Fprintf(&query, "`project` = '%s' ", s.project)
 	}
 	conQuery, conArgs := tidySQLConds(conds, s.compactMode)
 	if conQuery != "" {
 		if s.project != "" {
-			query += queryAnd
+			query.WriteString(queryAnd)
 		}
-		query += conQuery
+		query.WriteString(conQuery)
 	}
 	if len(sortBy) > 0 {
-		query += " ORDER BY " + getSortValue(sortBy[0])
+		query.WriteString(" ORDER BY " + getSortValue(sortBy[0]))
 		sortBy = sortBy[1:]
 		for _, v := range sortBy {
-			query += ", " + getSortValue(v)
+			query.WriteString(", " + getSortValue(v))
 		}
 	}
 	if limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", limit)
+		fmt.Fprintf(&query, " LIMIT %d", limit)
 	}
-	rows, err := s.QueryContext(ctx, query, conArgs...)
+	rows, err := s.QueryContext(ctx, query.String(), conArgs...)
 	if err != nil {
 		return nil, convertSQLError(s.scheme, err)
 	}

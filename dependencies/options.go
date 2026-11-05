@@ -49,10 +49,10 @@ func WithNewFns(newFn ...any) Option {
 		return nil
 	}
 	typeCreators := make(map[reflect.Type]*creator)
-	ctxInterfaceType := reflect.TypeOf((*context.Context)(nil)).Elem()
-	grpcConnInterfaceType := reflect.TypeOf((*grpc.ClientConnInterface)(nil)).Elem()
+	ctxInterfaceType := reflect.TypeFor[context.Context]()
+	grpcConnInterfaceType := reflect.TypeFor[grpc.ClientConnInterface]()
 	stringType := reflect.String
-	urlType := reflect.TypeOf((*url.URL)(nil)).Kind()
+	urlType := reflect.TypeFor[*url.URL]().Kind()
 
 	for _, v := range newFn {
 		t := reflect.TypeOf(v)

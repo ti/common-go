@@ -72,10 +72,7 @@ func (l *Limiter) AllowN(ctx context.Context,
 		return
 	}
 	allow = count <= maxn
-	remaining = maxn - count
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining = max(maxn-count, 0)
 	return
 }
 

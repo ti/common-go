@@ -22,8 +22,7 @@ func IsConflictError(err error) bool {
 	if err == nil {
 		return false
 	}
-	var exception mongo.WriteException
-	if errors.As(err, &exception) {
+	if exception, ok := errors.AsType[mongo.WriteException](err); ok {
 		for _, v := range exception.WriteErrors {
 			if v.Code == 11000 {
 				return true

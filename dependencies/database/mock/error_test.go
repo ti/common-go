@@ -9,10 +9,10 @@ import (
 
 func TestErrorJSONFormat(t *testing.T) {
 	tests := []struct {
-		name          string
-		err           error
-		expectedJSON  string
-		checkFields   map[string]string
+		name         string
+		err          error
+		expectedJSON string
+		checkFields  map[string]string
 	}{
 		{
 			name:         "NotFoundError",
@@ -72,7 +72,7 @@ func TestErrorJSONFormat(t *testing.T) {
 			}
 
 			// Unmarshal and verify snake_case field names
-			var result map[string]interface{}
+			var result map[string]any
 			err = json.Unmarshal(jsonBytes, &result)
 			if err != nil {
 				t.Fatalf("Failed to unmarshal JSON: %v", err)
@@ -161,7 +161,7 @@ func TestCommonErrors(t *testing.T) {
 				t.Fatalf("Failed to marshal error: %v", err)
 			}
 
-			var result map[string]interface{}
+			var result map[string]any
 			_ = json.Unmarshal(jsonBytes, &result)
 
 			if result["error_code"] != tt.expectedCode {

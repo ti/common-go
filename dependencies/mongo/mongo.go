@@ -10,10 +10,11 @@ import (
 
 	"github.com/ti/common-go/dependencies/mongo/codecs"
 
-	"github.com/ti/common-go/dependencies/database"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 // Mongo the mongo client
@@ -145,6 +146,6 @@ func (m *Mongo) Close(ctx context.Context) error {
 }
 
 var (
-	databaseDocType = reflect.TypeOf(database.D{})
-	databaseMapType = reflect.TypeOf(map[string]any{})
+	databaseDocType = reflect.TypeFor[database.D]()
+	databaseMapType = reflect.TypeFor[map[string]any]()
 )

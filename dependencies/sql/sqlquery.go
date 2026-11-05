@@ -41,18 +41,18 @@ func (q *Query) String() string {
 
 // ParseSort prase sort
 func ParseSort(sorts []string) string {
-	sortStr := ""
+	var sortStr strings.Builder
 	for i, v := range sorts {
 		if i > 0 {
-			sortStr += ","
+			sortStr.WriteString(",")
 		}
 		if strings.HasPrefix(v, "-") {
-			sortStr += v[1:] + " DESC"
+			sortStr.WriteString(v[1:] + " DESC")
 		} else {
-			sortStr += v
+			sortStr.WriteString(v)
 		}
 	}
-	return sortStr
+	return sortStr.String()
 }
 
 // ParseSelect prase select

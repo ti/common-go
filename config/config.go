@@ -9,9 +9,10 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/ti/objectbind"
+
 	"github.com/ti/common-go/dependencies"
 	"github.com/ti/common-go/log"
-	"github.com/ti/objectbind"
 )
 
 // Init initialize config from uri address. For exp: configURI ./conf/config.yaml
@@ -63,9 +64,8 @@ func initDeps(ctx context.Context, configURI string, configPtr any,
 	opts ...dependencies.Option,
 ) error {
 	configType := reflect.TypeOf(configPtr).Elem()
-	depType := reflect.TypeOf(dependencies.Dependency{})
-	for i := range configType.NumField() {
-		field := configType.Field(i)
+	depType := reflect.TypeFor[dependencies.Dependency]()
+	for field := range configType.Fields() {
 		fieldType := field.Type
 		if fieldType.Kind() != reflect.Struct {
 			continue
@@ -125,9 +125,9 @@ func initDepsFiled(ctx context.Context, configPtr any, configURI string, fieldNa
 func newDepStruct(name string, tag reflect.StructTag, multi bool) any {
 	var fieldType reflect.Type
 	if multi {
-		fieldType = reflect.TypeOf(make(map[string]map[string]string))
+		fieldType = reflect.TypeFor[map[string]map[string]string]()
 	} else {
-		fieldType = reflect.TypeOf(make(map[string]string))
+		fieldType = reflect.TypeFor[map[string]string]()
 	}
 	dataType := reflect.StructOf([]reflect.StructField{
 		{

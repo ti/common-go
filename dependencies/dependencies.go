@@ -9,10 +9,11 @@ import (
 	"reflect"
 	"strings"
 
+	"google.golang.org/grpc"
+
 	"github.com/ti/common-go/async"
 	"github.com/ti/common-go/graceful"
 	"github.com/ti/common-go/grpcmux"
-	"google.golang.org/grpc"
 )
 
 // Init Initialize dependencies.
@@ -235,10 +236,10 @@ func initPtrDependency(ctx context.Context, filedName string,
 ) (rv reflect.Value, err error) {
 	// check if is not Pointer
 	rv = reflect.New(filedType.Elem())
-	if dependencyCloser, ok := rv.Interface().(dependencyCloser); ok {
+	if dependencyCloser, ok := reflect.TypeAssert[dependencyCloser](rv); ok {
 		graceful.AddCloser(dependencyCloser.Close)
 	}
-	dependency, ok := rv.Interface().(dependencyInit)
+	dependency, ok := reflect.TypeAssert[dependencyInit](rv)
 	var uri *url.URL
 	if ok {
 		uri, err = url.Parse(uriStr)
@@ -252,7 +253,7 @@ func initPtrDependency(ctx context.Context, filedName string,
 		rv = reflect.ValueOf(dependency)
 		return
 	}
-	dependencyStr, ok := rv.Interface().(dependencyInitStr)
+	dependencyStr, ok := reflect.TypeAssert[dependencyInitStr](rv)
 	if ok {
 		if err = dependencyStr.Init(ctx, uriStr); err != nil {
 			return

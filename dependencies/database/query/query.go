@@ -4,12 +4,13 @@ import (
 	"context"
 	"reflect"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/ti/common-go/dependencies/database"
 	"github.com/ti/common-go/dependencies/database/mock"
 	"github.com/ti/common-go/dependencies/mongo"
 	"github.com/ti/common-go/dependencies/sql"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // PageQuery query the documents

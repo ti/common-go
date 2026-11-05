@@ -14,21 +14,21 @@ import (
 
 var (
 	// Protobuf's wrappers types
-	boolValueType   = reflect.TypeOf(wrapperspb.BoolValue{})
-	bytesValueType  = reflect.TypeOf(wrapperspb.BytesValue{})
-	doubleValueType = reflect.TypeOf(wrapperspb.DoubleValue{})
-	floatValueType  = reflect.TypeOf(wrapperspb.FloatValue{})
-	int32ValueType  = reflect.TypeOf(wrapperspb.Int32Value{})
-	int64ValueType  = reflect.TypeOf(wrapperspb.Int64Value{})
-	stringValueType = reflect.TypeOf(wrapperspb.StringValue{})
-	uint32ValueType = reflect.TypeOf(wrapperspb.UInt32Value{})
-	uint64ValueType = reflect.TypeOf(wrapperspb.UInt64Value{})
+	boolValueType   = reflect.TypeFor[wrapperspb.BoolValue]()
+	bytesValueType  = reflect.TypeFor[wrapperspb.BytesValue]()
+	doubleValueType = reflect.TypeFor[wrapperspb.DoubleValue]()
+	floatValueType  = reflect.TypeFor[wrapperspb.FloatValue]()
+	int32ValueType  = reflect.TypeFor[wrapperspb.Int32Value]()
+	int64ValueType  = reflect.TypeFor[wrapperspb.Int64Value]()
+	stringValueType = reflect.TypeFor[wrapperspb.StringValue]()
+	uint32ValueType = reflect.TypeFor[wrapperspb.UInt32Value]()
+	uint64ValueType = reflect.TypeFor[wrapperspb.UInt64Value]()
 
 	// Protobuf Timestamp type
-	timestampType = reflect.TypeOf(timestamppb.Timestamp{})
+	timestampType = reflect.TypeFor[timestamppb.Timestamp]()
 
 	// Time type
-	timeType = reflect.TypeOf(time.Time{})
+	timeType = reflect.TypeFor[time.Time]()
 
 	// Codecs
 	wrapperValueCodecRef = &wrapperValueCodec{}
@@ -68,7 +68,7 @@ func (e *timestampCodec) EncodeValue(ectx bson.EncodeContext, vw bson.ValueWrite
 	if !val.CanAddr() {
 		return errors.New("value is not timestamp addr")
 	}
-	v, ok := val.Addr().Interface().(*timestamppb.Timestamp)
+	v, ok := reflect.TypeAssert[*timestamppb.Timestamp](val.Addr())
 	if !ok {
 		return errors.New("value is not *timestamppb.Timestamp")
 	}

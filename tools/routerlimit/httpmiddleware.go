@@ -8,9 +8,10 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/metadata"
 
-	"github.com/ti/common-go/grpcmux/mux"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/ti/common-go/grpcmux/mux"
 )
 
 // NewHandler new router limit handler.

@@ -10,8 +10,7 @@ import (
 
 // ConvertError converts database errors to gRPC status errors
 func ConvertError(err error) error {
-	var pgError *pq.Error
-	if errors.As(err, &pgError) {
+	if pgError, ok := errors.AsType[*pq.Error](err); ok {
 		// if the database is not found, return the error
 		var code codes.Code
 		switch pgError.Code {

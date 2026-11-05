@@ -8,9 +8,10 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ti/common-go/dependencies/database"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 // StreamQuery query the documents

@@ -45,25 +45,25 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Optional fields using pointers to distinguish "not set" from "zero value"
-	Age                   *int32   `json:"age,omitempty"`
-	IsActive              *bool    `json:"is_active,omitempty"`
-	IsVerified            *bool    `json:"is_verified,omitempty"`
-	IsPremium             *bool    `json:"is_premium,omitempty"`
-	PhoneNumber           *string  `json:"phone_number,omitempty"`
-	Address               *string  `json:"address,omitempty"`
-	Bio                   *string  `json:"bio,omitempty"`
-	ReferrerID            *int64   `json:"referrer_id,omitempty"`
-	LoginCount            *int64   `json:"login_count,omitempty"`
-	AccountBalance        *float64 `json:"account_balance,omitempty"`
-	Rating                *float64 `json:"rating,omitempty"`
-	DiscountRate          *float32 `json:"discount_rate,omitempty"`
-	FailedLoginAttempts   *uint32  `json:"failed_login_attempts,omitempty"`
-	TotalSpent            *uint64  `json:"total_spent,omitempty"`
-	ProfilePicture        []byte   `json:"profile_picture,omitempty"`
-	PublicKey             []byte   `json:"public_key,omitempty"`
-	LastLoginAt           *time.Time `json:"last_login_at,omitempty"`
-	EmailVerifiedAt       *time.Time `json:"email_verified_at,omitempty"`
-	PremiumExpiresAt      *time.Time `json:"premium_expires_at,omitempty"`
+	Age                 *int32     `json:"age,omitempty"`
+	IsActive            *bool      `json:"is_active,omitempty"`
+	IsVerified          *bool      `json:"is_verified,omitempty"`
+	IsPremium           *bool      `json:"is_premium,omitempty"`
+	PhoneNumber         *string    `json:"phone_number,omitempty"`
+	Address             *string    `json:"address,omitempty"`
+	Bio                 *string    `json:"bio,omitempty"`
+	ReferrerID          *int64     `json:"referrer_id,omitempty"`
+	LoginCount          *int64     `json:"login_count,omitempty"`
+	AccountBalance      *float64   `json:"account_balance,omitempty"`
+	Rating              *float64   `json:"rating,omitempty"`
+	DiscountRate        *float32   `json:"discount_rate,omitempty"`
+	FailedLoginAttempts *uint32    `json:"failed_login_attempts,omitempty"`
+	TotalSpent          *uint64    `json:"total_spent,omitempty"`
+	ProfilePicture      []byte     `json:"profile_picture,omitempty"`
+	PublicKey           []byte     `json:"public_key,omitempty"`
+	LastLoginAt         *time.Time `json:"last_login_at,omitempty"`
+	EmailVerifiedAt     *time.Time `json:"email_verified_at,omitempty"`
+	PremiumExpiresAt    *time.Time `json:"premium_expires_at,omitempty"`
 }
 
 // userToProto converts User struct to protobuf User message
@@ -482,7 +482,7 @@ func (s *UserServiceServer) StreamUsers(ctx context.Context, req *pb.StreamQuery
 	// Build StreamQueryRequest for database layer
 	dbReq := &database.StreamQueryRequest{
 		PageToken: req.PageToken,
-		PageField: "user_id",  // Use user_id as the cursor field
+		PageField: "user_id", // Use user_id as the cursor field
 		Limit:     int(req.Limit),
 		Ascending: req.Ascending,
 	}

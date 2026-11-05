@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 	"sort"
 	"strings"
@@ -80,9 +81,7 @@ func (m *Mock) Update(ctx context.Context, tableName string, condition database.
 	// Update matching rows
 	for i := range table.data {
 		if matchConditions(table.data[i], condition) {
-			for key, value := range updates {
-				table.data[i][key] = value
-			}
+			maps.Copy(table.data[i], updates)
 			count++
 		}
 	}
@@ -117,9 +116,7 @@ func (m *Mock) UpdateOne(ctx context.Context, tableName string, condition databa
 	// Update first matching row
 	for i := range table.data {
 		if matchConditions(table.data[i], condition) {
-			for key, value := range updates {
-				table.data[i][key] = value
-			}
+			maps.Copy(table.data[i], updates)
 			return 1, nil
 		}
 	}
@@ -268,9 +265,7 @@ func (m *Mock) Find(ctx context.Context, tableName string, condition database.C,
 		if len(condition) == 0 || matchConditions(row, condition) {
 			// Make a copy to avoid race conditions
 			rowCopy := make(map[string]any)
-			for k, v := range row {
-				rowCopy[k] = v
-			}
+			maps.Copy(rowCopy, row)
 			matches = append(matches, rowCopy)
 		}
 	}
@@ -317,9 +312,7 @@ func (m *Mock) FindRows(ctx context.Context, tableName string, condition databas
 	for _, row := range table.data {
 		if len(condition) == 0 || matchConditions(row, condition) {
 			rowCopy := make(map[string]any)
-			for k, v := range row {
-				rowCopy[k] = v
-			}
+			maps.Copy(rowCopy, row)
 			matches = append(matches, rowCopy)
 		}
 	}

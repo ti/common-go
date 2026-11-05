@@ -5,8 +5,9 @@ package main
 import (
 	"context"
 
-	"github.com/ti/common-go/grpcmux"
 	pb "yourproject/pkg/go/proto"
+
+	"github.com/ti/common-go/grpcmux"
 )
 
 // Example 1: Using the default snake_case format

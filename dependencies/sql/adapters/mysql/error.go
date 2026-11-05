@@ -11,8 +11,7 @@ import (
 // ConvertError converts database errors to gRPC status errors
 // nolint: gomnd
 func ConvertError(err error) error {
-	var mySQLError *mysql.MySQLError
-	if errors.As(err, &mySQLError) {
+	if mySQLError, ok := errors.AsType[*mysql.MySQLError](err); ok {
 		// if the database is not found, return the error
 		var code codes.Code
 		switch mySQLError.Number {

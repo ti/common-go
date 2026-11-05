@@ -58,12 +58,12 @@ func EnsureIndex(ctx context.Context, col *mongo.Collection, indexs ...*Index) (
 			return errors.New("filed can not be empty")
 		}
 		partialFilter := make(bson.D, len(fields))
-		var indexName string
+		var indexName strings.Builder
 		for i, v := range fields {
 			partialFilter[i] = bson.E{Key: v, Value: bson.D{{Key: "$exists", Value: true}}}
-			indexName += "_" + v
+			indexName.WriteString("_" + v)
 		}
-		opts.SetName(indexName)
+		opts.SetName(indexName.String())
 		if v.Unique {
 			opts.SetUnique(v.Unique)
 			opts.SetPartialFilterExpression(partialFilter)

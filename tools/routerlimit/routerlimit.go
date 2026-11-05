@@ -99,12 +99,12 @@ func getQuota(quotaLimit Limit, path string, header Getter) *LimitValue {
 		Quota:    quotaLimit.Quota,
 		Duration: quotaLimit.Duration,
 	}
-	var targetHeaderKey string
+	var targetHeaderKey strings.Builder
 	for _, headerKey := range quotaLimit.Headers {
 		headerValue := header.Get(headerKey)
 		if headerValue != "" {
 			limitValue.Key += "." + headerValue
-			targetHeaderKey += headerKey
+			targetHeaderKey.WriteString(headerKey)
 		}
 	}
 	if limitValue.Key == "" {
@@ -112,7 +112,7 @@ func getQuota(quotaLimit Limit, path string, header Getter) *LimitValue {
 			Quota: NoLimit,
 		}
 	}
-	limitValue.Message = fmt.Sprintf("trace key %s, limit key %s", limitValue.Key, targetHeaderKey)
+	limitValue.Message = fmt.Sprintf("trace key %s, limit key %s", limitValue.Key, targetHeaderKey.String())
 	return limitValue
 }
 

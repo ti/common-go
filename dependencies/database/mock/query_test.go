@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/ti/common-go/dependencies/database"
-	"github.com/ti/common-go/dependencies/database/query"
 	_ "github.com/ti/common-go/dependencies/database/mock"
+	"github.com/ti/common-go/dependencies/database/query"
 )
 
 type QueryUser struct {

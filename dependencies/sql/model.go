@@ -7,21 +7,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ti/common-go/dependencies/database"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 // GenerateScheme gen scheme
 func GenerateScheme(table string, data any) string {
-	scheme := fmt.Sprintf("create table %s \n("+
+	var scheme strings.Builder
+	fmt.Fprintf(&scheme, "create table %s \n("+
 		"\t`_id`\t\tbigint unsigned auto_increment,\n"+
 		"\t`project`\tCHAR(64)\tnot null,\n", table)
 	docs := TransformScheme(data)
 	for _, v := range docs {
-		scheme += fmt.Sprintf("\t`%s`\t\t%s,\n", v.Key, v.Value)
+		fmt.Fprintf(&scheme, "\t`%s`\t\t%s,\n", v.Key, v.Value)
 	}
-	scheme += fmt.Sprintf("\tKEY(`project`),\n\tconstraint %s_pk primary key (_id)\n);", table)
-	return scheme
+	fmt.Fprintf(&scheme, "\tKEY(`project`),\n\tconstraint %s_pk primary key (_id)\n);", table)
+	return scheme.String()
 }
 
 // GenerateDBScheme gen scheme
@@ -244,11 +246,12 @@ func tidySQLCond(cond database.CE, compactMode bool) string {
 		if cond.C == database.In || cond.C == database.Nin {
 			data := reflect.ValueOf(cond.Value)
 			n := data.Len()
-			holder := "?"
+			var holder strings.Builder
+			holder.WriteString("?")
 			for j := 1; j < n; j++ {
-				holder += ",?"
+				holder.WriteString(",?")
 			}
-			return fmt.Sprintf("`%s` %s (%s)", key, condition, holder)
+			return fmt.Sprintf("`%s` %s (%s)", key, condition, holder.String())
 		}
 		return fmt.Sprintf("`%s` %s ?", key, condition)
 	}

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -114,8 +115,8 @@ func runClosers(timeout time.Duration) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for i := len(pending) - 1; i >= 0; i-- {
-		err := pending[i](ctx)
+	for _, p := range slices.Backward(pending) {
+		err := p(ctx)
 		if err == nil {
 			continue
 		}

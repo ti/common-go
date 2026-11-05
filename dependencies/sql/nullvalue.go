@@ -299,8 +299,7 @@ func asBytes(buf []byte, rv reflect.Value) (b []byte, ok bool) {
 }
 
 func strconvErr(err error) error {
-	var ne *strconv.NumError
-	if errors.As(err, &ne) {
+	if ne, ok := errors.AsType[*strconv.NumError](err); ok {
 		return ne.Err
 	}
 	return err

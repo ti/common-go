@@ -6,11 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ti/common-go/dependencies/mongo/codecs"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/ti/common-go/dependencies/database"
+	"github.com/ti/common-go/dependencies/mongo/codecs"
+
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 // TransformDocument transform any object to bson documents

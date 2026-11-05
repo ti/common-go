@@ -13,6 +13,7 @@ import (
 	"uuid"
 
 	"github.com/IBM/sarama"
+
 	"github.com/ti/common-go/dependencies/broker"
 )
 
