@@ -45,8 +45,8 @@ scripts/modernize-scan.sh docs/maintenance/scans/$(date +%F).md
 ```
 The report covers build/vet, `go fix -diff` modernizers, dependency updates, reachable vulnerabilities, lint, race tests, non-English text, repository hygiene, and the auth tidy/build/vet/test against the local checkout, plus auth's usage of the common-go API. Commit the report. Diffing it against the previous scan *is* the quarter's to-do list.
 
-### 3.3 Review (走查) (≈½–1 day)
-Read the code against the checklist below. Every finding needs **evidence**: a failing test, a repro program, or a quoted line. Hypotheses go in a separate "to verify" list. Put one-off repro programs in a temp dir with a `replace` to the local checkout, never inside the repo.
+### 3.3 Review (≈½–1 day)
+Read the code against the checklist below. Every finding needs **evidence**: a failing test, a repro program, or a quoted line. For every area, run at least one check against a **real process or the full stack** (the examples integration test, a child process receiving SIGTERM, an HTTP/1.1 client against the real handler chain). The worst bugs of 2026-Q4 (no drain on SIGTERM, malformed REST errors) were invisible to code reading and to unit tests. Hypotheses go in a separate "to verify" list. Put one-off repro programs in a temp dir with a `replace` to the local checkout, never inside the repo.
 
 | Area | Questions to answer |
 |---|---|
@@ -62,6 +62,7 @@ Read the code against the checklist below. Every finding needs **evidence**: a f
 | Observability | Log schema stable (`action`, `request_id`, low-cardinality action)? OTel semantic conventions current? Metric names stable? |
 | Security | govulncheck, TLS minimums, header/body limits, panic recovery, secrets never logged (`logBody` masking). |
 | Docs & examples | Does every doc command run? Do import paths exist? Is there any stale route/file reference? Do examples build in CI? |
+| Upgrades themselves | For every "drop-in" replacement or upgrade (json/v2, gateway, driver), what changes for types and inputs we don't own: field name matching, null handling, duplicate parameters, error shapes? Are there new **major** versions (`go list -m -u` doesn't show them; check the upstream release pages listed in §3.1)? |
 
 ### 3.4 Triage
 | Severity | Meaning | Handling |
@@ -91,7 +92,9 @@ Copy `docs/maintenance/cycles/TEMPLATE.md` to `docs/maintenance/cycles/<YYYY>-Q<
 6. Auth builds, vets and tests green against the local checkout (scan §9).
 7. A new scan is committed, and diffing it against the baseline shows every planned item closed.
 
-### 3.8 Adopt in the reference consumer (auth)
+### 3.8 Verify the reference consumer and write the upgrade guide (auth)
+
+Consumers upgrade themselves by following `docs/upgrades/<cycle>.md`. Write it every cycle: breaking changes with what to do, Kubernetes/config changes, recommended adoptions, verification, and a worked example for auth. Change auth's code only when the owner asks for it.
 1. Develop against the local checkout without touching auth's files: use a temporary copy of auth's `go.mod` that has a `replace` to this checkout. This is what scan §9 does. Do not use a `go.work`: workspace mode merges unpruned module graphs and reports `ambiguous import` errors (old monolithic `google.golang.org/genproto`) that a real upgrade never hits.
    ```bash
    cd ~/Workspace/projects/auth/backend

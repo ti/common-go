@@ -4,53 +4,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`github.com/ti/common-go` is a Go **library** (no `main` of its own) for building proto-first microservices: a single server that serves gRPC, grpc-gateway REST, ConnectRPC and plain HTTP, plus URI-driven dependency injection for databases, Redis, Kafka, HTTP and gRPC clients. Requires **Go 1.27** (generic methods, `encoding/json/v2`, stdlib `uuid`, `math/rand/v2` are used — see `docs/GO_1_27_UPGRADE.md`).
+`github.com/ti/common-go` is a Go **library** (no `main` of its own) for building proto-first microservices: a single server that serves gRPC, grpc-gateway REST, ConnectRPC and plain HTTP, plus URI-driven dependency injection for databases, Redis, Kafka, HTTP and gRPC clients. Requires **Go 1.27** (generic methods, `encoding/json/v2`, stdlib `uuid`, `math/rand/v2`; see `docs/upgrades/go-1.27.md`). User docs live in `docs/guides/`; runnable samples in `examples/`.
 
 ## Commands
 
 ```bash
 go build ./...
 go vet ./...
-go test ./... -race
-go test ./dependencies/database/mock -run TestName -v   # single test
+go test -race ./...
+go test ./grpcmux -run TestConnectConformance -v   # single test
+golangci-lint run ./...                            # config: .golangci.yml (v2.15.0 pinned in CI)
+go fix -diff ./...                                 # must be empty (modernizers)
+(cd examples && go build ./... && go test ./...)   # examples are a separate module
 ```
 
-- `go.sum` is listed in `.gitignore` (and so is `go.mod`, though `go.mod` is tracked anyway). The local `go.sum` can go stale, and then builds fail with "missing go.sum entry". Run `go mod download` to fix it.
-- No repo-level Makefile or golangci config. Commit history shows golangci-lint is used, so keep code lint-clean.
-- Proto code generation (`buf generate`) is only used under `docs/tutorial/restful/` (it has its own Makefile and `buf.yaml`). The only proto in the library itself is `grpcmux/mux/error.proto`, and its generated `error.pb.go` is committed.
-- `docs/examples/*.go` use `//go:build ignore`. `docs/tutorial/**` is compiled as part of `./...`, so API changes must keep the tutorials building.
-- Commits follow Conventional Commits with a scope, e.g. `feat(grpcmux): ...`, `fix(grpcmux): ...`, `refactor(async): ...`.
+- `go.mod` pins `toolchain go1.27.3`; `go.sum` is tracked.
+- CI (`.github/workflows/ci.yml`): tidy, build, vet, race tests, lint, `go fix -diff`, govulncheck, examples, and a check that rejects non-English (CJK) text.
+- `examples/` is its own module (`replace github.com/ti/common-go => ../`), so its dependencies (protovalidate generated code, connect-go, ...) don't leak into consumers. Its proto code is generated with buf and committed.
+- The only proto in the library is `grpcmux/mux/error.proto` (generated `error.pb.go` committed).
+- Commits follow Conventional Commits with a scope, e.g. `feat(grpcmux): ...`, `fix(graceful): ...`.
 
 ## Architecture
 
 ### Startup flow used by consumers
-`config.Init(ctx, uri, &cfg)` → `dependencies.Init(ctx, &deps, cfg.Dependencies)` → `grpcmux.NewServer(grpcmux.WithConfig(&cfg.Apis))` → register services → `server.Start()`.
+`config.Init(ctx, uri, &cfg, dependencies.WithNewFns(...))` (also inits dependency structs) → `grpcmux.NewServer(grpcmux.WithConfig(&cfg.Apis))` → register services → `gs.Start()` (blocks until shutdown).
 
-- **`config`** binds a file/folder URI into a struct via `github.com/ti/objectbind`, which supports live reload. If the URI is empty, it falls back to the `CONFIG_PATH` env var and then the `-c` flag (default `configs/config.yaml`). A `Log.Level` field gets a hook that calls `log.SetLevel`. Dependency-typed fields in the config are initialized too (`initDeps`). `config.Binder()` exposes the binder so you can add field hooks.
-- **`dependencies`** uses reflection. It walks struct fields and matches each field name (case-insensitive) to a key in a `map[string]string` of URIs. A field is resolved in this order:
-  1. The pointer type implements `Init(ctx, *url.URL) error` or `Init(ctx, string) error`.
-  2. A constructor was registered with `dependencies.WithNewFns(...)`. This can be a `pb.NewXxxClient` (a gRPC client is built via `grpcmux.NewClientConnWithURI`) or `func(ctx, *url.URL|string) (T, error)`.
-
-  If the type also implements `Close(ctx) error`, it is registered with `graceful.AddCloser`. Fields are required unless tagged `required:"false"`. By default fields initialize concurrently via `async.Future`. `InitMulti` does the same thing for nested config groups. A field of type `dependencies.Dependency` is a placeholder that is skipped.
-- **Scheme registries:** `database.DB` dispatches on the URI scheme to implementations that register themselves in `init()` with `database.RegisterImplements`: `mysql`/`postgres` (`dependencies/sql`), `mongodb` (`dependencies/mongo`) and `mock` (`dependencies/database/mock`, an in-memory store for tests). `broker` works the same way (`kafka`). The adapter package must be blank-imported for its scheme to exist. `database.Database` is the shared CRUD/stream/page interface across SQL and Mongo, so new backends must implement all of it.
+- **`config`** binds a file/folder URI into a struct via `github.com/ti/objectbind` (live reload). Empty URI → `CONFIG_PATH` → `-c` flag (default `configs/config.yaml`). A `Log.Level` field calls `log.SetLevel`. Top-level struct fields whose first field embeds `dependencies.Dependency` are initialized with `dependencies.Init` (or `InitMulti` when the second field is a struct).
+- **`dependencies`** matches struct field names (case-insensitive) to URI keys. Resolution: (1) the pointer type has `Init(ctx, *url.URL|string) error`; (2) a `WithNewFns` constructor (`pb.NewXxxClient` → gRPC conn via `grpcmux.NewClientConnWithURI`, or `func(ctx, *url.URL|string) (T, error)`). Types with `Close(ctx) error` are registered with `graceful.AddCloser`. Required unless `required:"false"`. Fields init concurrently via `async.Future.Go`.
+- **Scheme registries:** `database.DB` dispatches on scheme to implementations registered in `init()` (`mysql`/`postgres` in `dependencies/sql`, `mongodb` in `dependencies/mongo`, `mock` in `dependencies/database/mock`); `broker` likewise (`kafka`). Adapters must be blank-imported. New `database.Database` backends must implement the whole interface.
 
 ### grpcmux (the server)
-- `NewServer` builds one `grpc.Server` with chained interceptors from `NewFullMiddleWare` (`server_opts.go`: logging, metrics, recovery, auth, validator, rate limiting) and an HTTP `mux.ServeMux` that wraps grpc-gateway's `runtime.ServeMux`.
-- **In-memory gRPC connection:** a second `bufServer` on an in-process listener lets HTTP handlers call gRPC services without going through the network. `Server.Conn()` returns it.
-- `RegisterService` registers on gRPC. With `WithAutoHTTP()` it also exposes every method as `POST /{Service}/{Method}`. `connect.go` exposes services over the ConnectRPC protocol.
-- **HTTP handler layering, in `startHTTP`:** custom `Handle` routes go into `httpServerMux`, with the gateway mux as the fallback at `/`, and the whole thing is wrapped once by `mux.Middleware`. After that comes the WebSocket upgrade dispatch, then `otelhttp` when tracing is on. Serving is h2c (HTTP/1.1 + cleartext HTTP/2) by default, or TLS with `WithTLS`. Read/Write timeouts are deliberately 0 so streaming RPCs aren't cut off. Don't add them.
-- **`grpcmux/mux/interceptor.go` (HTTP path):** request-derived log fields (action, ip, request_id, …) are injected **before** auth so that 401s still produce a complete log line. Auth fields (user_id, …) are added after auth succeeds. `action` is the path cut to its first two segments (`rpcAction`) so logs stay low-cardinality.
-- `Start()` runs gRPC, metrics and HTTP through `graceful.Start` and registers `Close`. `graceful` handles signals and runs every registered closer.
-- Env vars: `PANIC_RECOVERY=false` disables recovery. `PRE_STOP` sets a delay before shutdown (see `Close`).
+- `buildInterceptors` (`server_opts.go`) builds two chains: gRPC (protovalidate, PGV `Validate()`, auth, authz, metrics, logging, rate limit, custom, recovery) and `httpUnary` (same minus auth and logging), which the HTTP bridges run. `WithoutHTTPInterceptors()` disables the latter.
+- **HTTP bridges** (`bridge.go`): `RegisterConnectService` (`connect.go`, Connect unary protocol incl. gzip, timeouts, GET for NO_SIDE_EFFECTS, error details) and `WithAutoHTTP` routes dispatch through `grpc.MethodDesc.Handler` with a fake `ServerTransportStream` and peer. `gs.ConnectServer()` is a connect-go v2 `connect.Server` mounted with `connecthttp`; its interceptors run the unary chain and convert gRPC status errors to `*connect.Error` (v2 only sends `*connect.Error` messages).
+- `RegisterService`/`registerGRPC` register on both the gRPC server and `bufServer` (in-memory; `Conn()`).
+- **HTTP layering (`httpHandler`)**: custom `Handle` routes in `httpServerMux` with the gateway mux as fallback, wrapped once by `mux.Middleware`, then WebSocket dispatch, then `otelhttp`. Stdlib-only HTTP/2 (`http.Protocols`, `http.HTTP2Config`), h2c by default. Read/Write timeouts are deliberately 0 so streaming isn't cut off. Don't add them.
+- **`grpcmux/mux/interceptor.go`**: request log fields are injected **before** auth so 401s log completely; `action` is cut to two path segments (`rpcAction`).
+- Health: `/healthz` = liveness (always 200), `/readyz` and gRPC health = readiness (NOT_SERVING before serving, during drain, or when a checker fails).
+- `Start()` → `graceful.Start` (signals registered first; shutdown on signal, `graceful.Close()`, ctx, or a server error). `Close`: NOT_SERVING → `PRE_STOP` → HTTP Shutdown ∥ GracefulStop → closers (LIFO, one `GRACEFUL_TIMEOUT` deadline). `PANIC_RECOVERY=false` disables recovery.
+- Prometheus collectors are created once per process (`sync.OnceValue`), so `NewServer`/`NewClientConn` may be called repeatedly.
 
 ### log
-`log` wraps `slog` and writes JSON. The request-scoped logger travels in the context: `log.NewContext`, `log.Inject(ctx, fields)` to add fields to the current request's logger, `log.Extract(ctx)`, and `.Action(name)`.
+`log` wraps `slog` and writes JSON. Request-scoped logger in the context: `log.NewContext`, `log.Inject(ctx, fields)`, `log.Extract(ctx)`, `.Action(name)`. Messages are format strings only when args are given; use `With` for fields.
 
 ## Gotchas
-- Use `encoding/json/v2` everywhere. The one exception is `grpcmux/logging/audit.go`, which has to use v1 `json.RawMessage` because a gRPC interface requires it. Use `jsontext.Value` where you would have used `json.RawMessage`.
-- `async.Future.Async` is a generic method that takes exactly one input and one output. To pass several arguments, wrap them in a small struct (see `initItemArgs` in `dependencies/dependencies.go`).
-- HTTP JSON uses snake_case by default. `WithUseCamelCase()` / `useCamelCase: true` switches it (see `docs/JSON_FORMAT.md`).
-- Parts of `README.md` are out of date. It links to `docs/BUF_GUIDE.md` and `docs/OPTIMIZATION_SUMMARY.md`, which don't exist, and its examples use `dependencies.Database`/`dependencies.Redis`, which aren't defined in `dependencies/`. Check the code rather than the README.
+- JSON: `encoding/json/v2` only for library-owned types with explicit tags (e.g. Connect error bodies, service config). Caller-owned types (dephttp request/response bodies, mqlru values, SQL params, Mongo page results, `mongo/codecs`) use `encoding/json` (v1): v2 is case-sensitive and encodes nil slices as `[]`, which silently breaks application structs and third-party APIs. `grpcmux/logging/audit.go` uses v1 `json.RawMessage` because a gRPC interface requires it.
+- `async`: use `Future.Go(func(ctx) error)` for fan-out without results; `Future.Async[I, O]` takes exactly one input and returns one output.
+- gRPC client TLS: only `secure=true`, `https://`, `grpcs://`. `dns://` is plaintext.
+- HTTP JSON is snake_case by default; `WithUseCamelCase()` / `useCamelCase: true` switches it (`docs/guides/json-format.md`).
+- MySQL URIs must be `mysql://user:pass@host:3306/db`; the driver-style `tcp(host:3306)` does not parse as a URL.
 
 ## Maintenance cycle
-Modernization runs quarterly following `docs/maintenance/playbook.md`. `scripts/modernize-scan.sh` is read-only: it writes a report to `docs/maintenance/scans/<date>.md` and also builds/vets/tests the reference consumer `~/Workspace/projects/auth/backend` against this checkout through a temporary copy of auth's go.mod (`go -modfile` with a `replace`). Don't use `go.work` for this; it reports false `ambiguous import` errors. Each cycle's plan is `docs/maintenance/cycles/<YYYY>-Q<n>.md`. API-compatibility, deprecation and behavior-change rules are in playbook §2.
+Modernization runs quarterly following `docs/maintenance/playbook.md`. `scripts/modernize-scan.sh` is read-only: it writes a report to `docs/maintenance/scans/<date>.md` and also builds/vets/tests the reference consumer `~/Workspace/projects/auth/backend` against this checkout through a temporary copy of auth's go.mod (`go -modfile` with a `replace`). Don't use `go.work` for this; it reports false `ambiguous import` errors. Each cycle's plan is `docs/maintenance/cycles/<YYYY>-Q<n>.md`. API-compatibility, deprecation and behavior-change rules are in playbook §2. Consumers upgrade by following `docs/upgrades/<cycle>.md`.

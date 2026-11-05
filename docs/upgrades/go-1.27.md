@@ -46,6 +46,14 @@ Affected files: `async/async.go`, `async/async_test.go`,
 
 ## 2. `encoding/json/v2`
 
+> **Update (2026-Q4):** call sites that encode or decode caller-owned types
+> (`dependencies/http` bodies, `mqlru`, SQL JSON params, Mongo page results,
+> `mongo/codecs`) were moved back to `encoding/json` (v1) semantics, because
+> json/v2 defaults are case-sensitive and encode nil slices as `[]`, which
+> silently changed behavior for application structs and third-party APIs.
+> Only library-owned types with explicit tags use json/v2. See
+> [2026-Q4.md](2026-Q4.md).
+
 Go 1.27 ships `encoding/json/v2` (and `encoding/json/jsontext`) in the
 standard library — no `GOEXPERIMENT` flag needed. `encoding/json` (v1) is
 now backed by the same implementation, but `v2` is the forward-looking API
