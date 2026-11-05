@@ -1,8 +1,7 @@
 package codecs
 
 import (
-	"encoding/json/jsontext"
-	"encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -52,7 +51,7 @@ func isProtoSlice(arr any) bool {
 		return false
 	}
 	elemType := arrType.Elem()
-	if protoMessageType := reflect.TypeOf((*proto.Message)(nil)).Elem(); !elemType.Implements(protoMessageType) {
+	if protoMessageType := reflect.TypeFor[proto.Message](); !elemType.Implements(protoMessageType) {
 		return false
 	}
 	return true
@@ -73,7 +72,7 @@ func encodeToJSON(data any) ([]byte, error) {
 
 func marshalProtoArray(data any) ([]byte, error) {
 	arrValue := reflect.ValueOf(data)
-	raw := make([]jsontext.Value, arrValue.Len())
+	raw := make([]json.RawMessage, arrValue.Len())
 	for i := range arrValue.Len() {
 		elemValue := arrValue.Index(i)
 		r, err := protojson.Marshal(elemValue.Interface().(proto.Message))
@@ -86,7 +85,7 @@ func marshalProtoArray(data any) ([]byte, error) {
 }
 
 func unmarshalProtoArray(rawBytes []byte, data any) error {
-	var raw []jsontext.Value
+	var raw []json.RawMessage
 	err := json.Unmarshal(rawBytes, &raw)
 	if err != nil {
 		return err

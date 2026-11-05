@@ -2,7 +2,7 @@ package mqlru
 
 import (
 	"context"
-	"encoding/json/v2"
+	"encoding/json"
 	"net/url"
 	"os"
 	"reflect"
@@ -11,10 +11,11 @@ import (
 	"uuid"
 
 	ttlcache "github.com/jellydator/ttlcache/v3"
-	"github.com/ti/common-go/dependencies/broker"
-	"github.com/ti/common-go/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/ti/common-go/dependencies/broker"
+	"github.com/ti/common-go/log"
 )
 
 // Lru the lru cache instance

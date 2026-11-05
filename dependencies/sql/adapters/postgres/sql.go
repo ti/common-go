@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"encoding/json/v2"
+	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"

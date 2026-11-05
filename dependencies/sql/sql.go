@@ -4,7 +4,7 @@ package sql
 import (
 	"context"
 	"database/sql"
-	"encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -14,6 +14,7 @@ import (
 	"github.com/ti/common-go/dependencies/sql/adapters/postgres"
 
 	sqldblogger "github.com/simukti/sqldb-logger"
+
 	"github.com/ti/common-go/dependencies/database"
 	"github.com/ti/common-go/log"
 )
@@ -58,7 +59,7 @@ func init() {
 }
 
 // Init Sql initialization
-func (s *SQL) Init(_ context.Context, u *url.URL) error {
+func (s *SQL) Init(ctx context.Context, u *url.URL) error {
 	// Compatible with mariadb mode. Compatible with mariadb mode, some inefficient query statements can be used.
 	const compactKey = "compact"
 	// bustedIndex is compatible with cases where json indexes are not supported (for mysql 5.7 or below)
@@ -100,7 +101,7 @@ func (s *SQL) Init(_ context.Context, u *url.URL) error {
 		s.loc = time.Now().Location()
 	}
 	s.scheme = u.Scheme
-	err = s.Ping()
+	err = s.PingContext(ctx)
 	if err != nil {
 		err = convertError(u.Scheme, err)
 		_ = s.DB.Close()
@@ -156,7 +157,7 @@ type sqlLogger struct {
 }
 
 // Log mysql by level
-func (s sqlLogger) Log(ctx context.Context, level sqldblogger.Level, msg string, data map[string]interface{}) {
+func (s sqlLogger) Log(ctx context.Context, level sqldblogger.Level, msg string, data map[string]any) {
 	if level < s.Level {
 		return
 	}

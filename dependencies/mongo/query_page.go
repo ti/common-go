@@ -2,18 +2,19 @@ package mongo
 
 import (
 	"context"
-	"encoding/json/v2"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
 
-	"github.com/ti/common-go/dependencies/database"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/ti/common-go/dependencies/database"
 )
 
 // PageQuery query the documents
