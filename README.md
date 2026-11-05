@@ -102,6 +102,7 @@ Blank-import the database drivers you use (`_ "github.com/ti/common-go/dependenc
 | `dependencies` | URI-driven dependency injection | [dependencies](docs/guides/dependencies.md) |
 | `dependencies/database`, `sql`, `mongo`, `database/mock` | One CRUD/page/stream interface over SQL, MongoDB and an in-memory store | [database](docs/guides/database.md) |
 | `dependencies/http` | HTTP client with pooling, retries, proxies, tracing | [http-client](docs/guides/http-client.md) |
+| `dependencies/oidc` | OIDC token validation, claim access rules and OAuth calls from one `oidc://` URI; grpcmux auth function | [oidc](docs/guides/oidc.md) |
 | `dependencies/redis`, `broker` (+`kafka`), `mqlru` | Redis, message queue, cache synchronized over a queue | [dependencies](docs/guides/dependencies.md) |
 | `log` | Structured JSON logging with request context | [logging](docs/guides/logging.md) |
 | `async`, `graceful` | Fan-out/await, process lifecycle | [server](docs/guides/server.md#graceful-shutdown) |

@@ -26,6 +26,7 @@ Upgrade guide: [docs/upgrades/2026-Q4.md](docs/upgrades/2026-Q4.md).
 - `dependencies/sql`: `log=` was ignored, and package options were left in the driver DSN unless another option was set.
 
 ### Added
+- `dependencies/oidc` (from the scaffold project): OIDC relying party configured by an `oidc://` URI. It covers discovery, JWKS with rotation, RS256 validation, claim access rules (`group=a%20b`, dotted paths, AND/OR), OAuth exchange/authorization/logout URLs, `net/http` middleware, and `Provider.AuthFunc()` for grpcmux. With `AuthFunc`, the claims go into the context and `user_id`/`client_id`/`project_id` go into the logs; a nil provider means auth is off.
 - Interceptor parity: the unary interceptor chain (protovalidate, PGV, authz, metrics, custom interceptors, recovery) runs on the ConnectRPC bridge, auto-HTTP routes and connect-go v2 handlers; `WithoutHTTPInterceptors()` / `disableHTTPInterceptors` opts out.
 - protovalidate (`buf.validate`) enforcement on every protocol.
 - Connect bridge: gzip, `Connect-Timeout-Ms`, protocol-version check, GET for `NO_SIDE_EFFECTS` methods, error details, header/trailer metadata, 415 for streaming content types, `WithMaxRequestBodyBytes`.

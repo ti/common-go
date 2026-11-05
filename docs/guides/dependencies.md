@@ -74,6 +74,7 @@ Group names are matched case-insensitively; groups without configuration are ski
 | `*broker.Broker` | `kafka` | `kafka://user:pass@b1:9092,b2:9092/default-topic?v=2.8.0&tls=true` | blank-import `dependencies/broker/kafka`; Kafka protocol version defaults to 2.0.0 |
 | `*mqlru.Lru` | `cache` or a broker scheme | `cache://memory?ttl=5m&capacity=10000` | in-process TTL cache; with a broker URI (`kafka://...?ttl=5m`) invalidations are shared across instances; `touch=false`, `mq=false` |
 | `*dephttp.HTTP` | `http`, `https`, custom resolvers | `http://host:8080/base?timeout=3s&try=2` | see [http-client.md](http-client.md) |
+| `*oidc.Provider` | `oidc` | `oidc://client:secret@account.example.com?group=admin` | OIDC token validation and access rules; see [oidc.md](oidc.md) |
 | `pb.XxxClient` (+ `WithNewFns(pb.NewXxxClient)`) | `dns` and other gRPC resolvers | `dns://svc.ns.svc:8081?timeout=5s&try=3` | see [grpc-client.md](grpc-client.md) |
 
 ## Options

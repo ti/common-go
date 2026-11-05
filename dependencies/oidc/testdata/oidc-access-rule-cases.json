@@ -1,0 +1,222 @@
+{
+  "description": "Claim access rules from the auth URI query. Every query parameter other than scope and oidc_logout is a rule: the named claim must contain at least one listed value (OR); all rules must match (AND). Values split on spaces (%20 or +) and commas, in both the URI and string claims. Dotted names match an exact top-level claim first, then nested objects. A last path segment of group/groups also reads its counterpart. Claims are raw JSON text so integer precision is preserved. Denials are 403, after token validation (401).",
+  "parse_cases": [
+    {
+      "name": "skips_provider_options",
+      "query": "scope=offline%20openid&oidc_logout=false&group=labs%20admin",
+      "rules": [
+        {
+          "path": "group",
+          "values": [
+            "labs",
+            "admin"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "sorted_and_merged",
+      "query": "user.role=a,b&group=x&user.role=c+a",
+      "rules": [
+        {
+          "path": "group",
+          "values": [
+            "x"
+          ]
+        },
+        {
+          "path": "user.role",
+          "values": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "no_rules",
+      "query": "scope=openid",
+      "rules": []
+    },
+    {
+      "name": "empty_value_fails",
+      "query": "scope=openid&group=",
+      "error": true
+    },
+    {
+      "name": "separator_only_fails",
+      "query": "group=%20,",
+      "error": true
+    },
+    {
+      "name": "empty_name_fails",
+      "query": "=labs",
+      "error": true
+    }
+  ],
+  "allow_cases": [
+    {
+      "name": "no_rules_allows_any_valid_token",
+      "query": "scope=openid%20profile",
+      "claims": "{}",
+      "allow": true
+    },
+    {
+      "name": "group_string",
+      "query": "group=labs%20admin",
+      "claims": "{\"group\":\"labs\"}",
+      "allow": true
+    },
+    {
+      "name": "group_space_string",
+      "query": "group=labs%20admin",
+      "claims": "{\"group\":\"users admin\"}",
+      "allow": true
+    },
+    {
+      "name": "group_comma_string",
+      "query": "group=labs%20admin",
+      "claims": "{\"group\":\"users,admin\"}",
+      "allow": true
+    },
+    {
+      "name": "group_array",
+      "query": "group=labs%20admin",
+      "claims": "{\"group\":[\"users\",\"admin\"]}",
+      "allow": true
+    },
+    {
+      "name": "groups_array_alias",
+      "query": "group=labs%20admin",
+      "claims": "{\"groups\":[\"admin\",\"test\"]}",
+      "allow": true
+    },
+    {
+      "name": "groups_string_alias",
+      "query": "group=labs%20admin",
+      "claims": "{\"groups\":\"test labs\"}",
+      "allow": true
+    },
+    {
+      "name": "plural_rule_reads_singular",
+      "query": "groups=admin",
+      "claims": "{\"group\":\"admin\"}",
+      "allow": true
+    },
+    {
+      "name": "nested_group_alias",
+      "query": "org.group=labs",
+      "claims": "{\"org\":{\"groups\":[\"labs\"]}}",
+      "allow": true
+    },
+    {
+      "name": "group_miss",
+      "query": "group=labs%20admin",
+      "claims": "{\"groups\":[\"test\"]}",
+      "allow": false
+    },
+    {
+      "name": "group_claim_missing",
+      "query": "group=labs%20admin",
+      "claims": "{\"sub\":\"u1\"}",
+      "allow": false
+    },
+    {
+      "name": "exact_match_only",
+      "query": "group=lab",
+      "claims": "{\"group\":\"labs\"}",
+      "allow": false
+    },
+    {
+      "name": "case_sensitive",
+      "query": "group=admin",
+      "claims": "{\"group\":\"Admin\"}",
+      "allow": false
+    },
+    {
+      "name": "nested_string",
+      "query": "user.role=labs%20admin",
+      "claims": "{\"user\":{\"role\":\"admin\"}}",
+      "allow": true
+    },
+    {
+      "name": "nested_array",
+      "query": "user.role=labs%20admin",
+      "claims": "{\"user\":{\"role\":[\"admin\"]}}",
+      "allow": true
+    },
+    {
+      "name": "nested_miss",
+      "query": "user.role=labs%20admin",
+      "claims": "{\"user\":{\"role\":[\"guest\"]}}",
+      "allow": false
+    },
+    {
+      "name": "flat_dotted_key_wins",
+      "query": "user.role=admin",
+      "claims": "{\"user.role\":\"admin\",\"user\":{\"role\":\"guest\"}}",
+      "allow": true
+    },
+    {
+      "name": "path_through_non_object",
+      "query": "user.role=admin",
+      "claims": "{\"user\":\"admin\"}",
+      "allow": false
+    },
+    {
+      "name": "no_alias_for_other_claims",
+      "query": "user.role=admin",
+      "claims": "{\"user\":{\"roles\":[\"admin\"]}}",
+      "allow": false
+    },
+    {
+      "name": "all_rules_must_match",
+      "query": "user.role=labs%20admin&sub=uid1234%20uid456&flag=office%20school",
+      "claims": "{\"sub\":\"uid456\",\"user\":{\"role\":[\"labs\"]},\"flag\":\"school\"}",
+      "allow": true
+    },
+    {
+      "name": "one_rule_fails",
+      "query": "user.role=labs%20admin&sub=uid1234%20uid456&flag=office%20school",
+      "claims": "{\"sub\":\"uid999\",\"user\":{\"role\":[\"labs\"]},\"flag\":\"school\"}",
+      "allow": false
+    },
+    {
+      "name": "plus_is_space",
+      "query": "group=labs+admin",
+      "claims": "{\"group\":[\"admin\"]}",
+      "allow": true
+    },
+    {
+      "name": "repeated_param_adds_values",
+      "query": "group=labs&group=admin",
+      "claims": "{\"group\":[\"admin\"]}",
+      "allow": true
+    },
+    {
+      "name": "number_claim",
+      "query": "level=3",
+      "claims": "{\"level\":3}",
+      "allow": true
+    },
+    {
+      "name": "big_integer_claim",
+      "query": "uid=12345678901234567890",
+      "claims": "{\"uid\":12345678901234567890}",
+      "allow": true
+    },
+    {
+      "name": "bool_claim",
+      "query": "email_verified=true",
+      "claims": "{\"email_verified\":true}",
+      "allow": true
+    },
+    {
+      "name": "oidc_logout_is_not_a_rule",
+      "query": "oidc_logout=false",
+      "claims": "{}",
+      "allow": true
+    }
+  ]
+}

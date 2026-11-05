@@ -1,0 +1,181 @@
+{
+  "clock_skew_seconds": 60,
+  "issuer": "https://test-issuer.example.com",
+  "client_id": "test-client",
+  "cases": [
+    {
+      "name": "valid_without_optional_markers",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com/",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0
+      },
+      "valid": true
+    },
+    {
+      "name": "valid_audience_array_contains_client_id",
+      "header": {
+        "typ": "at+jwt"
+      },
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": [
+          "another-service",
+          "test-client"
+        ],
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0,
+        "token_use": "access"
+      },
+      "valid": true
+    },
+    {
+      "name": "valid_nbf_within_clock_skew",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0,
+        "not_before_offset_seconds": 30
+      },
+      "valid": true
+    },
+    {
+      "name": "valid_iat_within_clock_skew",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 30
+      },
+      "valid": true
+    },
+    {
+      "name": "wrong_issuer",
+      "header": {
+        "typ": "JWT"
+      },
+      "claims": {
+        "issuer": "https://attacker.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0,
+        "token_use": "id"
+      },
+      "valid": false,
+      "error_contains": "issuer"
+    },
+    {
+      "name": "wrong_audience",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": [
+          "another-service",
+          "not-the-client"
+        ],
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0
+      },
+      "valid": false,
+      "error_contains": "audience"
+    },
+    {
+      "name": "wrong_typ",
+      "header": {
+        "typ": "JOSE"
+      },
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0
+      },
+      "valid": false,
+      "error_contains": "typ"
+    },
+    {
+      "name": "empty_typ",
+      "header": {
+        "typ": ""
+      },
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0
+      },
+      "valid": false,
+      "error_contains": "typ"
+    },
+    {
+      "name": "malformed_groups",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0,
+        "groups": ["admin", 1]
+      },
+      "valid": false,
+      "error_contains": "groups"
+    },
+    {
+      "name": "wrong_token_use",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0,
+        "token_use": "refresh"
+      },
+      "valid": false,
+      "error_contains": "token_use"
+    },
+    {
+      "name": "future_nbf",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0,
+        "not_before_offset_seconds": 3600
+      },
+      "valid": false,
+      "error_contains": "not yet valid"
+    },
+    {
+      "name": "future_iat",
+      "header": {},
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 7200,
+        "issued_at_offset_seconds": 3600
+      },
+      "valid": false,
+      "error_contains": "issued in the future"
+    },
+    {
+      "name": "empty_kid",
+      "header": {
+        "kid": ""
+      },
+      "claims": {
+        "issuer": "https://test-issuer.example.com",
+        "audience": "test-client",
+        "expires_in_seconds": 3600,
+        "issued_at_offset_seconds": 0
+      },
+      "valid": false,
+      "error_contains": "key id"
+    }
+  ]
+}

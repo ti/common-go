@@ -12,6 +12,7 @@
 | [JSON format](guides/json-format.md) | snake_case vs camelCase, what the setting covers |
 | [Databases](guides/database.md) | `database.Database`, drivers, connection strings, paging |
 | [HTTP client](guides/http-client.md) | `dependencies/http`: requests, retries, pooling, proxies |
+| [OIDC authentication](guides/oidc.md) | `dependencies/oidc`: auth URI, token validation, claim access rules, grpcmux auth function, OAuth calls |
 | [gRPC client](guides/grpc-client.md) | `grpcmux.NewClient`, targets, TLS, URI parameters |
 | [Logging](guides/logging.md) | JSON log schema and the `log` API |
 | [Deployment](guides/deployment.md) | Kubernetes probes, shutdown, load balancing, Envoy Gateway |
