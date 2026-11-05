@@ -1,0 +1,38 @@
+# golangci-lint v2 configuration. Run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose     # unclosed HTTP response bodies leak connections
+    - errorlint     # errors.Is/As instead of == and type assertions on wrapped errors
+    - misspell
+    - nilerr        # returning nil after checking err != nil
+    - noctx         # HTTP requests / net dials without a context
+    - unconvert
+    - usestdlibvars # http.MethodGet, http.StatusOK, ...
+    - modernize     # same analyzers as `go fix`; keeps idioms current
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+  exclusions:
+    generated: strict
+    paths:
+      - docs/
+      - examples/
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ti/common-go
+  exclusions:
+    generated: strict

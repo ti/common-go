@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Verify modules are tidy
+        run: |
+          go mod tidy -diff
+          (cd examples && go mod tidy -diff)
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - name: Examples module
+        working-directory: examples
+        run: |
+          go build ./...
+          go vet ./...
+          go test -count=1 ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./...
+      - name: Modernizers (go fix) leave nothing to rewrite
+        run: go fix -diff ./...
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  english-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: No CJK text in code or docs
+        run: |
+          if grep -rlP '[\x{3040}-\x{30ff}\x{3400}-\x{9fff}\x{ac00}-\x{d7af}]' \
+               --include='*.go' --include='*.md' --include='*.proto' --include='*.yaml' --include='*.yml' \
+               --include='*.ts' --include='*.js' --include='*.py' --include='*.html' \
+               --exclude-dir=node_modules --exclude-dir=.git . ; then
+            echo "::error::Non-English text found in the files above"; exit 1
+          fi
