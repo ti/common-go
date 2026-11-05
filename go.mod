@@ -7,7 +7,7 @@ toolchain go1.27.3
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.1
 	buf.build/go/protovalidate v1.4.0
-	connectrpc.com/connect v1.21.1
+	connectrpc.com/connect/v2 v2.0.2
 	github.com/IBM/sarama v1.61.1
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/envoyproxy/protoc-gen-validate v1.3.3

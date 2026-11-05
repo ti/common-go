@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"connectrpc.com/connect/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus"
@@ -120,6 +121,9 @@ type Server struct {
 
 	handlerOnce sync.Once
 	handler     http.Handler
+
+	connectOnce   sync.Once
+	connectServer *connect.Server // connect-go v2 handlers, see ConnectServer
 
 	ctx context.Context // carries the server logger
 
@@ -291,6 +295,12 @@ func (s *Server) httpHandler() http.Handler {
 			http.DefaultServeMux.ServeHTTP(w, r)
 		})
 
+		if s.connectServer != nil {
+			if s.httpServerMux == nil {
+				s.httpServerMux = http.NewServeMux()
+			}
+			s.mountConnect(s.httpServerMux)
+		}
 		var handler http.Handler
 		if s.httpServerMux == nil {
 			handler = s.mux
