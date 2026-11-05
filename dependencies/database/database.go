@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Database the database interface that support mysql and mongodb
@@ -87,4 +90,16 @@ func (d *DB) Init(ctx context.Context, u *url.URL) (err error) {
 // Close the db.
 func (d *DB) Close(ctx context.Context) error {
 	return d.Database.Close(ctx)
+}
+
+// IsNotFound reports whether err means "no matching record". All backends
+// (SQL, Mongo, mock) report it as a gRPC NOT_FOUND status, so the error can
+// also be returned to clients unchanged.
+func IsNotFound(err error) bool {
+	return err != nil && status.Code(err) == codes.NotFound
+}
+
+// IsAlreadyExists reports whether err means a unique constraint was violated.
+func IsAlreadyExists(err error) bool {
+	return err != nil && status.Code(err) == codes.AlreadyExists
 }

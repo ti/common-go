@@ -1,9 +1,11 @@
 package mock_test
 
 import (
+	"context"
 	"encoding/json/v2"
 	"testing"
 
+	"github.com/ti/common-go/dependencies/database"
 	"github.com/ti/common-go/dependencies/database/mock"
 )
 
@@ -179,5 +181,23 @@ func TestCommonErrors(t *testing.T) {
 				t.Error("Field 'error_message' not found - should be snake_case")
 			}
 		})
+	}
+}
+
+func TestErrorGRPCStatus(t *testing.T) {
+	m, err := database.New(context.Background(), "mock://local/errors")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out map[string]any
+	err = m.FindOne(context.Background(), "nothing", database.C{{Key: "id", Value: 1}}, &out)
+	if !database.IsNotFound(err) {
+		t.Fatalf("FindOne on a missing record: IsNotFound(%v) = false", err)
+	}
+	if database.IsNotFound(nil) || database.IsNotFound(mock.ErrInvalidArgument) {
+		t.Fatal("IsNotFound false positive")
+	}
+	if !database.IsAlreadyExists(mock.ErrAlreadyExists) {
+		t.Fatal("IsAlreadyExists(ErrAlreadyExists) = false")
 	}
 }

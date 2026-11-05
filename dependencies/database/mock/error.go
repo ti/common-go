@@ -3,6 +3,9 @@ package mock
 import (
 	"encoding/json/v2"
 	"fmt"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Error represents a structured error with snake_case JSON format
@@ -15,6 +18,28 @@ type Error struct {
 // Error implements error interface
 func (e *Error) Error() string {
 	return e.ErrorMessage
+}
+
+// GRPCStatus maps the error to a gRPC status, so status.Code(err) and
+// database.IsNotFound(err) work the same for the mock as for the SQL and
+// Mongo backends.
+func (e *Error) GRPCStatus() *status.Status {
+	code := codes.Unknown
+	switch e.ErrorCode {
+	case "not_found":
+		code = codes.NotFound
+	case "invalid_argument":
+		code = codes.InvalidArgument
+	case "already_exists":
+		code = codes.AlreadyExists
+	case "invalid_operation", "transaction_closed":
+		code = codes.FailedPrecondition
+	}
+	msg := e.ErrorMessage
+	if e.ErrorDescription != "" {
+		msg += ": " + e.ErrorDescription
+	}
+	return status.New(code, msg)
 }
 
 // MarshalJSON returns the JSON encoding with snake_case format
