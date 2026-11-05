@@ -56,6 +56,21 @@ func (f *Future) Async[I, O any](fn func(ctx context.Context, in I) (O, error), 
 	return out
 }
 
+// Go runs fn asynchronously on the Future's errgroup. Use it instead of
+// [Future.Async] when there is no result to collect:
+//
+//	f := async.New(ctx)
+//	for _, item := range items {
+//		f.Go(func(ctx context.Context) error { return process(ctx, item) })
+//	}
+//	err := f.Await()
+//
+// The ctx passed to fn is canceled as soon as any function started on this
+// Future returns an error.
+func (f *Future) Go(fn func(ctx context.Context) error) {
+	f.eg.Go(func() error { return fn(f.ctx) })
+}
+
 // Await wait for all pipeline functions done or context.Done()
 // Await returns the first error from any pipeline function, or ctx.Err() or nil.
 func (f *Future) Await() (err error) {

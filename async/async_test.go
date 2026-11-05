@@ -3,6 +3,7 @@ package async
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -69,4 +70,28 @@ type failRequest struct {
 func failAfter(_ context.Context, in *failRequest) (*fnResponse, error) {
 	time.Sleep(in.delay)
 	return nil, errors.New(in.msg)
+}
+
+func TestGo(t *testing.T) {
+	f := New(context.Background())
+	var n atomic.Int32
+	for range 10 {
+		f.Go(func(context.Context) error { n.Add(1); return nil })
+	}
+	if err := f.Await(); err != nil {
+		t.Fatal(err)
+	}
+	if n.Load() != 10 {
+		t.Fatalf("ran %d, want 10", n.Load())
+	}
+}
+
+func TestGoCancelsSiblingsOnError(t *testing.T) {
+	f := New(context.Background())
+	boom := errors.New("boom")
+	f.Go(func(context.Context) error { return boom })
+	f.Go(func(ctx context.Context) error { <-ctx.Done(); return nil })
+	if err := f.Await(); !errors.Is(err, boom) {
+		t.Fatalf("err = %v", err)
+	}
 }
