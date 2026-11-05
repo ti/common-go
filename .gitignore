@@ -20,6 +20,5 @@ id_rsa.pub
 .kube/
 .kube
 _root/
-snakeCase
-camelCase
-/connectrpc
+# Frontend build output
+dist/

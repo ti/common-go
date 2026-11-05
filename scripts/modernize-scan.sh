@@ -71,6 +71,20 @@ if [ -z "${SKIP_NET:-}" ]; then
     echo "All direct dependencies are current."
   fi
 
+  section "3b. New major versions of direct dependencies"
+  echo "go list -m -u never reports a new major version (a new module path). Probing <path>/v(N+1):"
+  echo
+  found=0
+  for mod in $(go list -m -f '{{if and (not .Indirect) (not .Main)}}{{.Path}}{{end}}' all 2>/dev/null); do
+    if [[ "$mod" =~ ^(.*)/v([0-9]+)$ ]]; then next="${BASH_REMATCH[1]}/v$((BASH_REMATCH[2] + 1))"; else next="$mod/v2"; fi
+    case "$mod" in gopkg.in/*|*/genproto/*) continue ;; esac
+    vers=$(go list -m -versions "$next" 2>/dev/null | cut -d' ' -f2-)
+    if [ -n "$vers" ] && [ "$vers" != "$next" ]; then
+      echo "- \`$mod\` → \`$next\` exists (latest: \`${vers##* }\`)"; found=1
+    fi
+  done
+  [ $found -eq 0 ] && echo "None found."
+
   section "4. Vulnerabilities (govulncheck)"
   go run "$GOVULNCHECK" ./... >"$TMP/vuln" 2>&1; rc=$?
   echo "govulncheck: $(status $rc)"
@@ -107,10 +121,10 @@ else
 fi
 
 section "7. Non-English text (CJK) in code and docs"
-grep -rlP '[\x{3040}-\x{30ff}\x{3400}-\x{9fff}\x{ac00}-\x{d7af}]' \
+grep -rlP '[\x{3000}-\x{303f}\x{3040}-\x{30ff}\x{3400}-\x{9fff}\x{ac00}-\x{d7af}\x{ff00}-\x{ffef}]' \
   --include='*.go' --include='*.md' --include='*.proto' --include='*.yaml' --include='*.yml' \
   --include='*.ts' --include='*.js' --include='*.py' --include='*.html' \
-  --exclude-dir=node_modules --exclude-dir=.git . >"$TMP/cjk" 2>/dev/null
+  --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=gen . >"$TMP/cjk" 2>/dev/null
 if [ -s "$TMP/cjk" ]; then echo "Files:"; sed 's/^/- /' "$TMP/cjk"; else echo "None."; fi
 
 section "8. Repository hygiene"
