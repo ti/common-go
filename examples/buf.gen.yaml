@@ -1,0 +1,39 @@
+# Generate with: cd examples && buf generate
+version: v2
+managed:
+  enabled: true
+  disable:
+    - module: buf.build/googleapis/googleapis
+    - module: buf.build/bufbuild/protovalidate
+  override:
+    - file_option: go_package_prefix
+      value: github.com/ti/common-go/examples/gen/go
+clean: true
+plugins:
+  # Messages
+  - remote: buf.build/protocolbuffers/go
+    out: gen/go
+    opt: paths=source_relative
+  # Native gRPC server/client stubs
+  - remote: buf.build/grpc/go
+    out: gen/go
+    opt: paths=source_relative
+  # REST (grpc-gateway) handlers
+  - remote: buf.build/grpc-ecosystem/gateway
+    out: gen/go
+    opt: paths=source_relative
+  # connect-go handlers/clients (used for the streaming method and the client example)
+  - remote: buf.build/connectrpc/go
+    out: gen/go
+    opt: paths=source_relative
+  # OpenAPI v2 description of the REST API
+  - remote: buf.build/grpc-ecosystem/openapiv2
+    out: gen/openapi
+    opt:
+      - allow_merge=true
+      - merge_file_name=api
+  # TypeScript messages and service descriptors for the web example
+  - remote: buf.build/bufbuild/es
+    out: web/connect/src/gen
+    include_imports: true
+    opt: target=ts

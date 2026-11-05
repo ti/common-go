@@ -1,0 +1,95 @@
+# Deployment and Service for a grpcmux server, with probes and shutdown timing
+# that let rolling updates finish without dropping requests.
+#
+# Shutdown sequence on SIGTERM (see docs/guides/server.md):
+#   1. health -> NOT_SERVING: gRPC health and /readyz fail, the readiness probe
+#      removes the pod from Service endpoints and Envoy stops routing to it;
+#   2. wait PRE_STOP while load balancers catch up (requests are still served);
+#   3. HTTP Shutdown + gRPC GracefulStop wait for in-flight requests/streams;
+#   4. dependency closers run (databases, clients).
+# terminationGracePeriodSeconds must exceed PRE_STOP + the longest request
+# you want to finish; here 10s + up to 40s < 60s.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: userservice
+  namespace: example
+  labels:
+    app: userservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: userservice
+  template:
+    metadata:
+      labels:
+        app: userservice
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: userservice
+          image: registry.example.com/userservice:latest
+          args: ["-c", "/etc/userservice/config.yaml"]
+          ports:
+            - name: http
+              containerPort: 8080 # REST, Connect, gRPC-Web (HTTP/1.1 + h2c)
+            - name: grpc
+              containerPort: 8081 # native gRPC
+            - name: metrics
+              containerPort: 9090 # Prometheus /metrics
+          env:
+            - name: PRE_STOP
+              value: "10s"
+            - name: GRACEFUL_TIMEOUT # upper bound for the whole shutdown
+              value: "55s"
+          # Readiness follows the drain and the registered health checkers.
+          readinessProbe:
+            grpc:
+              port: 8081
+            periodSeconds: 5
+            failureThreshold: 1
+          # Liveness only checks that the process serves HTTP; it never fails
+          # because a dependency is down, so it does not cause restart loops.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: userservice
+  namespace: example
+  labels:
+    app: userservice
+spec:
+  selector:
+    app: userservice
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      # Tells Gateway API implementations to talk HTTP/2 cleartext upstream.
+      appProtocol: kubernetes.io/h2c
+    - name: grpc
+      port: 8081
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
+    - name: metrics
+      port: 9090
+      targetPort: metrics

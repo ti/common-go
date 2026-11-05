@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package example.user.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ti/common-go/examples/gen/go/example/user/v1;userv1";
+
+// UserService is served by one implementation over native gRPC, REST
+// (grpc-gateway, from the google.api.http annotations) and ConnectRPC.
+service UserService {
+  // Creates a user. Fails with ALREADY_EXISTS (reason EMAIL_ALREADY_IN_USE)
+  // if the email is taken.
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+    option (google.api.http) = {
+      post: "/v1/users"
+      body: "user"
+    };
+  }
+
+  // Gets a user by ID.
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    // Side-effect free: Connect clients may call it with HTTP GET.
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (google.api.http) = {get: "/v1/users/{user_id}"};
+  }
+
+  // Updates the fields named in update_mask (all mutable fields when empty).
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {
+    option (google.api.http) = {
+      patch: "/v1/users/{user.user_id}"
+      body: "user"
+    };
+  }
+
+  // Deletes a user.
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {
+    option (google.api.http) = {delete: "/v1/users/{user_id}"};
+  }
+
+  // Lists users, newest first, with cursor pagination.
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (google.api.http) = {get: "/v1/users"};
+  }
+
+  // Streams every user (server streaming). Served on gRPC, on REST as
+  // newline-delimited JSON, and on Connect through a connect-go handler.
+  rpc ExportUsers(ExportUsersRequest) returns (stream ExportUsersResponse) {
+    option (google.api.http) = {get: "/v1/users:export"};
+  }
+}
+
+message User {
+  string user_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Field rules skip empty values so partial updates validate; creation
+  // requires name and email through the CreateUserRequest rule below.
+  string name = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.max_len = 100
+  ];
+  string email = 3 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.email = true
+  ];
+  // Unset means unknown (proto3 optional, no wrapper types needed).
+  optional int32 age = 4 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 150
+  }];
+  google.protobuf.Timestamp create_time = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+  google.protobuf.Timestamp update_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+message CreateUserRequest {
+  option (buf.validate.message).cel = {
+    id: "create_user.required_fields"
+    message: "user.name and user.email are required"
+    expression: "this.user.name != '' && this.user.email != ''"
+  };
+  User user = 1 [(buf.validate.field).required = true];
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message GetUserRequest {
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  User user = 1 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  string user_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message DeleteUserResponse {}
+
+message ListUsersRequest {
+  // At most 100; 0 means the default of 20.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 100
+  }];
+  // next_page_token of the previous response.
+  string page_token = 2;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  // Empty when there are no more pages.
+  string next_page_token = 2;
+}
+
+message ExportUsersRequest {}
+
+message ExportUsersResponse {
+  User user = 1;
+}

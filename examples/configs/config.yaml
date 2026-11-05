@@ -1,0 +1,17 @@
+apis:
+  httpAddr: ":8080"
+  grpcAddr: ":8081"
+  metricsAddr: ":9090"
+  logBody: false
+  # false: snake_case JSON (user_id), true: camelCase (userId)
+  useCamelCase: false
+  cors:
+    allowedOrigins: ["http://localhost:5173"]
+log:
+  level: info
+dependencies:
+  # In-memory database; switch the URI to use a real one, e.g.
+  #   mongodb://user:pass@localhost:27017/app?authSource=admin
+  #   postgres://user:pass@localhost:5432/app?sslmode=disable
+  #   mysql://user:pass@tcp(localhost:3306)/app?charset=utf8mb4&parseTime=true
+  db: "mock://local/users"
