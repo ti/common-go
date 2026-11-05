@@ -222,6 +222,11 @@ func BearerToken(authorization string) (string, error) {
 }
 
 func (p *Provider) validate(ctx context.Context, token string) (*Claims, error) {
+	discovery, err := p.Discover(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	parts := strings.SplitN(token, ".", jwtParts)
 	if len(parts) != jwtParts {
 		return nil, errInvalidJWTFormat
@@ -242,7 +247,7 @@ func (p *Provider) validate(ctx context.Context, token string) (*Claims, error) 
 		return nil, err
 	}
 
-	return parseClaims(parts[1], p.discovery.Issuer, p.cfg.ClientID, p.opts.now(), p.opts.clockSkew)
+	return parseClaims(parts[1], discovery.Issuer, p.cfg.ClientID, p.opts.now(), p.opts.clockSkew)
 }
 
 type jwtHeader struct {

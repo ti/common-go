@@ -46,7 +46,7 @@ func (p *Provider) lookupKey(ctx context.Context, kid string) (*rsa.PublicKey, e
 		return key, nil
 	}
 
-	if p.discovery.JwksURI == "" || p.opts.now().Sub(current.fetched) < p.opts.refreshInterval {
+	if p.Discovery().JwksURI == "" || p.opts.now().Sub(current.fetched) < p.opts.refreshInterval {
 		return nil, fmt.Errorf("%w: %s", errUnknownKeyID, kid)
 	}
 
@@ -77,13 +77,14 @@ func (p *Provider) lookupKey(ctx context.Context, kid string) (*rsa.PublicKey, e
 }
 
 func (p *Provider) fetchJWKS(ctx context.Context) (*keySet, error) {
-	if p.discovery.JwksURI == "" {
+	jwksURI := p.Discovery().JwksURI
+	if jwksURI == "" {
 		return nil, fmt.Errorf("%w: discovery has no jwks_uri", errUnknownKeyID)
 	}
 
 	var jwks JWKS
 
-	err := getJSON(ctx, p.opts.httpClient, p.discovery.JwksURI, errJWKSHTTPStatus, &jwks)
+	err := getJSON(ctx, p.opts.httpClient, jwksURI, errJWKSHTTPStatus, &jwks)
 	if err != nil {
 		return nil, err
 	}

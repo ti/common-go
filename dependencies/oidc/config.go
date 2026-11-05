@@ -149,6 +149,8 @@ type options struct {
 	clockSkew       time.Duration
 	refreshInterval time.Duration
 	keys            keySet
+	lazyDiscovery   bool
+	discoveryTTL    time.Duration
 }
 
 func defaultOptions() options {
@@ -179,6 +181,20 @@ func WithClockSkew(d time.Duration) Option {
 // WithJWKSRefreshInterval sets the minimum gap between unknown-kid refreshes.
 func WithJWKSRefreshInterval(d time.Duration) Option {
 	return func(o *options) { o.refreshInterval = d }
+}
+
+// WithLazyDiscovery defers discovery and the JWKS to first use instead of
+// fetching them in New/Init, and refetches discovery once it is older than
+// ttl (0: never refetch after the first success). Use it when the issuer may
+// be unreachable at startup — for example when it is this very process, whose
+// port is not listening yet — and see [Provider.Discover] for the stale-cache
+// behavior. Without it a provider fails at startup when the issuer is down,
+// which is the right default for a relying party.
+func WithLazyDiscovery(ttl time.Duration) Option {
+	return func(o *options) {
+		o.lazyDiscovery = true
+		o.discoveryTTL = ttl
+	}
 }
 
 // WithKeys installs verification keys by kid, e.g. for [NewFromDiscovery]

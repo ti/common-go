@@ -70,6 +70,20 @@ role, _ := claims.Lookup[string]("user.role")   // any claim, dotted paths reach
 groups := claims.AllGroups()                      // union of "groups" and "group"
 ```
 
+## When the issuer is not reachable at startup
+
+By default `Init`/`New` fetch discovery and the JWKS and fail when the issuer is down. That is the right default for a relying party, because it fails closed. Some services can't start that way, for example a service whose issuer is the service itself: its port isn't listening yet while dependencies initialize. Build those providers with `oidc.WithLazyDiscovery(ttl)`:
+
+```go
+cfg, err := oidc.ParseURL(u)
+p, err := oidc.New(ctx, cfg, oidc.WithLazyDiscovery(time.Hour)) // no network call here
+
+d, err := p.Discover(ctx)                // first call fetches; refetched after the TTL
+url := p.AuthorizationURL(oidc.AuthRequest{...})
+```
+
+`ValidateToken`, `Authenticate`, `AuthFunc` and `Exchange` load discovery and keys themselves. `AuthorizationURL` and `LogoutURL` take no context and use the current document, so call `Discover` first. A failed refetch keeps serving the previous document; only the very first load can fail.
+
 ## Without grpcmux
 
 ```go

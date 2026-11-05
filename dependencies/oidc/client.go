@@ -58,14 +58,14 @@ func (p *Provider) AuthorizationURL(r AuthRequest) string {
 
 	maps.Copy(params, r.Extra)
 
-	return withQuery(p.discovery.AuthorizationEndpoint, params.Encode())
+	return withQuery(p.Discovery().AuthorizationEndpoint, params.Encode())
 }
 
 // LogoutURL builds the issuer logout redirect: OIDC RP-initiated logout
 // (post_logout_redirect_uri + id_token_hint) or, with oidc_logout=false, the
 // Cognito-style logout_uri form.
 func (p *Provider) LogoutURL(redirectURI, idTokenHint string) (string, error) {
-	endpoint := p.discovery.EndSessionEndpoint
+	endpoint := p.Discovery().EndSessionEndpoint
 	if endpoint == "" {
 		return "", ErrNoEndSession
 	}
@@ -146,6 +146,7 @@ type Token struct {
 	AccessToken      string `json:"access_token"`
 	RefreshToken     string `json:"refresh_token"`
 	IDToken          string `json:"id_token"`
+	Scope            string `json:"scope"`
 	ExpiresIn        int32  `json:"expires_in"`
 	RefreshExpiresIn int32  `json:"refresh_expires_in"`
 	// Sub is a non-standard extension some issuers return.
@@ -169,7 +170,12 @@ func (e *TokenError) Error() string { return "token endpoint: " + e.Body }
 // A non-200 answer is a *[TokenError] (errors.AsType[*oidc.TokenError]); an
 // unreadable 200 matches ErrTokenResponse.
 func (p *Provider) Exchange(ctx context.Context, grant Grant) (*Token, error) {
-	endpoint := p.discovery.TokenEndpoint
+	discovery, err := p.Discover(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := discovery.TokenEndpoint
 	if endpoint == "" {
 		return nil, ErrNoTokenEndpoint
 	}
