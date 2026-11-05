@@ -3,8 +3,8 @@ package grpcmux
 import (
 	"context"
 	"fmt"
-	"github.com/ti/common-go/tools/stacktrace"
 	"strings"
+	"sync"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/metadata"
 
@@ -17,107 +17,119 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/validator"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	muxlogging "github.com/ti/common-go/grpcmux/logging"
-	"github.com/ti/common-go/log"
-	"github.com/ti/common-go/tools/routerlimit"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/codes"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+
+	muxlogging "github.com/ti/common-go/grpcmux/logging"
+	"github.com/ti/common-go/log"
+	"github.com/ti/common-go/tools/routerlimit"
+	"github.com/ti/common-go/tools/stacktrace"
 )
 
-// NewFullMiddleWare new full middleWare grpc server options.
-// nolint: funlen
+// NewFullMiddleWare returns the unary and stream interceptor chains that
+// [NewServer] installs on the gRPC server: validator, auth, authz, metrics,
+// access logging, rate limiting, custom interceptors and panic recovery, in
+// that order (outermost first).
 func NewFullMiddleWare(opts ...Option) (unaryServerInterceptors []grpc.UnaryServerInterceptor,
 	streamInterceptors []grpc.StreamServerInterceptor,
 ) {
-	o := evaluateOptions(opts)
-	// tags and validate
-	unaryServerInterceptors = []grpc.UnaryServerInterceptor{
-		validator.UnaryServerInterceptor(validator.WithFailFast()),
+	c := buildInterceptors(evaluateOptions(opts))
+	return c.grpcUnary, c.grpcStream
+}
+
+// interceptorChains holds the chains for each transport. httpUnary is the
+// chain the HTTP bridges (ConnectRPC, auto-HTTP, connect-go handlers) run: the
+// gRPC chain without auth and access logging, which the HTTP middleware
+// already performs for every HTTP request.
+type interceptorChains struct {
+	grpcUnary  []grpc.UnaryServerInterceptor
+	grpcStream []grpc.StreamServerInterceptor
+	httpUnary  []grpc.UnaryServerInterceptor
+}
+
+// nolint: funlen
+func buildInterceptors(o *options) interceptorChains {
+	var c interceptorChains
+	both := func(u grpc.UnaryServerInterceptor, st grpc.StreamServerInterceptor) {
+		c.grpcUnary = append(c.grpcUnary, u)
+		c.grpcStream = append(c.grpcStream, st)
+		c.httpUnary = append(c.httpUnary, u)
 	}
-	streamInterceptors = []grpc.StreamServerInterceptor{
-		validator.StreamServerInterceptor(validator.WithFailFast()),
+	grpcOnly := func(u grpc.UnaryServerInterceptor, st grpc.StreamServerInterceptor) {
+		c.grpcUnary = append(c.grpcUnary, u)
+		c.grpcStream = append(c.grpcStream, st)
 	}
-	// auth
+
+	both(validator.UnaryServerInterceptor(validator.WithFailFast()),
+		validator.StreamServerInterceptor(validator.WithFailFast()))
 	if o.authFunction != nil {
-		unary, stream := authInterceptors(o.authFunction, o.noAuthPrefix)
-		unaryServerInterceptors = append(unaryServerInterceptors, unary)
-		streamInterceptors = append(streamInterceptors, stream)
+		grpcOnly(authInterceptors(o.authFunction, o.noAuthPrefix))
 	}
-	// audit
 	if o.authzPolicy != "" {
 		muxlogging.RegisterAuditLogger(o.logger)
 		interceptor, err := authz.NewStatic(o.authzPolicy)
 		if err != nil {
 			log.Action("authzPolicy").Fatal("failed to create interceptor: %v", err)
 		}
-		unaryServerInterceptors = append(unaryServerInterceptors, interceptor.UnaryInterceptor)
-		streamInterceptors = append(streamInterceptors, interceptor.StreamInterceptor)
+		both(interceptor.UnaryInterceptor, interceptor.StreamInterceptor)
 	}
-	// metrics
 	var panicsTotal prometheus.Counter
 	if o.metricsAddr != "" {
-		panicsTotal = promauto.With(prometheus.DefaultRegisterer).NewCounter(prometheus.CounterOpts{
+		panicsTotal = panicsCounter()
+		both(metricsInterceptors(o.tracing, o.metaTags))
+	}
+	grpcOnly(muxlogging.UnaryServerInterceptor(interceptorLogger(), o.loggingOpts...),
+		muxlogging.StreamServerInterceptor(interceptorLogger(), o.loggingOpts...))
+	if o.limiter != nil {
+		both(routerlimit.UnaryServerInterceptor(o.limiter), routerlimit.StreamServerInterceptor(o.limiter))
+	}
+	c.grpcUnary = append(c.grpcUnary, o.grpcUnaryServerInterceptors...)
+	c.httpUnary = append(c.httpUnary, o.grpcUnaryServerInterceptors...)
+	c.grpcStream = append(c.grpcStream, o.grpcStreamServerInterceptors...)
+
+	if !noRecovery {
+		handler := func(ctx context.Context, p any) error {
+			if panicsTotal != nil {
+				panicsTotal.Inc()
+			}
+			log.Inject(ctx, map[string]any{"stack": stacktrace.Callers(5)})
+			return status.Errorf(codes.Internal, "%s", p)
+		}
+		both(recovery.UnaryServerInterceptor(recovery.WithRecoveryHandlerContext(handler)),
+			recovery.StreamServerInterceptor(recovery.WithRecoveryHandlerContext(handler)))
+	}
+	return c
+}
+
+// Prometheus collectors are process-wide: create and register them once, so
+// a process (or a test binary) can build more than one Server.
+var (
+	panicsCounter = sync.OnceValue(func() prometheus.Counter {
+		return promauto.With(prometheus.DefaultRegisterer).NewCounter(prometheus.CounterOpts{
 			Name: "grpc_req_panics_recovered_total",
 			Help: "Total number of gRPC requests recovered from internal panic.",
 		})
-		unary, stream := metricsInterceptors(o.tracing, o.metaTags)
-		unaryServerInterceptors = append(unaryServerInterceptors, unary)
-		streamInterceptors = append(streamInterceptors, stream)
-	}
-	// logging
-	unaryServerInterceptors = append(unaryServerInterceptors,
-		muxlogging.UnaryServerInterceptor(interceptorLogger(),
-			o.loggingOpts...))
-	streamInterceptors = append(streamInterceptors,
-		muxlogging.StreamServerInterceptor(interceptorLogger(),
-			o.loggingOpts...))
-
-	// ratelimit
-	if o.limiter != nil {
-		unaryServerInterceptors = append(unaryServerInterceptors,
-			routerlimit.UnaryServerInterceptor(o.limiter))
-		streamInterceptors = append(streamInterceptors,
-			routerlimit.StreamServerInterceptor(o.limiter))
-	}
-	if len(o.grpcUnaryServerInterceptors) > 0 {
-		unaryServerInterceptors = append(unaryServerInterceptors, o.grpcUnaryServerInterceptors...)
-	}
-	if len(o.grpcStreamServerInterceptors) > 0 {
-		streamInterceptors = append(streamInterceptors, o.grpcStreamServerInterceptors...)
-	}
-	// recovery
-	grpcPanicRecoveryHandler := func(ctx context.Context, p any) (err error) {
-		if panicsTotal != nil {
-			panicsTotal.Inc()
-		}
-		stackInfo := stacktrace.Callers(5)
-		log.Inject(ctx, map[string]any{
-			"stack": stackInfo,
-		})
-		return status.Errorf(codes.Internal, "%s", p)
-	}
-	if !noRecovery {
-		unaryServerInterceptors = append(unaryServerInterceptors,
-			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandlerContext(grpcPanicRecoveryHandler)))
-		streamInterceptors = append(streamInterceptors,
-			recovery.StreamServerInterceptor(recovery.WithRecoveryHandlerContext(grpcPanicRecoveryHandler)))
-	}
-	return
-}
+	})
+	serverMetrics = sync.OnceValue(func() *grpcprom.ServerMetrics {
+		m := grpcprom.NewServerMetrics(
+			grpcprom.WithServerHandlingTimeHistogram(
+				grpcprom.WithHistogramBuckets([]float64{
+					0.001, 0.01, 0.1,
+					0.3, 0.6, 1, 3, 6, 9, 20, 30, 60, 90, 120,
+				}),
+			),
+		)
+		prometheus.DefaultRegisterer.MustRegister(m)
+		return m
+	})
+)
 
 func metricsInterceptors(tracing bool, logMeta []string) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
-	srvMetrics := grpcprom.NewServerMetrics(
-		grpcprom.WithServerHandlingTimeHistogram(
-			grpcprom.WithHistogramBuckets([]float64{
-				0.001, 0.01, 0.1,
-				0.3, 0.6, 1, 3, 6, 9, 20, 30, 60, 90, 120,
-			}),
-		),
-	)
+	srvMetrics := serverMetrics()
 	samplerFromContext := func(ctx context.Context) prometheus.Labels {
 		metaData := metadata.ExtractIncoming(ctx)
 		labels := make(prometheus.Labels)
@@ -133,7 +145,6 @@ func metricsInterceptors(tracing bool, logMeta []string) (grpc.UnaryServerInterc
 		}
 		return labels
 	}
-	prometheus.DefaultRegisterer.MustRegister(srvMetrics)
 	return srvMetrics.UnaryServerInterceptor(grpcprom.WithExemplarFromContext(samplerFromContext)),
 		srvMetrics.StreamServerInterceptor(grpcprom.WithExemplarFromContext(samplerFromContext))
 }

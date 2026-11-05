@@ -1,4 +1,9 @@
-// Package grpcmux implements grpc, grpc gateway, and grpc middlewares.
+// Package grpcmux serves one gRPC service implementation over native gRPC,
+// grpc-gateway REST, ConnectRPC and plain HTTP, with logging, metrics,
+// tracing, auth, health and graceful shutdown built in.
+//
+// Ports (all configurable): HTTP on :8080 (HTTP/1.1 + h2c, or TLS), native
+// gRPC on :8081, Prometheus metrics on :9090.
 package grpcmux
 
 import (
@@ -9,69 +14,68 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"golang.org/x/net/http2"
-
-	"github.com/ti/common-go/log"
-
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
+
 	"github.com/ti/common-go/graceful"
 	"github.com/ti/common-go/grpcmux/mux"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
-	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
+	"github.com/ti/common-go/log"
 )
 
-// NewServer new grpc server with all common middleware.
+// NewServer creates a server with the default middleware. Register services
+// on it, then call [Server.Start].
 func NewServer(opts ...Option) *Server {
 	o := evaluateOptions(opts)
-	svc := &Server{
-		opts:   o,
-		locker: &sync.Mutex{},
-	}
 	if o.logger == nil {
 		o.logger = interceptorLogger()
 	}
-	unaryServerInterceptors, streamInterceptors := NewFullMiddleWare(withOptions(o))
+	chains := buildInterceptors(o)
 	serverOpts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(unaryServerInterceptors...),
-		grpc.ChainStreamInterceptor(streamInterceptors...),
+		grpc.ChainUnaryInterceptor(chains.grpcUnary...),
+		grpc.ChainStreamInterceptor(chains.grpcStream...),
 	}
 	if !o.withOutKeepAliveOpts {
-		serverOpts = append(serverOpts, grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionAge: time.Minute,
-		}))
+		serverOpts = append(serverOpts,
+			grpc.KeepaliveParams(o.keepaliveParams),
+			grpc.KeepaliveEnforcementPolicy(o.keepalivePolicy))
 	}
-
-	if len(o.grpcServerOpts) > 0 {
-		serverOpts = append(serverOpts, o.grpcServerOpts...)
-	}
+	serverOpts = append(serverOpts, o.grpcServerOpts...)
 	if o.tracing {
 		serverOpts = append(serverOpts, grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	}
-	gs := grpc.NewServer(serverOpts...)
-	svc.grpcServer = gs
-	svc.Logger = o.logger
-	svc.initMemConnListener(serverOpts...)
+
+	s := &Server{
+		Logger:     o.logger,
+		opts:       o,
+		grpcServer: grpc.NewServer(serverOpts...),
+		health:     newHealthServer(o.healthCheckers),
+		ctx:        log.NewContextWithLogger(context.Background(), log.Default(false)),
+	}
+	if !o.withoutHTTPInterceptors {
+		s.httpUnary = chainUnaryInterceptors(chains.httpUnary)
+	}
+	s.initMemConn(serverOpts...)
+	pbhealth.RegisterHealthServer(s.grpcServer, s.health)
+	pbhealth.RegisterHealthServer(s.bufServer, s.health)
+
 	muxOpts := []mux.Option{
 		mux.WithAuthFunc(o.authFunction),
 		mux.WithNoAuthPrefixes(o.noAuthPrefix...),
+		mux.WithMiddleWares(o.httpMiddleWares...),
+	}
+	if len(o.preHTTPMiddleWares) > 0 {
+		muxOpts = append(muxOpts, mux.WithPreMiddleWares(o.preHTTPMiddleWares...))
 	}
 	if o.logBody {
 		muxOpts = append(muxOpts, mux.WithLogBody())
@@ -85,52 +89,48 @@ func NewServer(opts ...Option) *Server {
 	if o.cors != nil {
 		muxOpts = append(muxOpts, mux.WithCORS(*o.cors))
 	}
-	if svc.useMemConn {
-		muxOpts = append(muxOpts, mux.WithOutLog())
-	} else {
-		muxOpts = append(muxOpts, mux.WithMiddleWares(o.httpMiddleWares...))
-		if len(o.preHTTPMiddleWares) > 0 {
-			muxOpts = append(muxOpts, mux.WithPreMiddleWares(o.preHTTPMiddleWares...))
-		}
-	}
-	svc.mux = mux.NewServeMux(muxOpts...)
-	svc.unaryServerInterceptor = chainUnaryInterceptors(unaryServerInterceptors)
-	svc.ctx = log.NewContextWithLogger(context.Background(),
-		log.Default(false))
-	return svc
+	s.mux = mux.NewServeMux(muxOpts...)
+	return s
 }
 
-var noRecovery = false
+var noRecovery = os.Getenv("PANIC_RECOVERY") == "false"
 
-func init() {
-	panicRecovery := os.Getenv("PANIC_RECOVERY")
-	if panicRecovery == "false" {
-		noRecovery = true
-	}
-}
-
-// Server the grpc server
+// Server serves gRPC, HTTP (REST, ConnectRPC, custom handlers) and metrics.
 type Server struct {
-	// Logger the grpc default logger with auto flush on close
-	Logger        logging.Logger
+	// Logger is the logger used for server lifecycle and gRPC access logs.
+	Logger logging.Logger
+	// HTTPServer is the running HTTP server. It is nil until Start has
+	// created it; do not replace it.
+	HTTPServer *http.Server
+
+	opts          *options
 	mux           *mux.ServeMux
-	httpServerMux *http.ServeMux
+	httpServerMux *http.ServeMux // custom handlers registered with Handle
 	wsServeMux    *http.ServeMux // WebSocket handlers
-	HTTPServer    *http.Server
-	healthServer  *simpleHealthServer
-	// GrpcServer the *grpc..Server
-	grpcServer             *grpc.Server
-	bufServer              *grpc.Server
-	opts                   *options
-	locker                 sync.Locker
-	memConn                *grpc.ClientConn
-	bufListener            net.Listener
-	unaryServerInterceptor grpc.UnaryServerInterceptor
-	useMemConn             bool
-	ctx                    context.Context
+	health        *simpleHealthServer
+	grpcServer    *grpc.Server
+	// httpUnary is the interceptor chain run by the HTTP bridges; nil when
+	// disabled with WithoutHTTPInterceptors.
+	httpUnary grpc.UnaryServerInterceptor
+
+	// In-memory gRPC server and client connection (see Conn).
+	bufServer   *grpc.Server
+	bufListener *listener
+	memConn     *grpc.ClientConn
+
+	handlerOnce sync.Once
+	handler     http.Handler
+
+	ctx context.Context // carries the server logger
+
+	mu            sync.Mutex // guards HTTPServer and metricsServer, set by the start functions
+	metricsServer *http.Server
 }
 
-// Start the service.
+// Start runs the gRPC, HTTP and metrics servers and blocks until the process
+// is asked to stop (SIGINT/SIGTERM, graceful.Close, or a server failing to
+// start). It then calls [Server.Close] and every other closer registered with
+// graceful.AddCloser, and returns.
 func (s *Server) Start() {
 	graceful.AddCloser(s.Close)
 	graceful.Start(s.ctx,
@@ -140,135 +140,95 @@ func (s *Server) Start() {
 	)
 }
 
-// RegisterService register service functions
+// RegisterService registers a service on the gRPC server (and the in-memory
+// connection). With [WithAutoHTTP] each unary method is also served as
+// POST /{package.Service}/{Method} with a JSON body.
+//
+// It implements grpc.ServiceRegistrar, so generated pb.RegisterXxxServer(gs, impl)
+// functions call it.
 func (s *Server) RegisterService(desc *grpc.ServiceDesc, serviceImpl any) {
-	s.grpcServer.RegisterService(desc, serviceImpl)
+	s.registerGRPC(desc, serviceImpl)
 	if !s.opts.autoHTTP {
 		return
 	}
-	for _, v := range desc.Methods {
-		httpPath := "/" + desc.ServiceName + "/" + v.MethodName
-		s.Logger.Log(s.ctx, logging.LevelDebug, "handled", "path", httpPath)
-		s.mux.Handle(http.MethodPost, httpPath, s.newGRPCAsHTTPHandler(serviceImpl, v))
+	for _, m := range desc.Methods {
+		fullMethod := "/" + desc.ServiceName + "/" + m.MethodName
+		s.Logger.Log(s.ctx, logging.LevelDebug, "handled", "path", fullMethod)
+		s.mux.Handle(http.MethodPost, fullMethod, s.newAutoHTTPHandler(serviceImpl, fullMethod, m))
 	}
 }
 
-func (s *Server) newGRPCAsHTTPHandler(server any, v grpc.MethodDesc) func(w http.ResponseWriter,
-	r *http.Request, _ map[string]string) {
+// registerGRPC registers a service on both gRPC servers.
+func (s *Server) registerGRPC(desc *grpc.ServiceDesc, serviceImpl any) {
+	s.grpcServer.RegisterService(desc, serviceImpl)
+	s.bufServer.RegisterService(desc, serviceImpl)
+}
+
+// newAutoHTTPHandler serves one unary method as a JSON POST route on the
+// grpc-gateway mux, running the HTTP interceptor chain.
+func (s *Server) newAutoHTTPHandler(server any, fullMethod string, m grpc.MethodDesc) runtime.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request, _ map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
-		var stream runtime.ServerTransportStream
-		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		serverMux := s.ServeMux()
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(serverMux, req)
-		resp, err := localRequest(ctx, inboundMarshaler, server, req, v.MethodName)
+		inbound, outbound := runtime.MarshalerForRequest(serverMux, req)
+		body := io.LimitReader(req.Body, s.opts.maxRequestBodyBytes)
+		dec := func(v any) error {
+			if err := inbound.NewDecoder(body).Decode(v); err != nil && !errors.Is(err, io.EOF) {
+				return invalidArgument(err)
+			}
+			return nil
+		}
+		resp, stream, err := s.invokeUnary(ctx, req, server, fullMethod, m, dec)
 		if err != nil {
-			runtime.HTTPError(ctx, serverMux, outboundMarshaler, w, req, err)
+			runtime.HTTPError(ctx, serverMux, outbound, w, req, err)
 			return
 		}
-		md := runtime.ServerMetadata{
-			HeaderMD:  stream.Header(),
-			TrailerMD: stream.Trailer(),
-		}
-		ctx = runtime.NewServerMetadataContext(ctx, md)
-		runtime.ForwardResponseMessage(ctx, serverMux, outboundMarshaler, w, req, resp,
+		header, trailer := stream.metadata()
+		ctx = runtime.NewServerMetadataContext(ctx, runtime.ServerMetadata{HeaderMD: header, TrailerMD: trailer})
+		runtime.ForwardResponseMessage(ctx, serverMux, outbound, w, req, resp,
 			serverMux.GetForwardResponseOptions()...)
 	}
 }
 
-func localRequest(ctx context.Context, marshaler runtime.Marshaler,
-	server any, req *http.Request, methodName string,
-) (proto.Message, error) {
-	newReader, berr := utilities.IOReaderFactory(req.Body)
-	if berr != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "%v", berr)
-	}
-	method := reflect.ValueOf(server).MethodByName(methodName)
-	if !method.IsValid() {
-		return nil, status.Errorf(codes.Unimplemented, "method %s is valid", methodName)
-	}
-	methodType := method.Type()
-	if methodType.NumIn() != 2 || methodType.NumOut() != 2 {
-		return nil, status.Errorf(codes.Unimplemented, "method %s may not a unary service", methodName)
-	}
-	callParams := make([]reflect.Value, 2)
-	callParams[0] = reflect.ValueOf(ctx)
-	in := reflect.New(methodType.In(1).Elem())
-	protoReq := in.Interface()
-	if err := marshaler.NewDecoder(newReader()).Decode(protoReq); err != nil && !errors.Is(err, io.EOF) {
-		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	callParams[1] = in
-	resps := method.Call(callParams)
-	if err := resps[1].Interface(); err != nil {
-		return nil, err.(error)
-	}
-	msg := resps[0].Interface()
-	return msg.(proto.Message), nil
-}
-
-// startMetrics start metrics
-func (s *Server) startMetrics(ctx context.Context) error {
-	httpMux := http.NewServeMux()
-	httpMux.Handle("/metrics", promhttp.HandlerFor(
-		prometheus.DefaultGatherer,
-		promhttp.HandlerOpts{
-			EnableOpenMetrics: true,
-		},
-	))
-	s.Logger.Log(ctx, logging.LevelInfo, "Start metrics at "+s.opts.metricsAddr)
-	server := http.Server{
-		Addr:              s.opts.metricsAddr,
-		ReadHeaderTimeout: 3 * time.Second,
-		Handler:           httpMux,
-	}
-	err := server.ListenAndServe()
-	if !errors.Is(err, http.ErrServerClosed) {
-		return errors.New("Start metrics failed for " + err.Error())
-	}
-	return nil
-}
-
-// Conn get the grpc client conn.
+// Conn returns an in-memory client connection to this server's services. It
+// goes through the full gRPC interceptor chain (including auth), without a
+// network hop. Typical use: serve grpc-gateway routes with interceptors,
+//
+//	pb.RegisterXxxHandlerClient(ctx, gs.ServeMux(), pb.NewXxxClient(gs.Conn()))
 func (s *Server) Conn() *grpc.ClientConn {
-	s.useMemConn = true
 	return s.memConn
 }
 
-func (s *Server) initMemConnListener(opts ...grpc.ServerOption) {
-	bufListener := newListener()
-	var err error
-	s.memConn, err = grpc.NewClient("passthrough:///buf",
-		grpc.WithContextDialer(bufListener.DialContext),
+func (s *Server) initMemConn(opts ...grpc.ServerOption) {
+	s.bufListener = newListener()
+	conn, err := grpc.NewClient("passthrough:///buf",
+		grpc.WithContextDialer(s.bufListener.DialContext),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
-	s.bufListener = bufListener
 	if err != nil {
-		panic(errors.New("Conn buf failed for " + err.Error()))
+		panic(errors.New("grpcmux: in-memory connection: " + err.Error()))
 	}
-	s.memConn.Connect()
+	s.memConn = conn
 	s.bufServer = grpc.NewServer(opts...)
 }
 
-// HandleFunc registers custom HTTP routes.
+// HandleFunc registers a route on the grpc-gateway mux (supports
+// path templates such as /v1/items/{id}).
 func (s *Server) HandleFunc(method, path string, h runtime.HandlerFunc) {
 	s.mux.Handle(method, path, h)
 }
 
-// AddHealthChecker registers a custom health check function.
-// All registered checkers are called on every gRPC health Check request.
-// If any checker returns a non-nil error, the response status is NOT_SERVING.
-// Can be called before or after Start().
+// AddHealthChecker registers a custom health check function. All checkers
+// run on every health Check (gRPC health and HTTP /readyz); any error reports
+// NOT_SERVING. Safe to call at any time.
 func (s *Server) AddHealthChecker(checker HealthChecker) {
-	if s.healthServer == nil {
-		s.opts.healthCheckers = append(s.opts.healthCheckers, checker)
-		return
-	}
-	s.healthServer.checkers = append(s.healthServer.checkers, checker)
+	s.health.addChecker(checker)
 }
 
-// Handle registers custom HTTP handler
+// Handle registers a custom HTTP handler (net/http ServeMux pattern). It runs
+// behind the same middleware as gateway routes: CORS, request ID, logging,
+// auth and recovery. Register handlers before Start.
 func (s *Server) Handle(pattern string, handler http.Handler) {
 	if s.httpServerMux == nil {
 		s.httpServerMux = http.NewServeMux()
@@ -293,216 +253,277 @@ func (s *Server) HandleWebSocket(pattern string, handler http.Handler) {
 	s.wsServeMux.Handle(pattern, handler)
 }
 
-// ServeMux returns the native server mux of grpc gateay
+// ServeMux returns the grpc-gateway mux, for pb.RegisterXxxHandlerServer.
 func (s *Server) ServeMux() *runtime.ServeMux {
 	return s.mux.ServeMux()
 }
 
-// GrpcServer Return grpc native grpc server
+// GrpcServer returns the native *grpc.Server.
 func (s *Server) GrpcServer() *grpc.Server {
 	return s.grpcServer
 }
 
-// startHttp start http
-func (s *Server) startHTTP(ctx context.Context) error {
-	s.HandleFunc(http.MethodGet, "/healthz", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
-		_, _ = w.Write([]byte(pbhealth.HealthCheckResponse_SERVING.String()))
-	})
-	s.HandleFunc(http.MethodGet, "/favicon.ico", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
-		w.Header().Set("Cache-Control", "public, max-age=31536000")
-		w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(time.RFC1123))
-	})
-	s.HandleFunc(http.MethodGet, "/debug/**", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
-		http.DefaultServeMux.ServeHTTP(w, r)
-	})
-	if s.useMemConn {
-		go func() {
-			pbhealth.RegisterHealthServer(s.bufServer, s.healthServer)
-			if errServer := s.bufServer.Serve(s.bufListener); errServer != nil {
-				panic(errServer)
-			}
-		}()
-	}
-	var handler http.Handler
-	if s.httpServerMux == nil {
-		handler = s.mux
-	} else {
-		// Custom handlers (registered via Handle) are served by httpServerMux.
-		// The gateway mux is the fallback for all other paths.
-		// We use the raw serveMux (without middleware) as the fallback because
-		// the mux.Middleware wrapper applies the interceptor chain once to the
-		// entire combined handler — logging, auth, recovery, request-id, etc.
-		s.httpServerMux.Handle("/", s.mux.ServeMux())
-		handler = s.mux.Middleware(s.httpServerMux)
-	}
-
-	// If WebSocket handlers are registered, wrap the outermost handler so that
-	// WebSocket upgrade requests are dispatched to wsServeMux before the main
-	// HTTP/2 handler processes them. This ensures the HTTP/1.1 WebSocket
-	// handshake completes correctly.
-	if s.wsServeMux != nil {
-		wsMux := s.wsServeMux
-		inner := handler
-		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-				wsMux.ServeHTTP(w, r)
+// httpHandler builds the HTTP handler once: built-in routes, custom handlers
+// with the gateway mux as fallback, WebSocket dispatch and tracing.
+func (s *Server) httpHandler() http.Handler {
+	s.handlerOnce.Do(func() {
+		// Liveness: the process is up and serving HTTP. Never fails because of
+		// dependencies or draining, so a liveness probe never restarts a pod
+		// that is merely unready.
+		s.HandleFunc(http.MethodGet, "/healthz", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
+			_, _ = io.WriteString(w, pbhealth.HealthCheckResponse_SERVING.String())
+		})
+		// Readiness: the gRPC health status (NOT_SERVING before start, while
+		// draining, or when a health checker fails).
+		s.HandleFunc(http.MethodGet, "/readyz", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+			if !s.health.ready(r.Context()) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = io.WriteString(w, pbhealth.HealthCheckResponse_NOT_SERVING.String())
 				return
 			}
-			inner.ServeHTTP(w, r)
+			_, _ = io.WriteString(w, pbhealth.HealthCheckResponse_SERVING.String())
 		})
-	}
+		s.HandleFunc(http.MethodGet, "/favicon.ico", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(time.RFC1123))
+		})
+		s.HandleFunc(http.MethodGet, "/debug/**", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+			http.DefaultServeMux.ServeHTTP(w, r)
+		})
 
-	// Tracing: wrap the HTTP handler with otelhttp so Connect/gRPC-web requests
-	// served over the HTTP path (which do NOT traverse the gRPC StatsHandler)
-	// produce spans too. Without this, only native gRPC (:grpcAddr) is traced
-	// and Connect RPCs from browsers are invisible in Tempo. The span is named
-	// after the request path (the RPC method, e.g. /auth.v1.AuthService/Token),
-	// which the trace drill-down dashboards filter on. No-op export unless an
-	// OTLP TracerProvider is installed by the application.
-	if s.opts.tracing {
-		handler = otelhttp.NewHandler(handler, "http.server",
-			otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-				if r.URL != nil && r.URL.Path != "" {
-					return r.Method + " " + r.URL.Path
+		var handler http.Handler
+		if s.httpServerMux == nil {
+			handler = s.mux
+		} else {
+			// Custom handlers (registered via Handle) are served by httpServerMux,
+			// with the raw gateway mux as the fallback for every other path. The
+			// middleware chain (logging, auth, recovery, request ID, ...) wraps
+			// the combined handler exactly once.
+			s.httpServerMux.Handle("/", s.mux.ServeMux())
+			handler = s.mux.Middleware(s.httpServerMux)
+		}
+		// WebSocket upgrades go to wsServeMux before anything else.
+		if s.wsServeMux != nil {
+			wsMux, inner := s.wsServeMux, handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+					wsMux.ServeHTTP(w, r)
+					return
 				}
-				return r.Method
-			}),
-		)
-	}
-
-	tlsCert := s.opts.tlsCertFile
-	tlsKey := s.opts.tlsKeyFile
-	useTLS := tlsCert != "" && tlsKey != ""
-
-	if useTLS {
-		// TLS mode: HTTP/2 over TLS (h2). The standard Go HTTP server automatically
-		// enables HTTP/2 when ListenAndServeTLS is used. No h2c wrapper needed.
-		//
-		// ReadTimeout and WriteTimeout are intentionally 0 (disabled) because
-		// HTTP/2 streaming RPCs (ConnectRPC SubscribeEvents, gRPC server-streaming)
-		// are long-lived connections. Setting a WriteTimeout kills streaming
-		// connections abruptly, causing ConnectError: missing EndStreamResponse.
-		// ReadHeaderTimeout is safe: it only applies to the initial headers phase.
-		s.HTTPServer = &http.Server{
-			Addr:                  s.opts.httpAddr,
-			Handler:               handler,
-			ReadHeaderTimeout:     10 * time.Second,
-			IdleTimeout:           5 * time.Minute,
-			MaxHeaderBytes:        1 << 20,
-			DisableClientPriority: s.opts.disableClientPriority,
+				inner.ServeHTTP(w, r)
+			})
 		}
-		s.Logger.Log(ctx, logging.LevelInfo, "Start https (TLS) at "+s.opts.httpAddr)
-		err := s.HTTPServer.ListenAndServeTLS(tlsCert, tlsKey)
-		if !errors.Is(err, http.ErrServerClosed) {
-			return errors.New("Start https failed for " + err.Error())
+		// Connect and gateway requests on the HTTP port don't pass through the
+		// gRPC StatsHandler, so trace them here. Spans are named after the
+		// request path (for an RPC, /pkg.Service/Method).
+		if s.opts.tracing {
+			handler = otelhttp.NewHandler(handler, "http.server",
+				otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+					if r.URL != nil && r.URL.Path != "" {
+						return r.Method + " " + r.URL.Path
+					}
+					return r.Method
+				}),
+			)
 		}
-		return nil
-	}
+		s.handler = handler
+	})
+	return s.handler
+}
 
-	// h2c mode (default): cleartext HTTP/2 + HTTP/1.1.
-	// Suitable for deployments behind a TLS-terminating proxy (Envoy Gateway, Nginx, etc.).
-	//
-	// ReadTimeout and WriteTimeout are intentionally 0 (disabled) because
-	// HTTP/2 streaming RPCs (ConnectRPC SubscribeEvents, gRPC server-streaming)
-	// are long-lived connections. Setting a WriteTimeout kills streaming
-	// connections abruptly, causing ConnectError: missing EndStreamResponse.
-	// ReadHeaderTimeout is safe: it only applies to the initial headers phase.
+// newHTTPServer configures HTTP/1.1 plus HTTP/2 (h2c by default, h2 with TLS)
+// using only the standard library.
+//
+// There is no ReadTimeout or WriteTimeout on purpose: streaming RPCs (gRPC
+// server streaming, Connect streams, WebSockets) are long-lived, and a write
+// timeout kills them mid-stream ("missing EndStreamResponse"). Only the header
+// phase is bounded.
+func (s *Server) newHTTPServer(handler http.Handler, useTLS bool) *http.Server {
 	protocols := &http.Protocols{}
 	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
-	s.HTTPServer = &http.Server{
+	if useTLS {
+		protocols.SetHTTP2(true)
+	} else {
+		protocols.SetUnencryptedHTTP2(true)
+	}
+	return &http.Server{
 		Addr:                  s.opts.httpAddr,
 		Handler:               handler,
 		Protocols:             protocols,
-		ReadHeaderTimeout:     10 * time.Second,
-		IdleTimeout:           5 * time.Minute,
-		MaxHeaderBytes:        1 << 20,
+		ReadHeaderTimeout:     s.opts.readHeaderTimeout,
+		IdleTimeout:           s.opts.idleTimeout,
+		MaxHeaderBytes:        s.opts.maxHeaderBytes,
 		DisableClientPriority: s.opts.disableClientPriority,
+		HTTP2: &http.HTTP2Config{
+			MaxConcurrentStreams: s.opts.maxConcurrentStreams,
+		},
 	}
-	h2s := &http2.Server{
-		IdleTimeout:          time.Minute,
-		MaxConcurrentStreams: 1000,
+}
+
+func (s *Server) startHTTP(ctx context.Context) error {
+	tlsCert, tlsKey := s.opts.tlsCertFile, s.opts.tlsKeyFile
+	useTLS := tlsCert != "" && tlsKey != ""
+	srv := s.newHTTPServer(s.httpHandler(), useTLS)
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.opts.httpAddr)
+	if err != nil {
+		return fmt.Errorf("start http: %w", err)
 	}
-	_ = http2.ConfigureServer(s.HTTPServer, h2s)
-	s.Logger.Log(ctx, logging.LevelInfo, "Start http at "+s.opts.httpAddr)
-	err := s.HTTPServer.ListenAndServe()
+	s.mu.Lock()
+	s.HTTPServer = srv
+	s.mu.Unlock()
+	if useTLS {
+		s.Logger.Log(ctx, logging.LevelInfo, "Start https (TLS) at "+s.opts.httpAddr)
+		err = srv.ServeTLS(lis, tlsCert, tlsKey)
+	} else {
+		s.Logger.Log(ctx, logging.LevelInfo, "Start http at "+s.opts.httpAddr)
+		err = srv.Serve(lis)
+	}
 	if !errors.Is(err, http.ErrServerClosed) {
-		return errors.New("Start http failed for " + err.Error())
+		return fmt.Errorf("serve http: %w", err)
 	}
 	return nil
 }
 
-// startGRPC start grpc
 func (s *Server) startGRPC(ctx context.Context) error {
-	lis, err := net.Listen("tcp", s.opts.grpcAddr)
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.opts.grpcAddr)
 	if err != nil {
 		s.Logger.Log(s.ctx, logging.LevelError, "Listen grpc "+s.opts.grpcAddr+" error for "+err.Error())
-		return err
+		return fmt.Errorf("start grpc: %w", err)
 	}
-
-	healthServer := health.NewServer()
-	s.healthServer = &simpleHealthServer{server: healthServer, checkers: s.opts.healthCheckers}
-	pbhealth.RegisterHealthServer(s.grpcServer, s.healthServer)
-	s.healthServer.server.SetServingStatus(allServices, pbhealth.HealthCheckResponse_SERVING)
+	go func() { _ = s.bufServer.Serve(s.bufListener) }()
+	s.health.setServing(true)
 	s.Logger.Log(ctx, logging.LevelInfo, "Start grpc at "+s.opts.grpcAddr)
-	err = s.grpcServer.Serve(lis)
-	if err != nil {
-		err = errors.New("Start grpc failed for " + err.Error())
+	if err := s.grpcServer.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+		return fmt.Errorf("serve grpc: %w", err)
 	}
-	return err
+	return nil
 }
 
-// Close service
-func (s *Server) Close(ctx context.Context) error {
-	if s.HTTPServer != nil {
-		s.HTTPServer.SetKeepAlivesEnabled(false)
-	}
-	if s.healthServer != nil {
-		s.healthServer.server.SetServingStatus(allServices, pbhealth.HealthCheckResponse_NOT_SERVING)
-	}
-	// The default timeout is 1 minute before closing, K8S service closing strategy.
-	// refer: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/
-	preStop := os.Getenv("PRE_STOP")
-	if preStop != "" {
-		preStopDuration, _ := time.ParseDuration(preStop)
-		if preStopDuration == 0 || preStopDuration > 5*time.Minute {
-			preStopDuration = time.Minute
-		}
-		s.Logger.Log(s.ctx, logging.LevelDebug, fmt.Sprintf("wait %s to stop the service", preStopDuration))
-		time.Sleep(preStopDuration)
-	}
-	if s.HTTPServer != nil {
-		err := s.HTTPServer.Shutdown(ctx)
-		if err != nil {
-			s.Logger.Log(s.ctx, logging.LevelWarn, "Shutdown http failed for "+err.Error())
-		}
-	}
-	ok := make(chan struct{})
-	go func() {
-		s.grpcServer.GracefulStop()
-		close(ok)
-	}()
-	select {
-	case <-ok:
+// startMetrics serves Prometheus metrics. An empty metrics address disables it.
+func (s *Server) startMetrics(ctx context.Context) error {
+	if s.opts.metricsAddr == "" {
 		return nil
-	case <-ctx.Done():
-		s.grpcServer.Stop()
-		return ctx.Err()
 	}
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/metrics", promhttp.HandlerFor(prometheus.DefaultGatherer,
+		promhttp.HandlerOpts{EnableOpenMetrics: true}))
+	srv := &http.Server{
+		Addr:              s.opts.metricsAddr,
+		ReadHeaderTimeout: 3 * time.Second,
+		Handler:           httpMux,
+	}
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", s.opts.metricsAddr)
+	if err != nil {
+		return fmt.Errorf("start metrics: %w", err)
+	}
+	s.mu.Lock()
+	s.metricsServer = srv
+	s.mu.Unlock()
+	s.Logger.Log(ctx, logging.LevelInfo, "Start metrics at "+s.opts.metricsAddr)
+	if err := srv.Serve(lis); !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("serve metrics: %w", err)
+	}
+	return nil
 }
 
+// maxPreStop caps the PRE_STOP wait.
+const maxPreStop = 5 * time.Minute
+
+// preStopDelay parses PRE_STOP: unset, "0" or "0s" → no wait; a duration →
+// that wait, capped at 5 minutes; anything unparsable → 1 minute.
+func preStopDelay() time.Duration {
+	v := os.Getenv("PRE_STOP")
+	if v == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(v)
+	switch {
+	case err != nil:
+		return time.Minute
+	case d <= 0:
+		return 0
+	case d > maxPreStop:
+		return maxPreStop
+	}
+	return d
+}
+
+// Close shuts the server down gracefully:
+//
+//  1. health switches to NOT_SERVING (gRPC health and /readyz), so readiness
+//     probes take the pod out of rotation;
+//  2. it waits PRE_STOP (see preStopDelay) while load balancers catch up;
+//     requests keep being served during the wait;
+//  3. HTTP Shutdown and gRPC GracefulStop run in parallel and wait for
+//     in-flight requests and streams;
+//  4. if ctx expires first, remaining connections are closed forcibly.
+//
+// Kubernetes' terminationGracePeriodSeconds must exceed PRE_STOP plus the
+// longest request you want to let finish.
+func (s *Server) Close(ctx context.Context) error {
+	s.health.setServing(false)
+	s.mu.Lock()
+	httpServer, metricsServer := s.HTTPServer, s.metricsServer
+	s.mu.Unlock()
+	if httpServer != nil {
+		httpServer.SetKeepAlivesEnabled(false)
+	}
+	if d := preStopDelay(); d > 0 {
+		s.Logger.Log(s.ctx, logging.LevelInfo, fmt.Sprintf("wait %s (PRE_STOP) before stopping", d))
+		select {
+		case <-time.After(d):
+		case <-ctx.Done():
+		}
+	}
+
+	var wg sync.WaitGroup
+	var httpErr error
+	if httpServer != nil {
+		wg.Go(func() {
+			if err := httpServer.Shutdown(ctx); err != nil {
+				httpErr = fmt.Errorf("shutdown http: %w", err)
+				_ = httpServer.Close()
+			}
+		})
+	}
+	var grpcErr error
+	wg.Go(func() {
+		stopped := make(chan struct{})
+		go func() {
+			s.grpcServer.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+		case <-ctx.Done():
+			s.grpcServer.Stop()
+			grpcErr = fmt.Errorf("stop grpc: %w", ctx.Err())
+		}
+	})
+	wg.Wait()
+
+	s.bufServer.Stop()
+	_ = s.bufListener.Close()
+	_ = s.memConn.Close()
+	var metricsErr error
+	if metricsServer != nil {
+		metricsErr = metricsServer.Shutdown(ctx)
+	}
+	return errors.Join(httpErr, grpcErr, metricsErr)
+}
+
+// listener is an in-memory net.Listener backing Conn.
 type listener struct {
-	addr        net.Addr
 	connections chan net.Conn
 	done        chan struct{}
-	mu          sync.Mutex
+	closeOnce   sync.Once
 }
 
 func newListener() *listener {
 	return &listener{connections: make(chan net.Conn), done: make(chan struct{})}
 }
 
-// Accept implement Accept
+// Accept implements net.Listener.
 func (l *listener) Accept() (net.Conn, error) {
 	select {
 	case <-l.done:
@@ -512,51 +533,58 @@ func (l *listener) Accept() (net.Conn, error) {
 	}
 }
 
-// Close the implement close
+// Close implements net.Listener.
 func (l *listener) Close() error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	select {
-	case <-l.done:
-		break
-	default:
-		close(l.done)
-	}
+	l.closeOnce.Do(func() { close(l.done) })
 	return nil
 }
 
-// DialContext implement DialContext
-func (l *listener) DialContext(_ context.Context, _ string) (net.Conn, error) {
+// DialContext connects a client to the in-memory server.
+func (l *listener) DialContext(ctx context.Context, _ string) (net.Conn, error) {
 	serverSide, clientSide := net.Pipe()
-	l.addr = serverSide.LocalAddr()
-	l.connections <- serverSide
-	return clientSide, nil
-}
-
-// Addr implement Addr
-func (l *listener) Addr() net.Addr {
-	return l.addr
-}
-
-func chainUnaryInterceptors(interceptors []grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
-	if len(interceptors) == 0 {
-		return nil
+	select {
+	case l.connections <- serverSide:
+		return clientSide, nil
+	case <-l.done:
+	case <-ctx.Done():
 	}
-	if len(interceptors) == 1 {
+	_ = serverSide.Close()
+	_ = clientSide.Close()
+	return nil, net.ErrClosed
+}
+
+// Addr implements net.Listener.
+func (l *listener) Addr() net.Addr {
+	return memAddr{}
+}
+
+type memAddr struct{}
+
+func (memAddr) Network() string { return "memory" }
+func (memAddr) String() string  { return "grpcmux-memconn" }
+
+// chainUnaryInterceptors composes interceptors into one, outermost first.
+// Each call builds its own chain, so an interceptor may invoke its handler
+// more than once (for example, to retry).
+func chainUnaryInterceptors(interceptors []grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
+	switch len(interceptors) {
+	case 0:
+		return nil
+	case 1:
 		return interceptors[0]
 	}
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (any, error) {
-		var i int
-		var next grpc.UnaryHandler
-		next = func(ctx context.Context, req any) (any, error) {
-			if i == len(interceptors)-1 {
-				return interceptors[i](ctx, req, info, handler)
-			}
-			i++
-			return interceptors[i-1](ctx, req, info, next)
-		}
-		return next(ctx, req)
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return interceptors[0](ctx, req, info, chainedHandler(interceptors, 0, info, handler))
+	}
+}
+
+func chainedHandler(interceptors []grpc.UnaryServerInterceptor, curr int,
+	info *grpc.UnaryServerInfo, final grpc.UnaryHandler,
+) grpc.UnaryHandler {
+	if curr == len(interceptors)-1 {
+		return final
+	}
+	return func(ctx context.Context, req any) (any, error) {
+		return interceptors[curr+1](ctx, req, info, chainedHandler(interceptors, curr+1, info, final))
 	}
 }

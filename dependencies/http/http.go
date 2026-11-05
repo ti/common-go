@@ -4,18 +4,20 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json/v2"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/ti/common-go/log"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -23,6 +25,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/ti/common-go/log"
 )
 
 // HTTP the http dep.
@@ -40,12 +44,20 @@ type HTTP struct {
 	resolverHostPath      string
 	addr                  string
 	tryTimes              int
+	backoff               time.Duration
+	retryNonIdempotent    bool
 	tracing               bool
 	log                   bool
 	logBody               bool
 	hasResolver           bool
 	noMetrics             bool
 	bufSize               int
+
+	// baseTransport is the client's own *http.Transport (before tracing
+	// wrapping), used to derive per-proxy transports. Nil when a custom
+	// non-*http.Transport RoundTripper was supplied.
+	baseTransport *http.Transport
+	proxyClients  sync.Map // proxy URL string -> *http.Client
 }
 
 var resolvers = map[string]Resolver{}
@@ -76,23 +88,61 @@ func New(ctx context.Context, uri string, opts ...Option) (client *HTTP, err err
 	return h, nil
 }
 
-// Init the http client with url params
+// Init configures the client from the URI. Query parameters:
+//
+//	timeout=5s              per-request timeout (default 10s)
+//	try=N                   retry up to N times (see Request for which requests are retried)
+//	backoff=100ms           base retry backoff; doubles per attempt with jitter, capped at max(2s, backoff)
+//	retryNonIdempotent=true also retry POST/PATCH after the request may have reached the server
+//	proxy=http://host:port  send this client's requests through a proxy
+//	maxIdlePerHost=64       idle connections kept per host
+//	idleTimeout=90s         how long idle connections are kept
+//	h2c=true                HTTP/2 without TLS (prior knowledge) for http:// URLs
+//	tracing=true            OpenTelemetry client spans
+//	log=true, logBody=true  access log (with bodies)
+//	metrics=false           disable Prometheus client metrics
+//	emitUnpopulated=true    include zero values when sending proto messages
+//	bufSize=N               Download buffer size
+//
+// A client supplied with WithHTTPClient is copied, never modified.
 func (h *HTTP) Init(ctx context.Context, u *url.URL) error {
 	query := u.Query()
-	if h.client == nil {
-		h.client = &http.Client{
-			Timeout: 10 * time.Second,
-		}
-		h.SetTransport(http.DefaultTransport)
-	}
+	const trueStr = "true"
 	h.uri = u
-	if timeout, _ := time.ParseDuration(query.Get("timeout")); timeout > 0 {
-		h.client.Timeout = timeout
+	h.tracing = query.Get("tracing") == trueStr
+	h.log = query.Get("log") == trueStr
+	h.logBody = query.Get("logBody") == trueStr
+	if h.logBody {
+		h.log = true
 	}
+	h.proxy = query.Get("proxy")
+	h.tryTimes, _ = strconv.Atoi(query.Get("try"))
+	h.retryNonIdempotent = query.Get("retryNonIdempotent") == trueStr
+	h.backoff = 100 * time.Millisecond
+	if d, err := time.ParseDuration(query.Get("backoff")); err == nil && d > 0 {
+		h.backoff = d
+	}
+	h.bufSize, _ = strconv.Atoi(query.Get("bufSize"))
+	if h.bufSize == 0 {
+		h.bufSize = 96 * 1024
+	}
+	timeout, _ := time.ParseDuration(query.Get("timeout"))
+
+	var proxyURL *url.URL
+	if h.proxy != "" {
+		var err error
+		if proxyURL, err = url.Parse(h.proxy); err != nil {
+			return fmt.Errorf("parse proxy %q: %w", h.proxy, err)
+		}
+	}
+	if err := h.initClient(query, timeout, proxyURL); err != nil {
+		return err
+	}
+
 	h.protoJSONMarshaller = &protojson.MarshalOptions{
 		UseProtoNames: true,
 	}
-	if query.Get("emitUnpopulated") == "true" {
+	if query.Get("emitUnpopulated") == trueStr {
 		h.protoJSONMarshaller.EmitUnpopulated = true
 	}
 	h.noMetrics = query.Get("metrics") == "false"
@@ -100,29 +150,14 @@ func (h *HTTP) Init(ctx context.Context, u *url.URL) error {
 		h.metrics = defaultClientMetrics
 	}
 	h.protoJSONUnmarshaller = &protojson.UnmarshalOptions{DiscardUnknown: true}
-	h.tryTimes, _ = strconv.Atoi(query.Get("try"))
-	h.bufSize, _ = strconv.Atoi(query.Get("bufSize"))
-	const trueStr = "true"
-	h.tracing = query.Get("tracing") == trueStr
-	h.log = query.Get("log") == trueStr
-	h.logBody = query.Get("logBody") == trueStr
-	h.proxy = query.Get("proxy")
-	if h.logBody {
-		h.log = true
-	}
 	if len(u.Path) > 0 {
 		h.path = u.Path
-	}
-	if h.bufSize == 0 {
-		h.bufSize = 96 * 1024
 	}
 	h.base = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	if h.tracing {
 		h.otelTracer = otel.Tracer("client/" + u.Host)
 	}
-	scheme := u.Scheme
-
-	if !internalSheme[scheme] {
+	if !internalSheme[u.Scheme] {
 		resolver, ok := resolvers[u.Scheme]
 		if !ok {
 			return errors.New("can not find registered http resolver for " + u.Scheme)
@@ -137,18 +172,116 @@ func (h *HTTP) Init(ctx context.Context, u *url.URL) error {
 		h.path = ""
 		h.addr = fmt.Sprintf("%s://%s", u.Scheme, h.resolverHostPath)
 	}
-	if h.proxy != "" {
-		proxyURL, err := url.Parse(h.proxy)
-		if err != nil {
-			return errors.New("parse proxy error %s" + h.proxy)
-		}
-		if t, ok := h.client.Transport.(*http.Transport); ok {
-			t.Proxy = func(request *http.Request) (*url.URL, error) {
-				return proxyURL, nil
-			}
-		}
-	}
 	return nil
+}
+
+// initClient builds the client: either a fresh one with a tuned transport, or
+// a copy of the one supplied with WithHTTPClient.
+func (h *HTTP) initClient(query url.Values, timeout time.Duration, proxyURL *url.URL) error {
+	var c http.Client
+	if h.client != nil {
+		c = *h.client // copy: never mutate the caller's client
+	} else {
+		c.Timeout = 10 * time.Second
+		c.Transport = newTransport(query)
+	}
+	if timeout > 0 {
+		c.Timeout = timeout
+	}
+	switch t := c.Transport.(type) {
+	case nil:
+		h.baseTransport = cloneDefaultTransport()
+	case *http.Transport:
+		h.baseTransport = t
+	}
+	if proxyURL != nil {
+		if h.baseTransport == nil {
+			return errors.New("proxy= needs an *http.Transport; the supplied client uses " +
+				fmt.Sprintf("%T", c.Transport))
+		}
+		h.baseTransport = h.baseTransport.Clone()
+		h.baseTransport.Proxy = http.ProxyURL(proxyURL)
+	}
+	rt := c.Transport
+	if h.baseTransport != nil {
+		rt = h.baseTransport
+	}
+	if h.tracing {
+		rt = otelhttp.NewTransport(rt)
+	}
+	c.Transport = rt
+	h.client = &c
+	return nil
+}
+
+// cloneDefaultTransport returns a private copy of http.DefaultTransport's
+// settings (proxy from environment, dial and TLS timeouts, HTTP/2).
+func cloneDefaultTransport() *http.Transport {
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		return t.Clone()
+	}
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+}
+
+// newTransport returns a transport tuned for service-to-service traffic.
+// http.DefaultTransport keeps only 2 idle connections per host, which forces
+// a new TCP (and TLS) handshake for most concurrent requests.
+func newTransport(query url.Values) *http.Transport {
+	t := cloneDefaultTransport()
+	t.MaxIdleConns = 512
+	t.MaxIdleConnsPerHost = 64
+	t.IdleConnTimeout = 90 * time.Second
+	if n, err := strconv.Atoi(query.Get("maxIdlePerHost")); err == nil && n > 0 {
+		t.MaxIdleConnsPerHost = n
+	}
+	if d, err := time.ParseDuration(query.Get("idleTimeout")); err == nil && d > 0 {
+		t.IdleConnTimeout = d
+	}
+	if query.Get("h2c") == "true" {
+		p := &http.Protocols{}
+		p.SetUnencryptedHTTP2(true) // http:// → HTTP/2 with prior knowledge
+		p.SetHTTP2(true)            // https:// → HTTP/2 over TLS
+		t.Protocols = p
+	}
+	return t
+}
+
+// clientFor returns the client to use for ctx: the per-proxy client when the
+// context carries a proxy (WithProxy), otherwise the main client.
+func (h *HTTP) clientFor(ctx context.Context) *http.Client {
+	proxyURL, ok := ProxyFromContext(ctx)
+	if !ok {
+		return h.client
+	}
+	key := proxyURL.String()
+	if c, ok := h.proxyClients.Load(key); ok {
+		return c.(*http.Client)
+	}
+	base := h.baseTransport
+	if base == nil {
+		base = cloneDefaultTransport()
+	}
+	tr := base.Clone()
+	tr.Proxy = http.ProxyURL(proxyURL)
+	var rt http.RoundTripper = tr
+	if h.tracing {
+		rt = otelhttp.NewTransport(tr)
+	}
+	c := &http.Client{
+		Transport:     rt,
+		Timeout:       h.client.Timeout,
+		CheckRedirect: h.client.CheckRedirect,
+		Jar:           h.client.Jar,
+	}
+	actual, _ := h.proxyClients.LoadOrStore(key, c)
+	return actual.(*http.Client)
 }
 
 func getResolverHostPath(u *url.URL) (string, error) {
@@ -215,15 +348,19 @@ func (h *HTTP) Request(ctx context.Context, method,
 		defer span.End()
 	}
 	var resp *http.Response
-	for i := 0; i <= h.tryTimes; i++ {
-		resp, err = h.request(ctx, method,
-			httpRequestURL, header, reqBody)
+	safeToRetry := h.retryNonIdempotent || isIdempotent(method) || header.Get("Idempotency-Key") != ""
+	for attempt := 0; ; attempt++ {
+		resp, err = h.request(ctx, method, httpRequestURL, header, reqBody)
 		tryTimes++
-		if err == nil {
+		if attempt >= h.tryTimes || !shouldRetry(resp, err, safeToRetry) {
 			break
 		}
 		if resp != nil {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10)) // let the connection be reused
 			_ = resp.Body.Close()
+		}
+		if waitErr := sleepCtx(ctx, retryDelay(h.backoff, attempt)); waitErr != nil {
+			return waitErr
 		}
 	}
 	if err != nil {
@@ -287,7 +424,7 @@ func (h *HTTP) Download(ctx context.Context, downloadURL string, writer io.Write
 		downloadURL = base + downloadURL
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
-	resp, errGet := h.client.Do(req)
+	resp, errGet := h.clientFor(ctx).Do(req)
 	if errGet != nil {
 		return 0, errGet
 	}
@@ -389,8 +526,10 @@ func (h *HTTP) onRequestClose(ctx context.Context,
 		}
 	}
 	if h.metrics != nil {
-		h.metrics.clientHandledCounter.WithLabelValues(h.uri.Scheme, h.uri.Host, path, strconv.Itoa(statusCode)).Inc()
-		h.metrics.clientHandledHistogram.WithLabelValues(h.uri.Scheme, h.uri.Host, path).Observe(used.Seconds())
+		// Query strings are unbounded label values; keep only the path.
+		metricPath, _, _ := strings.Cut(path, "?")
+		h.metrics.clientHandledCounter.WithLabelValues(h.uri.Scheme, h.uri.Host, metricPath, strconv.Itoa(statusCode)).Inc()
+		h.metrics.clientHandledHistogram.WithLabelValues(h.uri.Scheme, h.uri.Host, metricPath).Observe(used.Seconds())
 	}
 }
 
@@ -411,23 +550,72 @@ func (h *HTTP) request(ctx context.Context, method, uri string,
 		return nil, err
 	}
 	request.Header = header
-	if proxyURL, ok := ProxyFromContext(ctx); ok {
-		transport := &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
-		}
-		client := &http.Client{
-			Timeout:   h.client.Timeout,
-			Transport: transport,
-		}
-		return client.Do(request)
-	}
-	return h.client.Do(request)
+	return h.clientFor(ctx).Do(request)
 }
 
-// Close the http client
+// Close releases idle connections of this client and its per-proxy clients.
 func (h *HTTP) Close(_ context.Context) error {
 	h.client.CloseIdleConnections()
+	h.proxyClients.Range(func(_, c any) bool {
+		c.(*http.Client).CloseIdleConnections()
+		return true
+	})
 	return nil
+}
+
+// isIdempotent reports whether a request with this method can be repeated
+// safely (RFC 9110 §9.2.2).
+func isIdempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace,
+		http.MethodPut, http.MethodDelete:
+		return true
+	}
+	return false
+}
+
+// shouldRetry decides whether an attempt is worth repeating. Connection
+// failures before the request was sent (dial errors) are always retried;
+// other errors and 502/503/504 responses only when the request is safe to
+// repeat.
+func shouldRetry(resp *http.Response, err error, safeToRetry bool) bool {
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return false
+		}
+		if opErr, ok := errors.AsType[*net.OpError](err); ok && opErr.Op == "dial" {
+			return true
+		}
+		return safeToRetry
+	}
+	switch resp.StatusCode {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return safeToRetry
+	}
+	return false
+}
+
+// retryDelay is exponential backoff with jitter: base·2^attempt, capped at
+// max(2s, base), randomized to the upper half so retries don't synchronize.
+func retryDelay(base time.Duration, attempt int) time.Duration {
+	limit := max(2*time.Second, base)
+	d := base << min(attempt, 16)
+	if d <= 0 || d > limit {
+		d = limit
+	}
+	half := d / 2
+	return half + rand.N(half+1)
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Resolve return one of the addr
@@ -438,8 +626,12 @@ func (h *HTTP) Resolve(ctx context.Context) (addr string, err error) {
 	return h.addr, nil
 }
 
-// SetTransport set the http transport
+// SetTransport replaces the client's transport (wrapped for tracing when
+// tracing=true).
 func (h *HTTP) SetTransport(transport http.RoundTripper) {
+	if t, ok := transport.(*http.Transport); ok {
+		h.baseTransport = t
+	}
 	if h.tracing {
 		h.client.Transport = otelhttp.NewTransport(transport)
 	} else {

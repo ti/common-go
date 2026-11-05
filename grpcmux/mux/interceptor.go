@@ -16,6 +16,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/metadata"
+
 	"github.com/ti/common-go/tools/ip"
 
 	"google.golang.org/genproto/googleapis/api/httpbody"
@@ -24,10 +25,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
-	"github.com/ti/common-go/log"
 	"google.golang.org/grpc/codes"
 	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+
+	"github.com/ti/common-go/log"
 )
 
 var noLogMethod = map[string]bool{
@@ -40,6 +42,7 @@ var noLogMethod = map[string]bool{
 var noLogPath = map[string]bool{
 	"/healthz":                           true,
 	"/favicon.ico":                       true,
+	"/readyz":                            true,
 	pbhealth.Health_Check_FullMethodName: true,
 }
 

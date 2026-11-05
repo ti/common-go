@@ -2,9 +2,10 @@ package mux
 
 import (
 	"context"
-	"google.golang.org/grpc/metadata"
 	"net/http"
 	"strings"
+
+	"google.golang.org/grpc/metadata"
 )
 
 type authInfoKey struct{}

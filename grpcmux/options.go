@@ -2,14 +2,17 @@ package grpcmux
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
+
 	muxlogging "github.com/ti/common-go/grpcmux/logging"
 	"github.com/ti/common-go/grpcmux/mux"
 	"github.com/ti/common-go/tools/routerlimit"
-	"google.golang.org/grpc"
 )
 
 var defaultOptions = &options{
@@ -17,6 +20,25 @@ var defaultOptions = &options{
 	grpcAddr:    ":8081",
 	metricsAddr: ":9090",
 	metaTags:    []string{"client_id", "user_id", "device_id", "request_id"},
+
+	keepaliveParams: keepalive.ServerParameters{
+		// Recycle connections so clients re-resolve and rebalance across pods.
+		// MaxConnectionAgeGrace stays at gRPC's default (infinite), so streams
+		// in progress are never cut by this.
+		MaxConnectionAge: time.Minute,
+	},
+	keepalivePolicy: keepalive.EnforcementPolicy{
+		// gRPC's default MinTime is 5 minutes: a client that pings more often
+		// gets GOAWAY "too_many_pings". Accept the 10s+ intervals that client
+		// keepalive (and most proxies) use, also on idle connections.
+		MinTime:             10 * time.Second,
+		PermitWithoutStream: true,
+	},
+	readHeaderTimeout:    10 * time.Second,
+	idleTimeout:          5 * time.Minute,
+	maxHeaderBytes:       1 << 20,
+	maxConcurrentStreams: 1000,
+	maxRequestBodyBytes:  32 << 20, // matches the largest message the HTTP bridges accept
 }
 
 type options struct {
@@ -45,6 +67,14 @@ type options struct {
 	tlsKeyFile                   string
 	cors                         *mux.CORSConfig
 	disableClientPriority        bool
+	withoutHTTPInterceptors      bool
+	keepaliveParams              keepalive.ServerParameters
+	keepalivePolicy              keepalive.EnforcementPolicy
+	readHeaderTimeout            time.Duration
+	idleTimeout                  time.Duration
+	maxHeaderBytes               int
+	maxConcurrentStreams         int
+	maxRequestBodyBytes          int64
 }
 
 func evaluateOptions(opts []Option) *options {
@@ -59,7 +89,9 @@ func evaluateOptions(opts []Option) *options {
 // Option the option for this module
 type Option func(*options)
 
-// WithoutKeepAliveParams do not auto add grpc.KeepaliveParams on server
+// WithoutKeepAliveParams leaves the gRPC server's keepalive parameters and
+// enforcement policy at gRPC's own defaults instead of grpcmux's (see
+// [WithKeepalive]).
 func WithoutKeepAliveParams() Option {
 	return func(o *options) {
 		o.withOutKeepAliveOpts = true
@@ -112,7 +144,8 @@ func WithMetaTags(tags []string) Option {
 // CORSConfig is an alias for mux.CORSConfig exposed at the grpcmux package level.
 type CORSConfig = mux.CORSConfig
 
-// Config the config exporter.
+// Config is the file/YAML form of the most common options. Zero values keep
+// the defaults.
 type Config struct {
 	GrpcAddr     string      `yaml:"grpcAddr"`
 	HTTPAddr     string      `yaml:"httpAddr"`
@@ -123,6 +156,12 @@ type Config struct {
 	TLSCertFile  string      `yaml:"tlsCertFile"`
 	TLSKeyFile   string      `yaml:"tlsKeyFile"`
 	CORS         *CORSConfig `yaml:"cors"`
+	// MaxRequestBodyBytes limits request bodies on the ConnectRPC and
+	// auto-HTTP bridges (default 32 MiB).
+	MaxRequestBodyBytes int64 `yaml:"maxRequestBodyBytes"`
+	// DisableHTTPInterceptors turns off the gRPC interceptor chain on the
+	// HTTP bridges; see [WithoutHTTPInterceptors].
+	DisableHTTPInterceptors bool `yaml:"disableHTTPInterceptors"`
 }
 
 // WithConfig init with config
@@ -159,6 +198,12 @@ func WithConfig(c *Config) Option {
 		}
 		if c.CORS != nil {
 			o.cors = c.CORS
+		}
+		if c.MaxRequestBodyBytes > 0 {
+			o.maxRequestBodyBytes = c.MaxRequestBodyBytes
+		}
+		if c.DisableHTTPInterceptors {
+			o.withoutHTTPInterceptors = true
 		}
 	}
 }
@@ -294,10 +339,73 @@ func WithDisableClientPriority() Option {
 	}
 }
 
-// withOptions with the current options.
-func withOptions(opt *options) Option {
+// WithoutHTTPInterceptors stops the HTTP bridges ([RegisterConnectService],
+// [WithAutoHTTP] routes and [WithConnectOptions]) from running the gRPC unary
+// interceptor chain.
+//
+// By default those bridges run the same chain as native gRPC — validator,
+// authz policy, metrics, rate limiter, interceptors added with
+// [WithGRPCUnaryServerInterceptor], and panic recovery — so one service
+// implementation behaves the same on every protocol. Authentication and
+// access logging are the exceptions: the HTTP middleware already does both
+// for HTTP requests.
+//
+// grpc-gateway's generated RegisterXxxHandlerServer functions call the
+// service directly and cannot run interceptors. To get them on REST routes,
+// register the gateway against the in-memory connection instead:
+//
+//	pb.RegisterXxxHandlerClient(ctx, gs.ServeMux(), pb.NewXxxClient(gs.Conn()))
+func WithoutHTTPInterceptors() Option {
 	return func(o *options) {
-		*o = *opt
+		o.withoutHTTPInterceptors = true
+	}
+}
+
+// WithKeepalive sets the gRPC server's keepalive parameters and enforcement
+// policy. The defaults recycle connections every minute (without cutting
+// in-flight streams) and accept client pings every 10s or slower.
+func WithKeepalive(params keepalive.ServerParameters, policy keepalive.EnforcementPolicy) Option {
+	return func(o *options) {
+		o.keepaliveParams = params
+		o.keepalivePolicy = policy
+	}
+}
+
+// WithHTTPTimeouts sets the HTTP server's ReadHeaderTimeout (default 10s) and
+// IdleTimeout (default 5m). Zero keeps a value unchanged.
+//
+// There is deliberately no read/write timeout: those would cut streaming RPCs
+// (server streaming, Connect streams, WebSockets). Bound individual requests
+// with deadlines instead.
+func WithHTTPTimeouts(readHeader, idle time.Duration) Option {
+	return func(o *options) {
+		if readHeader > 0 {
+			o.readHeaderTimeout = readHeader
+		}
+		if idle > 0 {
+			o.idleTimeout = idle
+		}
+	}
+}
+
+// WithMaxConcurrentStreams sets the HTTP/2 concurrent-stream limit per
+// connection on the HTTP port (default 1000).
+func WithMaxConcurrentStreams(n int) Option {
+	return func(o *options) {
+		if n > 0 {
+			o.maxConcurrentStreams = n
+		}
+	}
+}
+
+// WithMaxRequestBodyBytes limits request bodies accepted by the ConnectRPC
+// and auto-HTTP bridges (default 32 MiB). Larger requests fail with
+// RESOURCE_EXHAUSTED.
+func WithMaxRequestBodyBytes(n int64) Option {
+	return func(o *options) {
+		if n > 0 {
+			o.maxRequestBodyBytes = n
+		}
 	}
 }
 

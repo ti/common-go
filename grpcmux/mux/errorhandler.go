@@ -11,10 +11,11 @@ import (
 	"strings"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/ti/common-go/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
+
+	"github.com/ti/common-go/log"
 )
 
 const (

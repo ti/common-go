@@ -34,9 +34,7 @@ var defaultOptions = &options{
 var defaultMarshaler = &runtime.HTTPBodyMarshaler{
 	Marshaler: &runtime.JSONPb{
 		MarshalOptions: defaultMarshalOptions,
-		UnmarshalOptions: protojson.UnmarshalOptions{
-			DiscardUnknown: true,
-		},
+		DiscardUnknown: true,
 	},
 }
 
@@ -156,18 +154,14 @@ func WithMarshalOptions(marshalOptions protojson.MarshalOptions) Option {
 		o.bodyMarshaler = &runtime.HTTPBodyMarshaler{
 			Marshaler: &runtime.JSONPb{
 				MarshalOptions: o.marshalOptions,
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
+				DiscardUnknown: true,
 			},
 		}
 		marshalOptions.EmitUnpopulated = false
 		o.errorMarshaler = &runtime.HTTPBodyMarshaler{
 			Marshaler: &runtime.JSONPb{
 				MarshalOptions: marshalOptions,
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
+				DiscardUnknown: true,
 			},
 		}
 	}
@@ -237,18 +231,14 @@ func WithUseCamelCase() Option {
 		o.bodyMarshaler = &runtime.HTTPBodyMarshaler{
 			Marshaler: &runtime.JSONPb{
 				MarshalOptions: o.marshalOptions,
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
+				DiscardUnknown: true,
 			},
 		}
 		// Update error marshaler (for consistent error response format)
 		o.errorMarshaler = &runtime.HTTPBodyMarshaler{
 			Marshaler: &runtime.JSONPb{
 				MarshalOptions: o.marshalOptions,
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
+				DiscardUnknown: true,
 			},
 		}
 	}
