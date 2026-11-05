@@ -343,12 +343,13 @@ func WithDisableClientPriority() Option {
 // [WithAutoHTTP] routes and [WithConnectOptions]) from running the gRPC unary
 // interceptor chain.
 //
-// By default those bridges run the same chain as native gRPC — validator,
-// authz policy, metrics, rate limiter, interceptors added with
+// By default those bridges run the same chain as native gRPC — validation,
+// authz policy, metrics, interceptors added with
 // [WithGRPCUnaryServerInterceptor], and panic recovery — so one service
-// implementation behaves the same on every protocol. Authentication and
-// access logging are the exceptions: the HTTP middleware already does both
-// for HTTP requests.
+// implementation behaves the same on every protocol. Authentication, access
+// logging and rate limiting are the exceptions: HTTP middleware does them for
+// HTTP requests (rate-limit HTTP traffic with routerlimit.NewHandler in
+// WithHTTPMiddleWares).
 //
 // grpc-gateway's generated RegisterXxxHandlerServer functions call the
 // service directly and cannot run interceptors. To get them on REST routes,

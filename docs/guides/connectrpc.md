@@ -21,7 +21,7 @@ This registers the service on the gRPC server and mounts every **unary** method 
 | Metadata | Request headers arrive as incoming gRPC metadata; `grpc.SetHeader` values are response headers and `grpc.SetTrailer` values are `Trailer-` prefixed headers |
 | Limits | Request bodies above `WithMaxRequestBodyBytes` (default 32 MiB) fail with `resource_exhausted` |
 | JSON names | snake_case by default, camelCase with `useCamelCase` ([json-format.md](json-format.md)); input accepts both |
-| Interceptors | The gRPC unary chain runs (validation, authz, metrics, rate limit, custom interceptors, recovery); see [server.md](server.md#interceptors) |
+| Interceptors | The gRPC unary chain runs (validation, authz, metrics, custom interceptors, recovery; rate limiting comes from the routerlimit HTTP middleware); see [server.md](server.md#interceptors) |
 
 The HTTP middleware (CORS, request ID, access log, auth) wraps these routes like every other HTTP route.
 
@@ -42,7 +42,7 @@ userv1connect.RegisterUserServiceHandler(gs.ConnectServer(), handler) // Connect
 
 `gs.ConnectServer()` is mounted on the HTTP port with `connecthttp` when the server starts, so its procedures speak Connect, gRPC-Web and gRPC behind the HTTP middleware (CORS, request ID, auth, access log). grpcmux adds two interceptors:
 
-- unary calls run the grpcmux unary interceptor chain (validation, authz, metrics, rate limit, custom interceptors, recovery);
+- unary calls run the grpcmux unary interceptor chain (validation, authz, metrics, custom interceptors, recovery);
 - gRPC status errors returned by handlers become `*connect.Error` with the same code, message and details. connect-go v2 only sends messages of `*connect.Error` to clients, so without this a handler shared with the gRPC server would answer `unknown` with no message.
 
 JSON follows the server's snake_case/camelCase setting, and request size is limited by `WithMaxRequestBodyBytes`. Register handlers before `Start`.

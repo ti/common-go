@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +23,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoregistry"
+
+	"github.com/ti/common-go/tools/routerlimit"
 )
 
 func statusCode(err error) string {
@@ -404,5 +407,43 @@ func TestConnectServerRunsInterceptors(t *testing.T) {
 	}
 	if calls != 9 {
 		t.Fatalf("handler calls = %d, want 9 (denied calls never reach it)", calls)
+	}
+}
+
+// Rate limiting is applied once per request. HTTP requests are limited by the
+// routerlimit HTTP middleware, gRPC by the interceptor; the HTTP bridges must
+// not run the limiter interceptor too, or every Connect call would be counted
+// twice under the same key (half the configured quota).
+func TestRateLimitCountsConnectCallsOnce(t *testing.T) {
+	var counted atomic.Int32
+	limiter := &routerlimit.Limiter{
+		Config: &routerlimit.RouterLimit{Limit: []routerlimit.Limit{
+			{Prefix: testCheckPath, Headers: []string{"ip"}, Quota: 100, Duration: time.Minute},
+		}},
+		PersistenceFn: func(context.Context, string, int, time.Duration, int) (int, time.Duration, bool) {
+			counted.Add(1)
+			return 99, time.Minute, true
+		},
+	}
+	s, _ := connectServer(t, WithLimiter(limiter), WithHTTPMiddleWares(routerlimit.NewHandler(limiter)))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for range 3 {
+		if _, _, err := connectClient(s, testCheckPath).call(ctx, &pbhealth.HealthCheckRequest{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := counted.Load(); n != 3 {
+		t.Fatalf("limiter counted %d times for 3 Connect calls, want 3", n)
+	}
+}
+
+// The gRPC limiter interceptor works without an explicit store (in-memory
+// default), like the HTTP middleware.
+func TestLimiterInterceptorDefaultsToMemory(t *testing.T) {
+	limiter := &routerlimit.Limiter{Config: &routerlimit.RouterLimit{}}
+	_ = routerlimit.UnaryServerInterceptor(limiter)
+	if limiter.PersistenceFn == nil {
+		t.Fatal("PersistenceFn not defaulted")
 	}
 }

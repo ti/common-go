@@ -13,6 +13,7 @@ import (
 
 // UnaryServerInterceptor returns a new unary server interceptors that performs request rate limiting.
 func UnaryServerInterceptor(limiter *Limiter) grpc.UnaryServerInterceptor {
+	ensurePersistence(limiter)
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
@@ -26,6 +27,7 @@ func UnaryServerInterceptor(limiter *Limiter) grpc.UnaryServerInterceptor {
 
 // StreamServerInterceptor returns a new stream server interceptor that performs rate limiting on the request.
 func StreamServerInterceptor(limiter *Limiter) grpc.StreamServerInterceptor {
+	ensurePersistence(limiter)
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
@@ -34,6 +36,13 @@ func StreamServerInterceptor(limiter *Limiter) grpc.StreamServerInterceptor {
 			return err
 		}
 		return handler(srv, stream)
+	}
+}
+
+// ensurePersistence defaults to the in-memory store, as NewHandler does.
+func ensurePersistence(limiter *Limiter) {
+	if limiter.PersistenceFn == nil {
+		limiter.PersistenceFn = newMemLimiter().AllowN
 	}
 }
 

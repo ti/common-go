@@ -21,11 +21,12 @@ Upgrade guide: [docs/upgrades/2026-Q4.md](docs/upgrades/2026-Q4.md).
 - JSON for caller-owned types (HTTP client bodies, mqlru, SQL params, Mongo page results, codecs) silently changed to json/v2 semantics (case-sensitive fields, `[]` for nil); restored v1 semantics.
 - `chainUnaryInterceptors` broke interceptors that call the handler more than once; the in-memory listener raced and blocked after Close.
 - Mock database: errors had no gRPC code, and `FindRows` decoded to `map[string]any` instead of the requested type.
+- `routerlimit.UnaryServerInterceptor`/`StreamServerInterceptor` panicked without a `PersistenceFn`; they now default to the in-memory store like the HTTP middleware.
 - `log.Fatal` dropped the logger's fields (it used the standard library logger).
 - `dependencies/sql`: `log=` was ignored, and package options were left in the driver DSN unless another option was set.
 
 ### Added
-- Interceptor parity: the unary interceptor chain (protovalidate, PGV, authz, metrics, rate limit, custom interceptors, recovery) runs on the ConnectRPC bridge, auto-HTTP routes and connect-go v2 handlers; `WithoutHTTPInterceptors()` / `disableHTTPInterceptors` opts out.
+- Interceptor parity: the unary interceptor chain (protovalidate, PGV, authz, metrics, custom interceptors, recovery) runs on the ConnectRPC bridge, auto-HTTP routes and connect-go v2 handlers; `WithoutHTTPInterceptors()` / `disableHTTPInterceptors` opts out.
 - protovalidate (`buf.validate`) enforcement on every protocol.
 - Connect bridge: gzip, `Connect-Timeout-Ms`, protocol-version check, GET for `NO_SIDE_EFFECTS` methods, error details, header/trailer metadata, 415 for streaming content types, `WithMaxRequestBodyBytes`.
 - `Server.ConnectServer()`: connect-go v2 `connect.Server` mounted on the HTTP port (Connect, gRPC-Web, gRPC), with the interceptor chain and gRPC-status-to-`connect.Error` conversion.

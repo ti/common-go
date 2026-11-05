@@ -55,7 +55,7 @@ Native gRPC requests run this unary/stream chain (outermost first):
 7. your interceptors (`WithGRPCUnaryServerInterceptor`, `WithGRPCStreamServerInterceptors`);
 8. panic recovery (unless `PANIC_RECOVERY=false`).
 
-**The HTTP bridges run the same chain**: `RegisterConnectService`, `WithAutoHTTP` routes and connect-go v2 handlers on `gs.ConnectServer()` (unary calls) all apply steps 1, 3, 4, 6, 7 and 8. Auth and access logging are not repeated there because the HTTP middleware already did them. Opt out with `WithoutHTTPInterceptors()` (or `disableHTTPInterceptors: true`).
+**The HTTP bridges run the same chain**: `RegisterConnectService`, `WithAutoHTTP` routes and connect-go v2 handlers on `gs.ConnectServer()` (unary calls) all apply steps 1, 3, 4, 7 and 8. Auth, access logging and rate limiting are left to HTTP middleware there: the HTTP middleware already authenticates and logs every request, and HTTP traffic is rate-limited by `routerlimit.NewHandler(limiter)` in `WithHTTPMiddleWares` (pass the same `Limiter` as `WithLimiter`). Running the interceptor as well would count each Connect call twice under the same key. Opt out with `WithoutHTTPInterceptors()` (or `disableHTTPInterceptors: true`).
 
 grpc-gateway's generated `RegisterXxxHandlerServer` calls the implementation directly and cannot run interceptors; use `RegisterXxxHandlerClient` with `gs.Conn()` when REST routes must go through the chain.
 

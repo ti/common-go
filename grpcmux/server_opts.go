@@ -46,8 +46,8 @@ func NewFullMiddleWare(opts ...Option) (unaryServerInterceptors []grpc.UnaryServ
 
 // interceptorChains holds the chains for each transport. httpUnary is the
 // chain the HTTP bridges (ConnectRPC, auto-HTTP, connect-go handlers) run: the
-// gRPC chain without auth and access logging, which the HTTP middleware
-// already performs for every HTTP request.
+// gRPC chain without auth, access logging and rate limiting, which HTTP
+// middleware performs for HTTP requests.
 type interceptorChains struct {
 	grpcUnary  []grpc.UnaryServerInterceptor
 	grpcStream []grpc.StreamServerInterceptor
@@ -93,7 +93,10 @@ func buildInterceptors(o *options) interceptorChains {
 	grpcOnly(muxlogging.UnaryServerInterceptor(interceptorLogger(), o.loggingOpts...),
 		muxlogging.StreamServerInterceptor(interceptorLogger(), o.loggingOpts...))
 	if o.limiter != nil {
-		both(routerlimit.UnaryServerInterceptor(o.limiter), routerlimit.StreamServerInterceptor(o.limiter))
+		// gRPC only: HTTP traffic is limited by the routerlimit HTTP middleware
+		// (routerlimit.NewHandler). Running both on an HTTP bridge would count
+		// each Connect call twice under the same key.
+		grpcOnly(routerlimit.UnaryServerInterceptor(o.limiter), routerlimit.StreamServerInterceptor(o.limiter))
 	}
 	c.grpcUnary = append(c.grpcUnary, o.grpcUnaryServerInterceptors...)
 	c.httpUnary = append(c.httpUnary, o.grpcUnaryServerInterceptors...)
