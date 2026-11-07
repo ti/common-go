@@ -51,7 +51,7 @@ func TestAuthFuncNilProviderAdmitsEverything(t *testing.T) {
 func TestAuthFunc(t *testing.T) {
 	kp := generateTestKeyPair(t)
 	p := NewFromDiscovery(
-		Config{Issuer: testIssuer, ClientID: "test-client", Scope: DefaultScope, Access: mustPolicy(t, "group=admin")},
+		Config{Issuer: testIssuer, ClientID: "test-client", Scope: DefaultScope, Access: mustPolicy(t, "groups=admin")},
 		Discovery{Issuer: testIssuer},
 		WithKeys(map[string]*rsa.PublicKey{kp.kid: kp.public}),
 	)
@@ -79,7 +79,7 @@ func TestAuthFunc(t *testing.T) {
 	}
 
 	t.Run("valid token", func(t *testing.T) {
-		token := signJWT(t, kp, validClaims("u1", map[string]any{"group": "admin"}))
+		token := signJWT(t, kp, validClaims("u1", map[string]any{"groups": "admin"}))
 
 		ctx, err := auth(incoming("Bearer " + token))
 		if err != nil {

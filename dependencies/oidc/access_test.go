@@ -31,18 +31,18 @@ func mustPolicy(t *testing.T, rawQuery string) AccessPolicy {
 func TestValidateThenAuthorize(t *testing.T) {
 	kp := generateTestKeyPair(t)
 	p := NewFromDiscovery(
-		Config{Issuer: testIssuer, ClientID: "test-client", Access: mustPolicy(t, "group=labs%20admin")},
+		Config{Issuer: testIssuer, ClientID: "test-client", Access: mustPolicy(t, "groups=labs%20admin")},
 		Discovery{Issuer: testIssuer},
 		WithKeys(map[string]*rsa.PublicKey{kp.kid: kp.public}),
 	)
 
-	base := func(group any) map[string]any {
+	base := func(groups any) map[string]any {
 		return map[string]any{
-			"iss":   "https://test-issuer.example.com",
-			"sub":   "user-1",
-			"aud":   "test-client",
-			"exp":   time.Now().Add(time.Hour).Unix(),
-			"group": group,
+			"iss":    "https://test-issuer.example.com",
+			"sub":    "user-1",
+			"aud":    "test-client",
+			"exp":    time.Now().Add(time.Hour).Unix(),
+			"groups": groups,
 		}
 	}
 
@@ -54,8 +54,8 @@ func TestValidateThenAuthorize(t *testing.T) {
 	if err != nil {
 		t.Errorf("Authorize(admin) = %v, want nil", err)
 	}
-	if got := claims.AllGroups(); len(got) != 1 || got[0] != "admin" {
-		t.Errorf("AllGroups = %v", got)
+	if got := claims.Groups; len(got) != 1 || got[0] != "admin" {
+		t.Errorf("Groups = %v", got)
 	}
 
 	claims, err = p.ValidateToken(t.Context(), signJWT(t, kp, base("users")))

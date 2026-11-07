@@ -1,12 +1,12 @@
 {
-  "description": "Claim access rules from the auth URI query. Every query parameter other than scope and oidc_logout is a rule: the named claim must contain at least one listed value (OR); all rules must match (AND). Values split on spaces (%20 or +) and commas, in both the URI and string claims. Dotted names match an exact top-level claim first, then nested objects. A last path segment of group/groups also reads its counterpart. Claims are raw JSON text so integer precision is preserved. Denials are 403, after token validation (401).",
+  "description": "Claim access rules from the auth URI query. Every query parameter other than scope and oidc_logout is a rule: the named claim must contain at least one listed value (OR); all rules must match (AND). Values split on spaces (%20 or +) and commas, in both the URI and string claims. Dotted names match an exact top-level claim first, then nested objects. No claim name is special or aliased (groups does not read group). Claims are raw JSON text so integer precision is preserved. Denials are 403, after token validation (401).",
   "parse_cases": [
     {
       "name": "skips_provider_options",
-      "query": "scope=offline%20openid&oidc_logout=false&group=labs%20admin",
+      "query": "scope=offline%20openid&oidc_logout=false&groups=labs%20admin",
       "rules": [
         {
-          "path": "group",
+          "path": "groups",
           "values": [
             "labs",
             "admin"
@@ -15,11 +15,44 @@
       ]
     },
     {
-      "name": "sorted_and_merged",
-      "query": "user.role=a,b&group=x&user.role=c+a",
+      "name": "multi_claim_example",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
       "rules": [
         {
-          "path": "group",
+          "path": "data.email",
+          "values": [
+            "i@example.com",
+            "test@gmail.com"
+          ]
+        },
+        {
+          "path": "email",
+          "values": [
+            "i@example.com",
+            "test@gmail.com"
+          ]
+        },
+        {
+          "path": "groups",
+          "values": [
+            "labs",
+            "admin"
+          ]
+        },
+        {
+          "path": "sub",
+          "values": [
+            "23321312321"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "sorted_and_merged",
+      "query": "user.role=a,b&groups=x&user.role=c+a",
+      "rules": [
+        {
+          "path": "groups",
           "values": [
             "x"
           ]
@@ -41,12 +74,12 @@
     },
     {
       "name": "empty_value_fails",
-      "query": "scope=openid&group=",
+      "query": "scope=openid&groups=",
       "error": true
     },
     {
       "name": "separator_only_fails",
-      "query": "group=%20,",
+      "query": "groups=%20,",
       "error": true
     },
     {
@@ -63,75 +96,51 @@
       "allow": true
     },
     {
-      "name": "group_string",
-      "query": "group=labs%20admin",
-      "claims": "{\"group\":\"labs\"}",
+      "name": "groups_string",
+      "query": "groups=labs%20admin",
+      "claims": "{\"groups\":\"labs\"}",
       "allow": true
     },
     {
-      "name": "group_space_string",
-      "query": "group=labs%20admin",
-      "claims": "{\"group\":\"users admin\"}",
+      "name": "groups_space_string",
+      "query": "groups=labs%20admin",
+      "claims": "{\"groups\":\"users admin\"}",
       "allow": true
     },
     {
-      "name": "group_comma_string",
-      "query": "group=labs%20admin",
-      "claims": "{\"group\":\"users,admin\"}",
+      "name": "groups_comma_string",
+      "query": "groups=labs%20admin",
+      "claims": "{\"groups\":\"users,admin\"}",
       "allow": true
     },
     {
-      "name": "group_array",
-      "query": "group=labs%20admin",
-      "claims": "{\"group\":[\"users\",\"admin\"]}",
+      "name": "groups_array",
+      "query": "groups=labs%20admin",
+      "claims": "{\"groups\":[\"users\",\"admin\"]}",
       "allow": true
     },
     {
-      "name": "groups_array_alias",
-      "query": "group=labs%20admin",
-      "claims": "{\"groups\":[\"admin\",\"test\"]}",
-      "allow": true
-    },
-    {
-      "name": "groups_string_alias",
-      "query": "group=labs%20admin",
-      "claims": "{\"groups\":\"test labs\"}",
-      "allow": true
-    },
-    {
-      "name": "plural_rule_reads_singular",
-      "query": "groups=admin",
-      "claims": "{\"group\":\"admin\"}",
-      "allow": true
-    },
-    {
-      "name": "nested_group_alias",
-      "query": "org.group=labs",
-      "claims": "{\"org\":{\"groups\":[\"labs\"]}}",
-      "allow": true
-    },
-    {
-      "name": "group_miss",
-      "query": "group=labs%20admin",
+      "name": "groups_miss",
+      "query": "groups=labs%20admin",
       "claims": "{\"groups\":[\"test\"]}",
       "allow": false
     },
     {
-      "name": "group_claim_missing",
-      "query": "group=labs%20admin",
+      "name": "groups_claim_missing",
+      "query": "groups=labs%20admin",
       "claims": "{\"sub\":\"u1\"}",
       "allow": false
     },
     {
       "name": "exact_match_only",
-      "query": "group=lab",
-      "claims": "{\"group\":\"labs\"}",
+      "query": "groups=lab",
+      "claims": "{\"groups\":\"labs\"}",
       "allow": false
     },
     {
       "name": "case_sensitive",
-      "query": "group=admin",
-      "claims": "{\"group\":\"Admin\"}",
+      "query": "groups=admin",
+      "claims": "{\"groups\":\"Admin\"}",
       "allow": false
     },
     {
@@ -184,15 +193,75 @@
     },
     {
       "name": "plus_is_space",
-      "query": "group=labs+admin",
-      "claims": "{\"group\":[\"admin\"]}",
+      "query": "groups=labs+admin",
+      "claims": "{\"groups\":[\"admin\"]}",
       "allow": true
     },
     {
       "name": "repeated_param_adds_values",
-      "query": "group=labs&group=admin",
-      "claims": "{\"group\":[\"admin\"]}",
+      "query": "groups=labs&groups=admin",
+      "claims": "{\"groups\":[\"admin\"]}",
       "allow": true
+    },
+    {
+      "name": "singular_claim_not_aliased",
+      "query": "groups=admin",
+      "claims": "{\"group\":\"admin\"}",
+      "allow": false
+    },
+    {
+      "name": "plural_claim_not_aliased",
+      "query": "group=admin",
+      "claims": "{\"groups\":[\"admin\"]}",
+      "allow": false
+    },
+    {
+      "name": "nested_groups_no_alias",
+      "query": "org.groups=labs",
+      "claims": "{\"org\":{\"group\":[\"labs\"]}}",
+      "allow": false
+    },
+    {
+      "name": "encoded_email_value",
+      "query": "email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"email\":\"test@gmail.com\"}",
+      "allow": true
+    },
+    {
+      "name": "multi_claim_all_match",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"sub\":\"23321312321\",\"groups\":[\"admin\",\"dev\"],\"email\":\"i@example.com\",\"data\":{\"email\":\"test@gmail.com\"}}",
+      "allow": true
+    },
+    {
+      "name": "multi_claim_array_values",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"sub\":\"23321312321\",\"groups\":\"labs\",\"email\":[\"x@y.z\",\"test@gmail.com\"],\"data\":{\"email\":[\"i@example.com\"]}}",
+      "allow": true
+    },
+    {
+      "name": "multi_claim_numeric_sub",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"sub\":23321312321,\"groups\":[\"labs\"],\"email\":\"i@example.com\",\"data\":{\"email\":\"i@example.com\"}}",
+      "allow": true
+    },
+    {
+      "name": "multi_claim_nested_missing",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"sub\":\"23321312321\",\"groups\":[\"admin\"],\"email\":\"i@example.com\"}",
+      "allow": false
+    },
+    {
+      "name": "multi_claim_email_miss",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"sub\":\"23321312321\",\"groups\":[\"admin\"],\"email\":\"other@example.com\",\"data\":{\"email\":\"i@example.com\"}}",
+      "allow": false
+    },
+    {
+      "name": "multi_claim_groups_miss",
+      "query": "scope=offline%20all%20openid&groups=labs%20admin&sub=23321312321&email=i%40example.com%20test%40gmail.com&data.email=i%40example.com%20test%40gmail.com",
+      "claims": "{\"sub\":\"23321312321\",\"groups\":[\"dev\"],\"email\":\"i@example.com\",\"data\":{\"email\":\"i@example.com\"}}",
+      "allow": false
     },
     {
       "name": "number_claim",

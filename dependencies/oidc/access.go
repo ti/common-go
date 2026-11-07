@@ -29,18 +29,19 @@ var (
 
 // ClaimRule requires the claim at Path to contain at least one of Values.
 type ClaimRule struct {
-	// Path is the claim name as written in the auth URI, e.g. "group" or
-	// "user.role". A dotted path first matches a top-level claim with that
-	// exact name, then walks nested objects ({"user":{"role":...}}).
+	// Path is the claim name as written in the auth URI, e.g. "groups" or
+	// "data.email". A dotted path first matches a top-level claim with that
+	// exact name, then walks nested objects ({"data":{"email":...}}). No
+	// claim name is special: the path is read exactly as written.
 	Path   string
 	Values []string
 }
 
 // AccessPolicy is the set of claim rules parsed from the auth URI query.
 //
-//	&group=labs%20admin                 group (or groups) contains labs OR admin
-//	&user.role=labs%20admin             user.role contains labs OR admin
-//	&user.role=labs&sub=uid1%20uid2     user.role contains labs AND sub is uid1 OR uid2
+//	&groups=labs%20admin                       groups contains labs OR admin
+//	&data.email=i%40example.com                {"data":{"email":...}} is i@example.com
+//	&groups=labs%20admin&sub=uid1%20uid2       groups contains labs or admin, AND sub is uid1 or uid2
 //
 // Values within one parameter are alternatives (OR), separated by spaces
 // (%20 or +) or commas; repeating a parameter adds alternatives. Different
@@ -51,7 +52,7 @@ type AccessPolicy struct {
 
 // ParseAccessPolicy builds the access policy from the auth URI query. Provider
 // options (scope, oidc_logout) are skipped. A rule with no values is an error,
-// so that a typo like "group=" fails at startup instead of silently opening or
+// so that a typo like "groups=" fails at startup instead of silently opening or
 // closing access.
 func ParseAccessPolicy(query url.Values) (AccessPolicy, error) {
 	var policy AccessPolicy
@@ -85,13 +86,7 @@ func ParseAccessPolicy(query url.Values) (AccessPolicy, error) {
 // wrapping ErrAccessDenied that names the first unmet rule.
 func (p AccessPolicy) Allow(raw map[string]any) error {
 	for _, rule := range p.Rules {
-		paths := claimPaths(rule.Path)
-
-		actual := make([]string, 0, len(paths))
-		for _, path := range paths {
-			actual = append(actual, claimValues(lookupClaim(raw, path))...)
-		}
-
+		actual := claimValues(lookupClaim(raw, rule.Path))
 		if !slices.ContainsFunc(rule.Values, func(v string) bool { return slices.Contains(actual, v) }) {
 			return fmt.Errorf("%w: claim %q must contain one of [%s]",
 				ErrAccessDenied, rule.Path, strings.Join(rule.Values, " "))
@@ -103,27 +98,6 @@ func (p AccessPolicy) Allow(raw map[string]any) error {
 
 func splitValues(raw string) []string {
 	return strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' })
-}
-
-// claimPaths returns the claim paths a rule reads. Issuers disagree on
-// singular vs plural group claims (account.nx.run "group", Cognito/Keycloak
-// "groups"), so a rule on either name reads both: group=labs%20admin matches
-// {"group":"labs"} as well as {"groups":["admin","test"]}. The alias applies
-// to the last path segment only (x.group <-> x.groups).
-func claimPaths(path string) []string {
-	prefix, last := "", path
-	if i := strings.LastIndexByte(path, '.'); i >= 0 {
-		prefix, last = path[:i+1], path[i+1:]
-	}
-
-	switch last {
-	case "group":
-		return []string{path, prefix + "groups"}
-	case "groups":
-		return []string{path, prefix + "group"}
-	default:
-		return []string{path}
-	}
 }
 
 // lookupClaim resolves path against the claims: an exact top-level key wins,

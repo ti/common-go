@@ -23,18 +23,18 @@ oidc://<client_id>:<client_secret>@<issuer host>[/<issuer path>]?scope=...&oidc_
 
 | Rule | Admits tokens whose |
 |---|---|
-| `group=labs%20admin` | `group` or `groups` claim contains `labs` or `admin` |
-| `user.role=labs` | `user.role` (exact key `user.role` first, then nested `{"user":{"role":...}}`) contains `labs` |
-| `group=admin&sub=uid1%20uid2` | group contains `admin` **and** sub is `uid1` or `uid2` |
+| `groups=labs%20admin` | `groups` claim contains `labs` or `admin` |
+| `data.email=i%40example.com` | `data.email` (exact key `data.email` first, then nested `{"data":{"email":...}}`) is `i@example.com` |
+| `groups=admin&sub=uid1%20uid2&email=a%40x.com%20b%40y.com` | groups contains `admin` **and** sub is `uid1` or `uid2` **and** email is `a@x.com` or `b@y.com` |
 
-Within one parameter, values separated by spaces or commas are alternatives (OR); different parameters must all match (AND). String and array claims are treated the same. A rule with no values (`group=`) fails at startup. A URI with no rules admits every valid token.
+Within one parameter, values separated by spaces or commas are alternatives (OR); different parameters must all match (AND). String and array claims are treated the same, and numbers and booleans compare by their JSON text. No claim name is special: the parameter name is the claim path exactly as written (`groups` does not read a `group` claim, or the other way round). A rule with no values (`groups=`) fails at startup. A URI with no rules admits every valid token.
 
 ## As a dependency with grpcmux
 
 ```go
 type Dependencies struct {
 	dependencies.Dependency
-	Auth *oidc.Provider `required:"false"` // dependencies.auth: oidc://client:secret@account.example.com?group=admin
+	Auth *oidc.Provider `required:"false"` // dependencies.auth: oidc://client:secret@account.example.com?groups=admin
 }
 
 gs := grpcmux.NewServer(
@@ -67,7 +67,7 @@ In a handler:
 ```go
 claims, ok := oidc.FromContext(ctx)
 role, _ := claims.Lookup[string]("user.role")   // any claim, dotted paths reach nested objects
-groups := claims.AllGroups()                      // union of "groups" and "group"
+groups := claims.Strings("groups")                // any claim flattened to strings, like the access rules
 ```
 
 ## When the issuer is not reachable at startup

@@ -58,7 +58,7 @@ func (e invalidTokenError) Unwrap() error        { return e.err }
 func (e invalidTokenError) Is(target error) bool { return target == ErrInvalidToken }
 
 // StringSlice decodes a JSON array of strings or one space/comma-separated
-// string ("admin users") — issuers emit group claims both ways.
+// string ("admin users") — issuers emit list claims both ways.
 type StringSlice []string
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -137,20 +137,6 @@ type Claims struct {
 
 // Expiry is the exp claim as a time.
 func (c *Claims) Expiry() time.Time { return time.Unix(c.Exp, 0) }
-
-// AllGroups is the union of the "groups" and "group" claims (Cognito uses
-// groups, account.nx.run group). group is read leniently from Raw so an
-// unusual shape never turns a valid token into a 401.
-func (c *Claims) AllGroups() []string {
-	out := slices.Clone([]string(c.Groups))
-	for _, g := range claimValues(c.Raw["group"]) {
-		if !slices.Contains(out, g) {
-			out = append(out, g)
-		}
-	}
-
-	return out
-}
 
 // Strings returns the claim at path flattened to strings, with the same
 // rules as access rules: dotted paths reach nested objects, strings split

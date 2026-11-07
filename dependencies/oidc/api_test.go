@@ -17,7 +17,7 @@ import (
 )
 
 func TestParseURI(t *testing.T) {
-	cfg, err := ParseURI("oidc://cid:s3cret@account.nx.run/tenant?scope=offline%20openid&oidc_logout=false&group=labs%20admin")
+	cfg, err := ParseURI("oidc://cid:s3cret@account.nx.run/tenant?scope=offline%20openid&oidc_logout=false&groups=labs%20admin")
 	if err != nil {
 		t.Fatalf("ParseURI: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestParseURI(t *testing.T) {
 	if cfg.Scope != "offline openid" || cfg.RPInitiatedLogout {
 		t.Errorf("scope / logout = %q / %t", cfg.Scope, cfg.RPInitiatedLogout)
 	}
-	if len(cfg.Access.Rules) != 1 || cfg.Access.Rules[0].Path != "group" {
+	if len(cfg.Access.Rules) != 1 || cfg.Access.Rules[0].Path != "groups" {
 		t.Errorf("rules = %+v", cfg.Access.Rules)
 	}
 	if red := cfg.Redacted(); strings.Contains(red, "s3cret") || !strings.Contains(red, "secret=xxxxx") {
@@ -41,10 +41,10 @@ func TestParseURI(t *testing.T) {
 	}
 
 	for _, bad := range []string{
-		"https://cid:@account.nx.run",       // wrong scheme
-		"oidc://cid:@",                      // no issuer host
-		"oidc://account.nx.run",             // no client id
-		"oidc://cid:@account.nx.run?group=", // empty access rule
+		"https://cid:@account.nx.run",        // wrong scheme
+		"oidc://cid:@",                       // no issuer host
+		"oidc://account.nx.run",              // no client id
+		"oidc://cid:@account.nx.run?groups=", // empty access rule
 		"oidc://cid:@account.nx.run?scope=%zz",
 	} {
 		_, err := ParseURI(bad)
@@ -126,7 +126,7 @@ func (f *fakeIssuer) token(t *testing.T, extra map[string]any) string {
 func TestOpenFromURIAndAuthenticate(t *testing.T) {
 	issuer := newFakeIssuer(t)
 
-	p, err := Open(t.Context(), issuer.uri("group=labs%20admin"), WithHTTPClient(issuer.Client()))
+	p, err := Open(t.Context(), issuer.uri("groups=labs%20admin"), WithHTTPClient(issuer.Client()))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestOpenFromURIAndAuthenticate(t *testing.T) {
 		t.Errorf("Strings = %v", got)
 	}
 
-	expired := issuer.token(t, map[string]any{"exp": time.Now().Add(-time.Minute).Unix(), "group": "admin"})
+	expired := issuer.token(t, map[string]any{"exp": time.Now().Add(-time.Minute).Unix(), "groups": "admin"})
 	_, err = p.Authenticate(t.Context(), "Bearer "+expired)
 	if !errors.Is(err, ErrInvalidToken) || err.Error() != "token expired" || HTTPStatus(err) != http.StatusUnauthorized {
 		t.Fatalf("Authenticate(expired) = %v", err)
@@ -293,7 +293,7 @@ func TestUnknownKidRefreshIsRateLimited(t *testing.T) {
 func TestMiddleware(t *testing.T) {
 	issuer := newFakeIssuer(t)
 
-	p, err := Open(t.Context(), issuer.uri("group=admin"), WithHTTPClient(issuer.Client()))
+	p, err := Open(t.Context(), issuer.uri("groups=admin"), WithHTTPClient(issuer.Client()))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -319,14 +319,14 @@ func TestMiddleware(t *testing.T) {
 		return rec
 	}
 
-	if rec := call("Bearer " + issuer.token(t, map[string]any{"group": "admin"})); rec.Code != http.StatusOK || rec.Body.String() != "u1" {
+	if rec := call("Bearer " + issuer.token(t, map[string]any{"groups": "admin"})); rec.Code != http.StatusOK || rec.Body.String() != "u1" {
 		t.Errorf("allowed = %d %q", rec.Code, rec.Body)
 	}
 
-	rec := call("Bearer " + issuer.token(t, map[string]any{"group": "users"}))
+	rec := call("Bearer " + issuer.token(t, map[string]any{"groups": "users"}))
 	var body map[string]string
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	if rec.Code != http.StatusForbidden || body["error"] != "permission_denied" || !strings.Contains(body["error_description"], `claim "group"`) {
+	if rec.Code != http.StatusForbidden || body["error"] != "permission_denied" || !strings.Contains(body["error_description"], `claim "groups"`) {
 		t.Errorf("denied = %d %v", rec.Code, body)
 	}
 

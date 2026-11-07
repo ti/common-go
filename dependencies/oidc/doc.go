@@ -16,8 +16,9 @@
 // (logout_uri) instead of OIDC RP-initiated logout (post_logout_redirect_uri).
 //
 // Every other query parameter is a claim access rule, see [AccessPolicy]:
-// group=labs%20admin admits tokens whose group (or groups) claim contains
-// labs or admin. No rule admits every valid token.
+// groups=labs%20admin admits tokens whose groups claim contains labs or
+// admin. No claim name is special; any claim (or dotted path into nested
+// objects, e.g. data.email) can be a rule. No rule admits every valid token.
 //
 // # Use
 //

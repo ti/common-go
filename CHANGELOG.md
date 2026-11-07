@@ -9,6 +9,9 @@ Upgrade guide: [docs/upgrades/2026-Q4.md](docs/upgrades/2026-Q4.md).
 ### Security
 - Fixed 10 vulnerabilities reachable from library code by upgrading grpc (GO-2026-6061, -6348, -6443), x/net (GO-2026-6603, -6610, -6611, -6612, -6617), x/text (GO-2026-5970) and the toolchain to go1.27.3 (crypto/x509, GO-2026-6809). mongo-driver v2.9.3 also includes fixes for CVE-2026-81521, -88031, -107324 and -107325.
 
+### Changed
+- `dependencies/oidc`: access rules no longer alias `group` and `groups`. A rule reads exactly the claim it names, so `groups=labs%20admin` reads only the `groups` claim; rename `group=` rules to `groups=` for issuers (account.nx.run, Cognito, Keycloak) that emit `groups`. `Claims.AllGroups` is removed; use `Claims.Groups` or `Claims.Strings("groups")`.
+
 ### Fixed
 - **Graceful shutdown never ran**: `graceful.Start` installed its signal handler only after every server had returned, so SIGTERM killed the process with no health flip, no `PRE_STOP` wait, no drain and no closers.
 - Data race in `graceful.AddCloser` during concurrent dependency initialization.
@@ -26,7 +29,7 @@ Upgrade guide: [docs/upgrades/2026-Q4.md](docs/upgrades/2026-Q4.md).
 - `dependencies/sql`: `log=` was ignored, and package options were left in the driver DSN unless another option was set.
 
 ### Added
-- `dependencies/oidc` (from the scaffold project): OIDC relying party configured by an `oidc://` URI. It covers discovery, JWKS with rotation, RS256 validation, claim access rules (`group=a%20b`, dotted paths, AND/OR), OAuth exchange/authorization/logout URLs, `net/http` middleware, and `Provider.AuthFunc()` for grpcmux. With `AuthFunc`, the claims go into the context and `user_id`/`client_id`/`project_id` go into the logs; a nil provider means auth is off. `WithLazyDiscovery(ttl)` and `Provider.Discover` are for issuers that are unreachable at startup (for example, the service itself), with TTL refetch and a stale-cache fallback.
+- `dependencies/oidc` (from the scaffold project): OIDC relying party configured by an `oidc://` URI. It covers discovery, JWKS with rotation, RS256 validation, claim access rules (`groups=a%20b`, dotted paths, AND/OR), OAuth exchange/authorization/logout URLs, `net/http` middleware, and `Provider.AuthFunc()` for grpcmux. With `AuthFunc`, the claims go into the context and `user_id`/`client_id`/`project_id` go into the logs; a nil provider means auth is off. `WithLazyDiscovery(ttl)` and `Provider.Discover` are for issuers that are unreachable at startup (for example, the service itself), with TTL refetch and a stale-cache fallback.
 - Interceptor parity: the unary interceptor chain (protovalidate, PGV, authz, metrics, custom interceptors, recovery) runs on the ConnectRPC bridge, auto-HTTP routes and connect-go v2 handlers; `WithoutHTTPInterceptors()` / `disableHTTPInterceptors` opts out.
 - protovalidate (`buf.validate`) enforcement on every protocol.
 - Connect bridge: gzip, `Connect-Timeout-Ms`, protocol-version check, GET for `NO_SIDE_EFFECTS` methods, error details, header/trailer metadata, 415 for streaming content types, `WithMaxRequestBodyBytes`.
