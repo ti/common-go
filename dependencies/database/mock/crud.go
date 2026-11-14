@@ -257,7 +257,7 @@ func (m *Mock) Find(ctx context.Context, tableName string, condition database.C,
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	table := m.getOrCreateTable(tableName)
+	table := m.readTable(tableName)
 
 	// Collect matching rows
 	var matches []map[string]any
@@ -289,7 +289,7 @@ func (m *Mock) FindOne(ctx context.Context, tableName string, condition database
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	table := m.getOrCreateTable(tableName)
+	table := m.readTable(tableName)
 
 	for _, row := range table.data {
 		if matchConditions(row, condition) {
@@ -305,7 +305,7 @@ func (m *Mock) FindRows(ctx context.Context, tableName string, condition databas
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	table := m.getOrCreateTable(tableName)
+	table := m.readTable(tableName)
 
 	// Collect matching rows
 	var matches []map[string]any
@@ -339,7 +339,7 @@ func (m *Mock) Exist(ctx context.Context, tableName string, condition database.C
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	table := m.getOrCreateTable(tableName)
+	table := m.readTable(tableName)
 
 	for _, row := range table.data {
 		if matchConditions(row, condition) {
@@ -355,7 +355,7 @@ func (m *Mock) Count(ctx context.Context, tableName string, condition database.C
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	table := m.getOrCreateTable(tableName)
+	table := m.readTable(tableName)
 
 	count := int64(0)
 	for _, row := range table.data {

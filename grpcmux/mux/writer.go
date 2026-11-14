@@ -46,3 +46,11 @@ func (l *responseWriter) Flush() {
 		flusher.Flush()
 	}
 }
+
+// Unwrap returns the wrapped ResponseWriter, so http.ResponseController can
+// reach what this wrapper does not implement itself — SetWriteDeadline,
+// SetReadDeadline, Hijack, EnableFullDuplex. Without it a streaming handler
+// behind the interceptor cannot bound a write to a peer that stopped reading.
+func (l *responseWriter) Unwrap() http.ResponseWriter {
+	return l.W
+}

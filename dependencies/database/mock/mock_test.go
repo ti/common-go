@@ -2,6 +2,8 @@ package mock_test
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/ti/common-go/dependencies/database"
@@ -520,4 +522,29 @@ func TestFindRowsDecodesToOneDataType(t *testing.T) {
 	if len(names) != 2 || names[0] != "a" || names[1] != "b" {
 		t.Fatalf("names = %v", names)
 	}
+}
+
+// TestConcurrentReadsOfUntouchedTables guards the read paths against creating
+// tables: they hold the read lock only, so several of them touching tables that
+// do not exist yet must not write to the table map. Run with -race.
+func TestConcurrentReadsOfUntouchedTables(t *testing.T) {
+	ctx := context.Background()
+	m, err := database.New(ctx, "mock://local/untouchedreads")
+	if err != nil {
+		t.Fatalf("new mock: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			name := fmt.Sprintf("untouched_%d", i%4)
+			var rows []map[string]any
+			_ = m.Find(ctx, name, nil, nil, 0, &rows)
+			_, _ = m.Count(ctx, name, nil)
+			_, _ = m.Exist(ctx, name, nil)
+		}(i)
+	}
+	wg.Wait()
 }

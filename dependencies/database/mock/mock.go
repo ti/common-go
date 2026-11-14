@@ -87,6 +87,17 @@ func (m *Mock) getOrCreateTable(tableName string) *table {
 	return m.tables[tableName]
 }
 
+// readTable returns the table for a read path, which holds only the read lock
+// and therefore must not insert into m.tables. A table nobody has written to
+// yet reads as empty: the returned value is private to the caller and is never
+// stored.
+func (m *Mock) readTable(tableName string) *table {
+	if t := m.tables[tableName]; t != nil {
+		return t
+	}
+	return &table{data: make([]map[string]any, 0)}
+}
+
 // toSnakeCase converts camelCase or PascalCase to snake_case
 // Examples:
 //   - userId -> user_id
