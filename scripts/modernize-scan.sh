@@ -14,7 +14,7 @@
 #   scripts/modernize-scan.sh docs/maintenance/scans/$(date +%F).md
 #
 # Env:
-#   DOWNSTREAM   path to the reference consumer module (default: ../auth/backend)
+#   DOWNSTREAM   path to the reference consumer module (default: ../../platform/auth/backend)
 #   SKIP_TESTS=1 skip `go test -race` (slow)
 #   SKIP_NET=1   skip anything that needs the network (dep updates, govulncheck, latest Go)
 #
@@ -22,7 +22,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DOWNSTREAM="$(realpath -m "${DOWNSTREAM:-$ROOT/../auth/backend}")"
+DOWNSTREAM="$(realpath -m "${DOWNSTREAM:-$ROOT/../../platform/auth/backend}")"
 OUT="${1:-/dev/stdout}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

@@ -14,7 +14,7 @@ A cycle may change *how* these work, but never break them:
 2. **URI-driven dependencies.** `name: scheme://host/path?opts` in config, plus typed struct fields, wired by `dependencies.Init`. Backends self-register by scheme, closers register automatically, and unknown query parameters are ignored.
 3. **`async.Future`.** Typed, errgroup-backed fan-out/await, used for dependency init and server start.
 4. **Defaults on, options to tune.** Logging, metrics, tracing hooks, health, auth, CORS and graceful shutdown work out of the box and are tuned through `grpcmux.With*`, `grpcmux.Config` fields and URI query parameters.
-5. **Source compatibility for the reference consumer.** `~/Workspace/projects/auth/backend` must build, vet and test green against every release (§6).
+5. **Source compatibility for the reference consumer.** `~/Workspace/projects/platform/auth/backend` must build, vet and test green against every release (§6).
 
 ## 2. Policies
 
@@ -97,9 +97,9 @@ Copy `docs/maintenance/cycles/TEMPLATE.md` to `docs/maintenance/cycles/<YYYY>-Q<
 Consumers upgrade themselves by following `docs/upgrades/<cycle>.md`. Write it every cycle: breaking changes with what to do, Kubernetes/config changes, recommended adoptions, verification, and a worked example for auth. Change auth's code only when the owner asks for it.
 1. Develop against the local checkout without touching auth's files: use a temporary copy of auth's `go.mod` that has a `replace` to this checkout. This is what scan §9 does. Do not use a `go.work`: workspace mode merges unpruned module graphs and reports `ambiguous import` errors (old monolithic `google.golang.org/genproto`) that a real upgrade never hits.
    ```bash
-   cd ~/Workspace/projects/auth/backend
+   cd ~/Workspace/projects/platform/auth/backend
    T=$(mktemp -d); cp go.mod go.sum "$T"/; M="-modfile=$T/go.mod"
-   go mod edit $M -replace github.com/ti/common-go=$HOME/Workspace/projects/common-go
+   go mod edit $M -replace github.com/ti/common-go=$HOME/Workspace/projects/foundation/common-go
    go mod tidy $M && go build $M ./... && go vet $M ./... && go test $M ./...
    ```
 2. Adjust auth's code **only** where common-go deprecated something, changed behavior, or now provides what auth hand-rolled (list each change in the cycle plan). Follow auth's own `CLAUDE.md` conventions.
@@ -126,4 +126,4 @@ Run `go fix -diff ./...` first. It applies the toolchain's own modernizers. Beyo
 - **Observability:** current OpenTelemetry semantic conventions, low-cardinality span/log/metric names.
 
 ## 6. Reference consumer
-`~/Workspace/projects/auth/backend` (module `github.com/ti/authentication`) is the compatibility target. It uses `log`, `database`/`query`/`mongo`/`codecs`, `grpcmux` (`NewServer`, `RegisterConnectService` ×27, CORS/auth/camelCase/pre-HTTP middleware options), `grpcmux/mux` (`WriteHTTPErrorResponse` ×52, `AuthInfo*`, error codes), `dependencies/http` (including `WithProxy`), `redis`, `broker`/`kafka`, `mqlru`, `config` and `tools/{routerlimit,ip}`. Scan §9 regenerates this list every cycle, so watch it for new usage.
+`~/Workspace/projects/platform/auth/backend` (module `github.com/ti/authentication`) is the compatibility target. It uses `log`, `database`/`query`/`mongo`/`codecs`, `grpcmux` (`NewServer`, `RegisterConnectService` ×27, CORS/auth/camelCase/pre-HTTP middleware options), `grpcmux/mux` (`WriteHTTPErrorResponse` ×52, `AuthInfo*`, error codes), `dependencies/http` (including `WithProxy`), `redis`, `broker`/`kafka`, `mqlru`, `config` and `tools/{routerlimit,ip}`. Scan §9 regenerates this list every cycle, so watch it for new usage.
