@@ -22,3 +22,12 @@ id_rsa.pub
 _root/
 # Frontend build output
 dist/
+
+# Workspace baseline: local secrets, caches and patch leftovers
+.env
+.env.local
+__pycache__/
+*.pyc
+*.orig
+*.rej
+.playwright-cli/
