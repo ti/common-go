@@ -271,21 +271,14 @@ func addMetrics(enableTracing bool, logMeta []string) (grpc.UnaryClientIntercept
 	clMetrics := clientMetrics()
 	labelsFromContext := func(ctx context.Context) prometheus.Labels {
 		metaData := metadata.ExtractIncoming(ctx)
-		labels := make(prometheus.Labels)
-		for _, f := range logMeta {
-			if data := metaData.Get(f); data != "" {
-				labels[f] = data
-			}
-		}
+		var traceID string
 		if enableTracing {
 			if span := trace.SpanContextFromContext(ctx); span.IsSampled() {
-				labels["trace_id"] = span.TraceID().String()
+				traceID = span.TraceID().String()
 			}
 		}
-		if len(labels) == 0 {
-			return nil
-		}
-		return labels
+		// Bounded like the server side: the metadata is forwarded from the caller.
+		return exemplarLabels(traceID, logMeta, metaData.Get)
 	}
 	return clMetrics.UnaryClientInterceptor(grpcprom.WithExemplarFromContext(labelsFromContext)),
 		clMetrics.StreamClientInterceptor(grpcprom.WithExemplarFromContext(labelsFromContext))

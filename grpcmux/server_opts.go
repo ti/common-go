@@ -175,18 +175,14 @@ func metricsInterceptors(tracing bool, logMeta []string) (grpc.UnaryServerInterc
 	srvMetrics := serverMetrics()
 	samplerFromContext := func(ctx context.Context) prometheus.Labels {
 		metaData := metadata.ExtractIncoming(ctx)
-		labels := make(prometheus.Labels)
-		for _, f := range logMeta {
-			if data := metaData.Get(f); data != "" {
-				labels[f] = data
-			}
-		}
+		var traceID string
 		if tracing {
 			if span := trace.SpanContextFromContext(ctx); span.IsSampled() {
-				labels["trace_id"] = span.TraceID().String()
+				traceID = span.TraceID().String()
 			}
 		}
-		return labels
+		// Bounded: the metadata is caller-supplied and an oversized exemplar panics.
+		return exemplarLabels(traceID, logMeta, metaData.Get)
 	}
 	return srvMetrics.UnaryServerInterceptor(grpcprom.WithExemplarFromContext(samplerFromContext)),
 		srvMetrics.StreamServerInterceptor(grpcprom.WithExemplarFromContext(samplerFromContext))

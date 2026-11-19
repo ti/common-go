@@ -13,6 +13,15 @@ Upgrade guide: [docs/upgrades/2026-Q4.md](docs/upgrades/2026-Q4.md).
 - `dependencies/oidc`: access rules no longer alias `group` and `groups`. A rule reads exactly the claim it names, so `groups=labs%20admin` reads only the `groups` claim; rename `group=` rules to `groups=` for issuers (account.nx.run, Cognito, Keycloak) that emit `groups`. `Claims.AllGroups` is removed; use `Claims.Groups` or `Claims.Strings("groups")`.
 
 ### Fixed
+
+- **A signed-in request could answer `Internal` from the metrics interceptor.** The Prometheus exemplar
+  was built from every request-metadata field (`client_id`, `user_id`, `device_id`, `request_id`) plus
+  the trace id, with no regard for the client library's limit of 128 runes over all label names and
+  values; `AddWithExemplar` panics beyond it, and also on a value that is not valid UTF-8. Four ordinary
+  identifiers and a trace id already exceed the limit, and `device_id` / `request_id` come from request
+  headers, so any caller could trigger it with one long header. The exemplar is now bounded
+  (`grpcmux/exemplar.go`): the trace id first, then each field only if it fits whole; oversized and
+  invalid values are left out. Server and client interceptors share the rule.
 - `config.Init` data race (found by `go test -race` in a consumer): the file watcher was given the caller's struct, so it re-read and rewrote the whole struct, dependency fields included, while `Init` was still setting them and later while handlers used them (it also JSON-encoded and deep-compared the live dependency clients on every change). The watcher now works on a private copy. It never touches the caller's struct before `Init` returns, never reads or writes dependency fields, and on a change assigns only the top-level fields that changed, as fresh values, under a lock that the new `config.RLock()` / `config.RUnlock()` take for readers of hot-reloaded fields. `Init` now returns an error for a config that is not a pointer to a struct (it panicked).
 - `log.SetLevel` panicked on an empty or unknown level name, so `config.Init` crashed at startup when the config struct had a `Log` field and the file no `log.level`, and a typo in a hot-reloaded level killed the process. The level is now optional; an unknown name is an error from `config.Init` and a logged no-op on reload.
 - gRPC port: validation ran before authentication, so an unauthenticated caller learned whether its request was valid. Auth and authz now run first.
