@@ -18,7 +18,7 @@ go fix -diff ./...                                 # must be empty (modernizers)
 (cd examples && go build ./... && go test ./...)   # examples are a separate module
 ```
 
-- `go.mod` pins `toolchain go1.27.3`; `go.sum` is tracked.
+- `go.mod` pins `toolchain go1.27.4`; `go.sum` is tracked.
 - CI (`.github/workflows/ci.yml`): tidy, build, vet, race tests, lint, `go fix -diff`, govulncheck, examples, and a check that rejects non-English (CJK) text.
 - `examples/` is its own module (`replace github.com/ti/common-go => ../`), so its dependencies (protovalidate generated code, connect-go, ...) don't leak into consumers. Its proto code is generated with buf and committed.
 - The only proto in the library is `grpcmux/mux/error.proto` (generated `error.pb.go` committed).
