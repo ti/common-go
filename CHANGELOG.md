@@ -8,6 +8,7 @@ The four sections dated 2026-11 together are the 2026-Q4 modernization. Its upgr
 
 | Section | Commits | Dates |
 |---|---|---|
+| [Client IP](#client-ip-5ef0166-2026-11-19) | `5ef0166` | 2026-11-19 |
 | [Platform capabilities](#platform-capabilities-af101ba-to-fd97b61-2026-11-18-to-2026-11-19) | `af101ba` to `fd97b61` | 2026-11-18 to 2026-11-19 |
 | [OIDC relying party](#oidc-relying-party-1247dd8-to-80d3e63-2026-11-06-to-2026-11-16) | `1247dd8` to `80d3e63` | 2026-11-06 to 2026-11-16 |
 | [2026-Q4 modernization](#2026-q4-modernization-d1943b1-to-299d0fc-2026-11-05) | `d1943b1` to `299d0fc` | 2026-11-05 |
@@ -16,6 +17,39 @@ The four sections dated 2026-11 together are the 2026-Q4 modernization. Its upgr
 | [ConnectRPC, CORS, mongo-driver v2](#connectrpc-cors-mongo-driver-v2-0e201fa-to-4b40ff4-2026-03-03-to-2026-04-24) | `0e201fa` to `4b40ff4` | 2026-03-03 to 2026-04-24 |
 | [Mock database and camelCase JSON](#mock-database-and-camelcase-json-4a9b6a4-to-bba6d1a-2026-01-30-to-2026-02-02) | `4a9b6a4` to `bba6d1a` | 2026-01-30 to 2026-02-02 |
 | [Initial publication](#initial-publication-fdfddd6-to-41d53e1-2025-01-08-to-2025-07-04) | `fdfddd6` to `41d53e1` | 2025-01-08 to 2025-07-04 |
+
+## Client IP (`5ef0166`, 2026-11-19)
+
+Unreleased. One commit. It changes which address a server behind a proxy logs and limits on; read "what to do".
+
+### Security
+
+- **The client IP could be chosen by the caller.** The `ip` field of the access log on both ports and the
+  `ip` request-metadata key (the key of router-limit rules) were the left-most `X-Forwarded-For` entry,
+  which is whatever the client sent. They are now the connection's peer, unless the peer is in
+  `rateLimit.trustedProxies`; then the right-most `X-Forwarded-For` entry that is not itself a trusted proxy
+  (`tools/ip.TrustedProxies`, the rule the rate limiter already used). No other header is read:
+  `X-Real-IP`, `True-Client-IP`, `Forwarded`, `CloudFront-Viewer-Address` and `X-Envoy-External-Address`
+  are ignored. With nothing configured, no header is trusted.
+  **What to do:** behind a load balancer or gateway, set `rateLimit.trustedProxies` to the networks of the
+  proxies that connect to the server (it may be set with `disabled: true`); otherwise `ip` is the proxy's
+  address. The edge must also make the right-most entries its own: see the consumer's client-IP document
+  (scaffold `docs/client-ip.md`).
+
+### Added
+
+- `grpcmux.ClientIP(ctx)`: the client IP of the current request, on either port.
+- `mux.WithClientIP`, `ip.NewContextWithClientIP`, `ip.ClientIPFromContext`.
+
+### Changed
+
+- `rateLimit.trustedProxies` is validated at start-up and applied even when the limiter is disabled or has
+  no rules; an entry that is not an address, a CIDR or `private` is an error.
+- `X-Forwarded-For` is no longer added to a request that arrived without one.
+
+### Deprecated
+
+- `ip.GetIPFromHTTPRequest`: it returns the left-most entry. Use `grpcmux.ClientIP`.
 
 ## Platform capabilities (`af101ba` to `fd97b61`, 2026-11-18 to 2026-11-19)
 
