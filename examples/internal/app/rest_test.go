@@ -362,3 +362,34 @@ func TestOpenAPIMatchesServedRoutes(t *testing.T) {
 		}
 	}
 }
+
+// A PATCH body may carry members the server's schema does not declare (a
+// client built against a newer version of the API). They are ignored, as in
+// every other JSON body, and stay out of the derived update mask; an explicit
+// update_mask is never rejected because of them.
+func TestRESTPatchIgnoresUnknownMembers(t *testing.T) {
+	e := start(t)
+	var created struct{ User restUser }
+	if resp := e.call(t, http.MethodPost, "/v1/users", `{"name":"Ada","email":"ada@example.com","age":36,"futureField":"x"}`, nil, &created); resp.StatusCode != http.StatusOK {
+		t.Fatalf("create with an unknown member: %d", resp.StatusCode)
+	}
+	id := created.User.UserID
+	for _, tt := range []struct {
+		name, query, body, wantName, wantEmail string
+	}{
+		{"derived mask, unknown top-level member", "", `{"name":"A1","futureField":1}`, "A1", "ada@example.com"},
+		{"derived mask, unknown object member", "", `{"name":"A2","futureField":{"nested":{"deep":[1,2]}}}`, "A2", "ada@example.com"},
+		{"explicit update_mask, unknown member", "?update_mask=name", `{"name":"A3","email":"ignored@example.com","futureField":1}`, "A3", "ada@example.com"},
+		{"explicit updateMask, unknown member", "?updateMask=email", `{"name":"ignored","email":"a3@example.com","future_field":1}`, "A3", "a3@example.com"},
+	} {
+		var patched struct{ User restUser }
+		resp := e.call(t, http.MethodPatch, "/v1/users/"+id+tt.query, tt.body, nil, &patched)
+		if resp.StatusCode != http.StatusOK || patched.User.Name != tt.wantName || patched.User.Email != tt.wantEmail ||
+			patched.User.Age == nil || *patched.User.Age != 36 {
+			t.Errorf("%s: %d %+v, want name %q email %q age 36", tt.name, resp.StatusCode, patched.User, tt.wantName, tt.wantEmail)
+		}
+	}
+	// What a mask names is still the service's business: a path it does not
+	// accept is its error to report, and a wrong type in a known field is 400.
+	e.mustFail(t, http.MethodPatch, "/v1/users/"+id, `{"age":"old"}`, http.StatusBadRequest, "invalid_argument")
+}

@@ -44,7 +44,8 @@ The rules are those of [`google.api.http`](https://github.com/googleapis/googlea
 | `body: "note"` | The JSON body is that field; the other fields come from the path and the query |
 | No `body` | The request body is ignored |
 | Query parameters | Every request field not bound by the path or the body, by proto name or JSON name (`page_size` or `pageSize`), nested with dots (`filter.label=x`), repeated by repeating the key, maps as `labels[k]=v`. Well-known types work: `update_mask=title,body`, timestamps as RFC 3339. Unknown parameters are ignored; a value of the wrong type, or the same field given twice, is `400` |
-| `PATCH` with `body: "<message field>"` | When the request has exactly one `google.protobuf.FieldMask` field and it is empty, it is set to the fields present in the JSON body (AIP-134). An explicit `?update_mask=` wins |
+| `PATCH` with `body: "<message field>"` | When the request has exactly one `google.protobuf.FieldMask` field and it is empty, it is set to the fields present in the JSON body (AIP-134): the declared fields of the body message, found by proto or JSON name and named by proto name, descending into nested messages (`address.city`), with repeated and map fields, `null` and `{}` as leaves. An explicit `?update_mask=` wins |
+| Unknown JSON members | Ignored, in every body (as on Connect), at any depth, and they contribute nothing to a derived mask: a client built against a newer schema can `POST` and `PATCH` an older server. A request is never rejected because of one, with or without an explicit mask. If a body carries nothing but unknown members, the derived mask is empty, and what an empty mask means (many services: "all fields") is the service's rule, as it is for a body of `{}`. Which paths a mask may name is the service's business too |
 | `response_body: "note"` | The response is that field instead of the whole response message |
 | `additional_bindings` | One route per binding |
 

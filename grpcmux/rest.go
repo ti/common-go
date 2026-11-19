@@ -3,10 +3,12 @@ package grpcmux
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
@@ -20,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/ti/common-go/grpcmux/mux"
 )
@@ -446,10 +449,7 @@ func (rt *restRoute) decodeBody(inbound runtime.Marshaler, body []byte, msg prot
 	}
 	m.Set(fd, protoreflect.ValueOfMessage(sub))
 	if rt.maskField != nil && maskIsEmpty(m.Get(rt.maskField).Message()) {
-		mask, err := runtime.FieldMaskFromRequestBody(bytes.NewReader(body), sub.Interface())
-		if err != nil {
-			return err
-		}
+		mask := &fieldmaskpb.FieldMask{Paths: fieldMaskFromBody(body, fd.Message())}
 		m.Set(rt.maskField, protoreflect.ValueOfMessage(mask.ProtoReflect()))
 	}
 	return nil
@@ -460,6 +460,94 @@ func decodeJSON(inbound runtime.Marshaler, body []byte, msg proto.Message) error
 		return err
 	}
 	return nil
+}
+
+// fieldMaskFromBody derives the FieldMask of a PATCH from its JSON body: the
+// fields of md that the body sets, as proto field names (AIP-134: an absent
+// mask means "what the body carries").
+//
+// A member the message does not declare contributes nothing, at any depth.
+// The decoder ignores such members everywhere (REST and Connect bodies
+// alike), and the mask has to agree with it: a client built against a newer
+// schema must be able to PATCH an older server. The rules for declared
+// fields are grpc-gateway's:
+//
+//   - a member is found by proto name or JSON name; the path uses the proto
+//     name;
+//   - a singular message field whose value is a non-empty object is descended
+//     into, so {"address":{"city":"x"}} yields address.city;
+//   - everything else is a leaf and yields its own path: scalars, null, empty
+//     objects, repeated and map fields (never descended into), well-known
+//     types written as scalars, and google.protobuf.Any;
+//   - google.protobuf.Struct and Value hold free-form JSON, so their object
+//     keys are path segments as they are.
+//
+// It never fails: body has already been decoded into the message, which is
+// where malformed JSON and type mismatches are reported.
+func fieldMaskFromBody(body []byte, md protoreflect.MessageDescriptor) []string {
+	var root any
+	if err := json.Unmarshal(body, &root); err != nil {
+		return nil
+	}
+	obj, ok := root.(map[string]any)
+	if !ok {
+		return nil
+	}
+	seen := map[string]bool{}
+	var paths []string
+	add := func(path string) {
+		if !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	var walk func(prefix string, obj map[string]any, md protoreflect.MessageDescriptor)
+	var free func(prefix string, v any)
+	free = func(prefix string, v any) {
+		m, ok := v.(map[string]any)
+		if !ok || len(m) == 0 {
+			add(prefix)
+			return
+		}
+		for k, child := range m {
+			free(prefix+"."+k, child)
+		}
+	}
+	walk = func(prefix string, obj map[string]any, md protoreflect.MessageDescriptor) {
+		fields := md.Fields()
+		for key, value := range obj {
+			fd := fields.ByName(protoreflect.Name(key))
+			if fd == nil {
+				fd = fields.ByJSONName(key)
+			}
+			if fd == nil {
+				continue // not a field of this message: ignored, like the decoder does
+			}
+			path := string(fd.Name())
+			if prefix != "" {
+				path = prefix + "." + path
+			}
+			child, isObject := value.(map[string]any)
+			sub := fd.Message()
+			switch {
+			case fd.IsList() || fd.IsMap() || sub == nil || !isObject || len(child) == 0:
+				add(path)
+			case sub.FullName() == "google.protobuf.Struct" || sub.FullName() == "google.protobuf.Value":
+				free(path, value)
+			case sub.FullName() == "google.protobuf.Any":
+				add(path)
+			default:
+				// Only what is declared inside counts. An object holding
+				// nothing but undeclared members yields no path: naming the
+				// field itself would tell the service to replace it with an
+				// empty message because of a member it does not know.
+				walk(path, child, sub)
+			}
+		}
+	}
+	walk("", obj, md)
+	slices.Sort(paths)
+	return paths
 }
 
 func maskIsEmpty(mask protoreflect.Message) bool {
