@@ -113,7 +113,7 @@ Blank-import the database drivers you use (`_ "github.com/ti/common-go/dependenc
 ## More
 
 - [Getting started](docs/guides/getting-started.md) and the runnable [examples](examples/) module: one user service on every protocol, with protovalidate, streaming, a Connect web client and Kubernetes manifests.
-- [Upgrading from earlier versions](docs/upgrades/2026-Q4.md).
+- [Upgrading from earlier versions](docs/upgrades/2026-Q4.md); every change by commit range in the [changelog](CHANGELOG.md).
 - [Documentation index](docs/README.md).
 - [Maintenance playbook](docs/maintenance/playbook.md): how this library is kept current every quarter.
 
