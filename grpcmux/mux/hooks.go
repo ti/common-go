@@ -3,6 +3,8 @@ package mux
 import (
 	"context"
 	"net/http"
+
+	"github.com/ti/common-go/tools/ip"
 )
 
 // WithRouteResolver lets the server tell the middleware which RPC a request
@@ -76,4 +78,23 @@ type methodNotAllowedKey struct{}
 // front of it (the REST routes of grpcmux.WithREST).
 func MarkMethodNotAllowed(ctx context.Context) context.Context {
 	return context.WithValue(ctx, methodNotAllowedKey{}, true)
+}
+
+// WithClientIP sets how the client address of a request is worked out. The
+// result is the "ip" field of the access log, the "ip" incoming metadata and
+// the value of ip.ClientIPFromContext. Without this option it is the
+// connection's peer address: no request header is believed, because any
+// header can be written by the caller. grpcmux passes the trusted-proxy rule
+// of its configuration (rateLimit.trustedProxies).
+func WithClientIP(fn func(r *http.Request) string) Option {
+	return func(o *options) {
+		o.clientIP = fn
+	}
+}
+
+func (o *options) clientIPOf(r *http.Request) string {
+	if o.clientIP != nil {
+		return o.clientIP(r)
+	}
+	return ip.GetRemoteIP(r)
 }

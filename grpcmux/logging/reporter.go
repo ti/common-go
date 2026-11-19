@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ti/common-go/log"
+	"github.com/ti/common-go/tools/ip"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
@@ -98,6 +99,11 @@ func reportable(logger logging.Logger, opts *options) interceptors.CommonReporta
 		if !c.IsClient {
 			if remotePeer, ok := peer.FromContext(ctx); ok {
 				fields = append(fields, "peer", remotePeer.Addr.String())
+			}
+			// Set by grpcmux before this interceptor: the peer, or the client a
+			// trusted proxy speaks for. Never a header taken at its word.
+			if clientIP, ok := ip.ClientIPFromContext(ctx); ok {
+				fields = append(fields, "ip", clientIP)
 			}
 		}
 		// Correlate the access log line, and everything the handler logs

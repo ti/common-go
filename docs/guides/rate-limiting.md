@@ -71,7 +71,7 @@ From a trusted peer the header is read from the right, skipping trusted proxies;
 
 An **IPv6** client is limited by its /64, not by its single address: a subscriber controls the whole /64 and could use a new address for every request. `ipv6Prefix` changes the length (128 = per address; 56 or 48 for providers that delegate larger prefixes). IPv4 is always per address.
 
-`tools/ip.TrustedProxies` is the same logic for your own code. The older `ip.GetIPFromHTTPRequest` (the `ip` log field, and the key of `routerlimit` rules on `ip`) is unchanged: it takes the first `X-Forwarded-For` entry from anyone, so do not use it for new decisions.
+The same address is what the server logs and hands to handlers, whether or not any rate-limit rule is configured: the `ip` field of the access log (both ports), the `ip` incoming metadata (the key of `routerlimit` rules on `ip`) and `grpcmux.ClientIP(ctx)`. A handler that stores or logs the caller's address uses `grpcmux.ClientIP(ctx)` and never reads `X-Forwarded-For`, `X-Real-IP`, `Forwarded`, `True-Client-IP` or `CloudFront-Viewer-Address` itself: without `trustedProxies` those are whatever the caller sent. `tools/ip.TrustedProxies` is the same logic for code outside a request. `ip.GetIPFromHTTPRequest` (first `X-Forwarded-For` entry from anyone) is deprecated and no longer used by the server.
 
 ## Counting
 

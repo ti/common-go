@@ -41,6 +41,11 @@ func TestClientIP(t *testing.T) {
 		{"custom list: private peer is not trusted", custom, "10.0.3.4:55000", []string{"1.2.3.4"}, "10.0.3.4"},
 		{"custom list: listed peer is trusted", custom, "203.0.113.5:443", []string{"1.2.3.4, 198.51.100.7"}, "1.2.3.4"},
 		{"none: header never used", none, "10.0.3.4:55000", []string{"198.51.100.9"}, "10.0.3.4"},
+		{"entry with a port", private, "10.0.3.4:55000", []string{"1.2.3.4, [2001:db8::7]:443, 10.0.0.5:80"}, "2001:db8::7"},
+		{"empty entry stops the walk", private, "10.0.3.4:55000", []string{"1.2.3.4, , 10.0.0.5"}, "10.0.0.5"},
+		{"empty header from a trusted peer", private, "10.0.3.4:55000", []string{""}, "10.0.3.4"},
+		{"zone is dropped", private, "[fe80::1%eth0]:8080", []string{"2001:db8::7"}, "2001:db8::7"},
+		{"untrusted ipv6 peer, forged header ignored", private, "[2001:db8::9]:8080", []string{"1.2.3.4"}, "2001:db8::9"},
 		{"unparsable peer returned as is", private, "@", []string{"198.51.100.9"}, "@"},
 		// The default trusts nobody: a private or loopback peer cannot pick
 		// its address with the header either (L4 load balancer, SNAT).
@@ -75,5 +80,14 @@ func TestParseTrustedProxiesErrors(t *testing.T) {
 		if _, err := ParseTrustedProxies(list); err == nil {
 			t.Errorf("ParseTrustedProxies(%q): expected an error", list)
 		}
+	}
+}
+
+func TestClientIPContext(t *testing.T) {
+	if v, ok := ClientIPFromContext(t.Context()); ok || v != "" {
+		t.Errorf("empty context: %q, %v", v, ok)
+	}
+	if v, ok := ClientIPFromContext(NewContextWithClientIP(t.Context(), "198.51.100.9")); !ok || v != "198.51.100.9" {
+		t.Errorf("got %q, %v", v, ok)
 	}
 }

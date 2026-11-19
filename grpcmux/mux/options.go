@@ -91,6 +91,7 @@ type options struct {
 	preAuth           func(http.ResponseWriter, *http.Request) int // see WithPreAuth
 	notFoundStatus    bool                                         // see WithNotFoundStatus
 	typedErrorDetails bool                                         // see WithTypedErrorDetails
+	clientIP          func(*http.Request) string                   // see WithClientIP
 	marshalOptions    protojson.MarshalOptions
 	bodyMarshaler     runtime.Marshaler
 	errorMarshaler    runtime.Marshaler

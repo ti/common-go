@@ -3,6 +3,7 @@ package grpcmux
 import (
 	"context"
 
+	"github.com/ti/common-go/tools/ip"
 	"github.com/ti/common-go/tools/ratelimit"
 )
 
@@ -18,6 +19,9 @@ type platformOptions struct {
 
 	limiter      *ratelimit.Limiter // built on first use, see options.rateLimiter
 	limiterBuilt bool
+
+	proxies      *ip.TrustedProxies // built on first use, see options.trustedProxies
+	proxiesBuilt bool
 }
 
 // applyPlatformConfig is the WithConfig part of these features.

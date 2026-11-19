@@ -52,6 +52,8 @@ type Config struct {
 	// is the connection's peer. Behind a proxy this MUST be set, or every
 	// client shares the proxy's bucket; it must not name peers that are not
 	// proxies, or callers choose their own bucket. See ip.ParseTrustedProxies.
+	// It is read and validated also when Disabled is set or there are no
+	// rules: grpcmux derives the access log's "ip" and ClientIP from it.
 	TrustedProxies []string `yaml:"trustedProxies"`
 	// IPv6Prefix is the prefix length a bucket keyed by an IPv6 client
 	// address belongs to. A subscriber typically controls a whole /64 and can
@@ -180,12 +182,14 @@ var exemptPaths = []string{"/grpc.health.v1.Health/*", "/healthz", "/readyz", "/
 // (disabled, or no default and no rules), and a nil *Limiter allows
 // everything.
 func New(cfg Config, opts ...Option) (*Limiter, error) {
-	if cfg.Disabled || (cfg.Default == nil && len(cfg.Rules) == 0) {
-		return nil, nil //nolint:nilnil // a nil Limiter is the documented "off" value
-	}
+	// Before the "off" answer: the list also decides the client address the
+	// server logs and hands to handlers (grpcmux.ClientIP), limiter or not.
 	proxies, err := ip.ParseTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("ratelimit: %w", err)
+	}
+	if cfg.Disabled || (cfg.Default == nil && len(cfg.Rules) == 0) {
+		return nil, nil //nolint:nilnil // a nil Limiter is the documented "off" value
 	}
 	l := &Limiter{
 		memory:      NewMemoryStore(),

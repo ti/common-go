@@ -11,7 +11,7 @@
 | `time`, `level`, `msg` | Standard slog fields (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
 | `action` | What happened: for requests the RPC `/pkg.Service/Method` (HTTP paths are cut to their first two segments to keep cardinality low); for your own logs, the name you pass to `Action` |
 | `request_id` | `x-request-id` from the request, or generated; propagated as gRPC metadata |
-| `ip`, `peer`, `protocol`, `status`, `method` | Added to access logs. `status` is the HTTP status the client received (an auth rejection logs `401` or `403`, with `code` and `error`) |
+| `ip`, `peer`, `protocol`, `status`, `method` | Added to access logs. `peer` is the connection's remote address; `ip` is the client address: the peer, or what a peer listed in `rateLimit.trustedProxies` says in `X-Forwarded-For` ([rate-limiting.md](rate-limiting.md#client-ip)). A caller cannot set either with a header. `status` is the HTTP status the client received (an auth rejection logs `401` or `403`, with `code` and `error`) |
 | `trace_id`, `span_id` | The OpenTelemetry server span of the request, when the server runs with tracing ([tracing.md](tracing.md)); on the access log line and on everything logged through `log.Extract(ctx)` |
 | `project_id`, `client_id`, `user_id`, `device_id`, `organization_id` | From the `mux.AuthInfo` your auth function stored |
 | `request`, `response` | Bodies, when `logBody` is enabled |

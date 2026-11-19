@@ -1,6 +1,7 @@
 package ip
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/netip"
@@ -166,4 +167,22 @@ func (t *TrustedProxies) String() string {
 		parts = append(parts, p.String())
 	}
 	return strings.Join(parts, ", ") + " (X-Forwarded-For from these peers is believed)"
+}
+
+type clientIPKey struct{}
+
+// NewContextWithClientIP returns a context that carries the client address
+// the server worked out for the request (see [TrustedProxies.ClientIP]).
+func NewContextWithClientIP(ctx context.Context, clientIP string) context.Context {
+	return context.WithValue(ctx, clientIPKey{}, clientIP)
+}
+
+// ClientIPFromContext returns the client address of the request being
+// handled. grpcmux sets it on both ports before authentication; it is the
+// connection's peer unless the peer is a configured trusted proxy. Handlers
+// should store and log this value and never read X-Forwarded-For, X-Real-IP
+// or similar headers themselves.
+func ClientIPFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(clientIPKey{}).(string)
+	return v, ok && v != ""
 }

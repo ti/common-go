@@ -620,3 +620,19 @@ func TestChangedLimitStartsAFreshBucket(t *testing.T) {
 		}
 	}
 }
+
+// trustedProxies is validated although nothing is limited: the server uses
+// the list for the client address it logs and hands to handlers.
+func TestTrustedProxiesValidatedWhenOff(t *testing.T) {
+	for _, cfg := range []Config{
+		{Disabled: true, TrustedProxies: []string{"gateway.internal"}},
+		{TrustedProxies: []string{"none", "private"}},
+	} {
+		if l, err := New(cfg); err == nil || l != nil {
+			t.Errorf("New(%+v) = %v, %v; want an error", cfg, l, err)
+		}
+	}
+	if l, err := New(Config{Disabled: true, TrustedProxies: []string{"10.0.0.0/8"}}); err != nil || l != nil {
+		t.Errorf("valid list, disabled: %v, %v; want nil, nil", l, err)
+	}
+}

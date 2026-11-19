@@ -23,7 +23,13 @@ func GetLocalIP() net.IP {
 	return nil
 }
 
-// GetIPFromHTTPRequest get ip from http request.
+// GetIPFromHTTPRequest returns the first X-Forwarded-For entry, whoever sent
+// it, and writes the header when it is absent.
+//
+// Deprecated: the first entry is whatever the client chose to send, so this
+// value must not reach a log, a stored record or a limiter. Use
+// [TrustedProxies.FromRequest], or [ClientIPFromContext] inside a grpcmux
+// handler.
 func GetIPFromHTTPRequest(r *http.Request) string {
 	ip := r.Header.Get("x-forwarded-for")
 	if ip != "" {

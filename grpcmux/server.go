@@ -84,6 +84,7 @@ func NewServer(opts ...Option) *Server {
 		mux.WithAuthFunc(o.authFunction),
 		mux.WithNoAuthPrefixes(o.noAuthPrefix...),
 		mux.WithNoAuthMethods(o.noAuthMethods...),
+		mux.WithClientIP(o.trustedProxies().FromRequest),
 	}
 	if o.platform.rest {
 		muxOpts = append(muxOpts, mux.WithRouteResolver(s.resolveREST), mux.WithNotFoundStatus())

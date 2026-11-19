@@ -115,7 +115,7 @@ func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
 			// BEFORE auth so that auth rejections (401/403) still produce a full
 			// log line. Auth-derived fields (user_id/client_id/...) are added after
 			// a successful auth by injectAuthInfo below.
-			ctx = injectRequestInfo(ctx, r, logger, rpcMethod)
+			ctx = injectRequestInfo(ctx, r, logger, rpcMethod, opts.clientIPOf(r))
 			if opts.preAuth != nil {
 				if st := opts.preAuth(w, r.WithContext(ctx)); st != 0 {
 					responseStatus = st
@@ -308,17 +308,22 @@ func rpcAction(path string) string {
 // hand-mounted HTTP route with dynamic trailing parameters logs the same
 // low-cardinality "/{Service}/{Method}" shape the gRPC reporter emits.
 //
+// ip is the client address the server worked out (WithClientIP): the peer
+// unless it is a trusted proxy. It replaces any "ip" the caller sent as a
+// header, and no X-Forwarded-For value is read or written here.
+//
 // rpcMethod is the full method of a request the route resolver matched (a REST
 // route); it is then the action, so a call logs the same action on every
 // protocol and path variables never reach it.
-func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger, rpcMethod string) context.Context {
+func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger, rpcMethod, clientIP string,
+) context.Context {
 	action := rpcMethod
 	if action == "" {
 		action = rpcAction(r.URL.Path)
 	}
 	logData := map[string]any{
 		"action":   action,
-		"ip":       ip.GetIPFromHTTPRequest(r),
+		"ip":       clientIP,
 		"protocol": r.Proto,
 		"peer":     r.RemoteAddr,
 	}
@@ -334,7 +339,7 @@ func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger, 
 	for k, v := range logData {
 		md.Set(k, v.(string))
 	}
-	return md.ToIncoming(ctx)
+	return ip.NewContextWithClientIP(md.ToIncoming(ctx), clientIP)
 }
 
 // TraceFields returns the log fields that correlate a log line with its

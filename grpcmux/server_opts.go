@@ -71,6 +71,10 @@ func buildInterceptors(o *options) interceptorChains {
 		c.grpcStream = append(c.grpcStream, st)
 	}
 
+	// The client address, before anything that logs, limits or stores it.
+	// gRPC only: the HTTP middleware does it for the HTTP port.
+	grpcOnly(clientIPInterceptors(o.trustedProxies()))
+
 	// Rate limiting (WithRateLimit) is gRPC only: the HTTP middleware does it
 	// for the HTTP port, so no call is counted twice. Rules keyed by client
 	// IP run before authentication, so they also bound calls whose
