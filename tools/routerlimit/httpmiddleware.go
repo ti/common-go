@@ -19,10 +19,7 @@ func NewHandler(limiter *Limiter) func(h http.Handler) http.Handler {
 	if limiter.PersistenceFn == nil {
 		limiter.PersistenceFn = newMemLimiter().AllowN
 	}
-	l := &LimitHandler{
-		limiter: limiter,
-	}
-	l.responseWriter = func(w http.ResponseWriter, r *http.Request, block bool, limitMessage string) {
+	responseWriter := func(w http.ResponseWriter, r *http.Request, block bool, limitMessage string) {
 		var err error
 		if block {
 			err = status.Errorf(codes.Aborted, "rate limit aborted, %s", limitMessage)
@@ -32,8 +29,9 @@ func NewHandler(limiter *Limiter) func(h http.Handler) http.Handler {
 		mux.WriteHTTPErrorResponse(w, r, err)
 	}
 	return func(h http.Handler) http.Handler {
-		l.handler = h
-		return l
+		// One handler per wrapped handler: the middleware may be installed
+		// on more than one chain.
+		return &LimitHandler{handler: h, limiter: limiter, responseWriter: responseWriter}
 	}
 }
 
@@ -75,6 +73,8 @@ func (h *LimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-RateLimit-Reset", strconv.Itoa(int(reset/time.Second)))
 	w.Header().Set("X-RateLimit-Resource", resourceKey(lv.Key))
 	if !allowed {
+		// RFC 9110 section 10.2.3: whole seconds, at least one.
+		w.Header().Set("Retry-After", strconv.Itoa(max(int((reset+time.Second-1)/time.Second), 1)))
 		h.responseWriter(w, r, false, lv.Message)
 		return
 	}

@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+package example.report.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ti/common-go/examples/gen/go/example/report/v1;reportv1";
+
+// ReportService shows background work with observable status: StartReport
+// returns at once with a job that runs in the server process (package
+// background), WatchReport streams its state and progress until it is done.
+service ReportService {
+  // Starts building a report and returns immediately. Calling it again with
+  // the same request_id returns the report that request started.
+  //
+  // Errors: RESOURCE_EXHAUSTED when too many reports are waiting,
+  // UNAVAILABLE while the server is shutting down (retry).
+  rpc StartReport(StartReportRequest) returns (StartReportResponse) {
+    option (google.api.http) = {
+      post: "/v1/reports"
+      body: "*"
+    };
+  }
+
+  // Gets the current state of a report. NOT_FOUND once it has expired.
+  rpc GetReport(GetReportRequest) returns (GetReportResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (google.api.http) = {get: "/v1/reports/{report_id}"};
+  }
+
+  // Streams the report's state: the current state first, then every change,
+  // ending after a state that is done (SUCCEEDED, FAILED, CANCELLED,
+  // INTERRUPTED). The stream ends with UNAVAILABLE when the server starts
+  // shutting down; call it again to continue.
+  rpc WatchReport(WatchReportRequest) returns (stream WatchReportResponse) {
+    option (google.api.http) = {get: "/v1/reports/{report_id}:watch"};
+  }
+
+  // Asks a report to stop. A queued report is cancelled at once; a running
+  // one becomes CANCELLED shortly after. Cancelling a report that is done
+  // changes nothing.
+  rpc CancelReport(CancelReportRequest) returns (CancelReportResponse) {
+    option (google.api.http) = {
+      post: "/v1/reports/{report_id}:cancel"
+      body: "*"
+    };
+  }
+}
+
+// State of a report.
+enum State {
+  STATE_UNSPECIFIED = 0;
+  // Accepted, waiting for a worker (or for a retry).
+  STATE_QUEUED = 1;
+  STATE_RUNNING = 2;
+  STATE_SUCCEEDED = 3;
+  STATE_FAILED = 4;
+  // Stopped by CancelReport.
+  STATE_CANCELLED = 5;
+  // Stopped because the server shut down before the report was finished.
+  STATE_INTERRUPTED = 6;
+}
+
+message Report {
+  string report_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  State state = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Progress in sections; total_sections is what was requested.
+  int32 done_sections = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+  int32 total_sections = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Why the report failed, was cancelled or was interrupted.
+  string error = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // The finished report, set when state is SUCCEEDED.
+  string summary = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+  google.protobuf.Timestamp create_time = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
+  google.protobuf.Timestamp finish_time = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+message StartReportRequest {
+  // Number of sections to build (the example's unit of work).
+  int32 sections = 1 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 1000
+  }];
+  // Time spent on each section, in milliseconds (simulated work).
+  int32 section_millis = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 60000
+  }];
+  // Optional client-generated ID that makes the call idempotent.
+  string request_id = 3 [(buf.validate.field).string.max_len = 64];
+}
+
+message StartReportResponse {
+  Report report = 1;
+}
+
+message GetReportRequest {
+  string report_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetReportResponse {
+  Report report = 1;
+}
+
+message WatchReportRequest {
+  string report_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message WatchReportResponse {
+  Report report = 1;
+}
+
+message CancelReportRequest {
+  string report_id = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message CancelReportResponse {
+  Report report = 1;
+}

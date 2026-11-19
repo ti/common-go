@@ -2,10 +2,9 @@ package routerlimit
 
 import (
 	"context"
-	"fmt"
+	"strconv"
+	"sync"
 	"time"
-
-	"github.com/jellydator/ttlcache/v3"
 )
 
 // Limiter the limiter struct for hold fn and config
@@ -18,42 +17,53 @@ type Limiter struct {
 type PersistenceFn func(ctx context.Context, key string,
 	limit int, period time.Duration, n int) (remaining int, reset time.Duration, allowed bool)
 
+// memLimiter is the default PersistenceFn: fixed windows counted in process
+// memory. A window starts with the first request for a key and ends period
+// later.
 type memLimiter struct {
-	cache *ttlcache.Cache[string, int]
+	mu        sync.Mutex
+	windows   map[string]*memWindow
+	lastSweep time.Time
+}
+
+type memWindow struct {
+	count   int
+	expires time.Time
 }
 
 func newMemLimiter() *memLimiter {
-	opts := []ttlcache.Option[string, int]{
-		ttlcache.WithDisableTouchOnHit[string, int](),
-		ttlcache.WithCapacity[string, int](1024 * 1024 * 500),
-	}
-	return &memLimiter{
-		cache: ttlcache.New[string, int](opts...),
-	}
+	return &memLimiter{windows: make(map[string]*memWindow)}
 }
+
+// memSweepInterval is how often expired windows are dropped, so that keys
+// seen once (client IPs) do not accumulate.
+const memSweepInterval = time.Minute
 
 // AllowN ratelimit allow n times
 func (m *memLimiter) AllowN(_ context.Context, key string,
 	limit int, period time.Duration, n int,
 ) (remaining int, reset time.Duration, allowed bool) {
-	memKey := fmt.Sprintf("%s.%d", key, period.Microseconds()/1000)
-	data := m.cache.Get(memKey)
-	if data == nil {
-		remaining = limit - n
-		reset = period
-		allowed = true
-		m.cache.Set(memKey, n, period)
-		return
+	memKey := key + "." + strconv.FormatInt(period.Milliseconds(), 10)
+	now := time.Now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if now.Sub(m.lastSweep) > memSweepInterval {
+		for k, w := range m.windows {
+			if !now.Before(w.expires) {
+				delete(m.windows, k)
+			}
+		}
+		m.lastSweep = now
 	}
-	reset = time.Until(data.ExpiresAt())
-	count := data.Value()
-	remaining = limit - count - n
-	allowed = remaining >= 0
-	if !allowed {
-		remaining = 0
+	w := m.windows[memKey]
+	if w == nil || !now.Before(w.expires) {
+		w = &memWindow{expires: now.Add(period)}
+		m.windows[memKey] = w
 	}
-	if allowed && reset > time.Microsecond {
-		m.cache.Set(memKey, count+n, reset)
+	reset = w.expires.Sub(now)
+	if w.count+n > limit {
+		return 0, reset, false
 	}
-	return
+	w.count += n
+	return limit - w.count, reset, true
 }

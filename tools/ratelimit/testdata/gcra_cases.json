@@ -1,0 +1,530 @@
+{
+  "description": "Cases for the GCRA token bucket shared by every backend. All times are microseconds. A case starts with an empty store (no key). Each step calls take(n) at time base_time+at ('at' may go backwards: a clock step). 'tat' is the stored value minus base_time after the step, null while there is no key. A denied step consumes nothing: the stored value changes only when the step corrects it after a backward clock step. Expected results: allowed, remaining tokens, retry_after and reset_after.",
+  "base_time": 1800000000000000,
+  "cases": [
+    {
+      "name": "burst is spent, then one token per interval",
+      "interval": 500000,
+      "burst": 4,
+      "steps": [
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 3,
+          "retry_after": 0,
+          "reset_after": 500000,
+          "tat": 500000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 2,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 1000000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 1500000,
+          "tat": 1500000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 2000000,
+          "tat": 2000000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 500000,
+          "reset_after": 2000000,
+          "tat": 2000000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 500000,
+          "reset_after": 2000000,
+          "tat": 2000000
+        },
+        {
+          "at": 499999,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1,
+          "reset_after": 1500001,
+          "tat": 2000000
+        },
+        {
+          "at": 500000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 2000000,
+          "tat": 2500000
+        },
+        {
+          "at": 500000,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 500000,
+          "reset_after": 2000000,
+          "tat": 2500000
+        }
+      ]
+    },
+    {
+      "name": "a denied request consumes nothing",
+      "interval": 1000000,
+      "burst": 1,
+      "steps": [
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 1000000
+        },
+        {
+          "at": 1,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 999999,
+          "reset_after": 999999,
+          "tat": 1000000
+        },
+        {
+          "at": 2,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 999998,
+          "reset_after": 999998,
+          "tat": 1000000
+        },
+        {
+          "at": 999999,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1,
+          "reset_after": 1,
+          "tat": 1000000
+        },
+        {
+          "at": 1000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 2000000
+        }
+      ]
+    },
+    {
+      "name": "an idle bucket refills to burst and no further",
+      "interval": 100000,
+      "burst": 3,
+      "steps": [
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 2,
+          "retry_after": 0,
+          "reset_after": 100000,
+          "tat": 100000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 200000,
+          "tat": 200000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 300000,
+          "tat": 300000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 100000,
+          "reset_after": 300000,
+          "tat": 300000
+        },
+        {
+          "at": 10000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 2,
+          "retry_after": 0,
+          "reset_after": 100000,
+          "tat": 10100000
+        },
+        {
+          "at": 10000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 200000,
+          "tat": 10200000
+        },
+        {
+          "at": 10000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 300000,
+          "tat": 10300000
+        },
+        {
+          "at": 10000000,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 100000,
+          "reset_after": 300000,
+          "tat": 10300000
+        }
+      ]
+    },
+    {
+      "name": "partial refill",
+      "interval": 200000,
+      "burst": 5,
+      "steps": [
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 4,
+          "retry_after": 0,
+          "reset_after": 200000,
+          "tat": 200000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 3,
+          "retry_after": 0,
+          "reset_after": 400000,
+          "tat": 400000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 2,
+          "retry_after": 0,
+          "reset_after": 600000,
+          "tat": 600000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 800000,
+          "tat": 800000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 1000000
+        },
+        {
+          "at": 450000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 750000,
+          "tat": 1200000
+        },
+        {
+          "at": 450000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 950000,
+          "tat": 1400000
+        },
+        {
+          "at": 450000,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 150000,
+          "reset_after": 950000,
+          "tat": 1400000
+        },
+        {
+          "at": 600000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 1600000
+        }
+      ]
+    },
+    {
+      "name": "taking several tokens at once",
+      "interval": 250000,
+      "burst": 4,
+      "steps": [
+        {
+          "at": 0,
+          "n": 3,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 750000,
+          "tat": 750000
+        },
+        {
+          "at": 0,
+          "n": 2,
+          "allowed": false,
+          "remaining": 1,
+          "retry_after": 250000,
+          "reset_after": 750000,
+          "tat": 750000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 1000000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 250000,
+          "reset_after": 1000000,
+          "tat": 1000000
+        },
+        {
+          "at": 500000,
+          "n": 2,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 1500000
+        },
+        {
+          "at": 500000,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 250000,
+          "reset_after": 1000000,
+          "tat": 1500000
+        }
+      ]
+    },
+    {
+      "name": "more tokens than the bucket holds is never allowed",
+      "interval": 1000000,
+      "burst": 2,
+      "steps": [
+        {
+          "at": 0,
+          "n": 3,
+          "allowed": false,
+          "remaining": 2,
+          "retry_after": 1000000,
+          "reset_after": 0,
+          "tat": null
+        },
+        {
+          "at": 5000000,
+          "n": 3,
+          "allowed": false,
+          "remaining": 2,
+          "retry_after": 1000000,
+          "reset_after": 0,
+          "tat": null
+        },
+        {
+          "at": 5000000,
+          "n": 2,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 2000000,
+          "tat": 7000000
+        }
+      ]
+    },
+    {
+      "name": "burst of one is a strict interval",
+      "interval": 60000000,
+      "burst": 1,
+      "steps": [
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 60000000,
+          "tat": 60000000
+        },
+        {
+          "at": 59999999,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1,
+          "reset_after": 1,
+          "tat": 60000000
+        },
+        {
+          "at": 60000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 60000000,
+          "tat": 120000000
+        },
+        {
+          "at": 60000001,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 59999999,
+          "reset_after": 59999999,
+          "tat": 120000000
+        }
+      ]
+    },
+    {
+      "name": "a clock that steps back one hour does not lock the key out",
+      "interval": 1000000,
+      "burst": 2,
+      "steps": [
+        {
+          "at": 3600000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 1,
+          "retry_after": 0,
+          "reset_after": 1000000,
+          "tat": 3601000000
+        },
+        {
+          "at": 3600000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 2000000,
+          "tat": 3602000000
+        },
+        {
+          "at": 3600000000,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1000000,
+          "reset_after": 2000000,
+          "tat": 3602000000
+        },
+        {
+          "at": 0,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1000000,
+          "reset_after": 2000000,
+          "tat": 2000000
+        },
+        {
+          "at": 999999,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1,
+          "reset_after": 1000001,
+          "tat": 2000000
+        },
+        {
+          "at": 1000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 2000000,
+          "tat": 3000000
+        },
+        {
+          "at": 1000000,
+          "n": 1,
+          "allowed": false,
+          "remaining": 0,
+          "retry_after": 1000000,
+          "reset_after": 2000000,
+          "tat": 3000000
+        },
+        {
+          "at": 2000000,
+          "n": 1,
+          "allowed": true,
+          "remaining": 0,
+          "retry_after": 0,
+          "reset_after": 2000000,
+          "tat": 4000000
+        }
+      ]
+    }
+  ]
+}

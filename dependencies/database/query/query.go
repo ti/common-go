@@ -17,6 +17,8 @@ import (
 func PageQuery[T any](ctx context.Context, d database.Database, table string,
 	in *database.PageQueryRequest,
 ) (*database.PageQueryResponse[T], error) {
+	// A *database.DB dependency field wraps the backend.
+	d = database.Unwrap(d)
 	if q, ok := d.(database.PageQuerier); ok {
 		out := &database.PageQueryResponse[T]{}
 		if err := q.DoPageQuery(ctx, table, in, out); err != nil {
@@ -42,6 +44,8 @@ func PageQuery[T any](ctx context.Context, d database.Database, table string,
 func StreamQuery[T any](ctx context.Context, d database.Database, table string,
 	in *database.StreamQueryRequest,
 ) (*database.StreamResponse[T], error) {
+	// A *database.DB dependency field wraps the backend.
+	d = database.Unwrap(d)
 	if q, ok := d.(database.StreamQuerier); ok {
 		out := &database.StreamResponse[T]{}
 		if err := q.DoStreamQuery(ctx, table, in, out); err != nil {

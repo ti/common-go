@@ -100,8 +100,12 @@ Consumers upgrade themselves by following `docs/upgrades/<cycle>.md`. Write it e
    cd ~/Workspace/projects/platform/auth/backend
    T=$(mktemp -d); cp go.mod go.sum "$T"/; M="-modfile=$T/go.mod"
    go mod edit $M -replace github.com/ti/common-go=$HOME/Workspace/projects/foundation/common-go
-   go mod tidy $M && go build $M ./... && go vet $M ./... && go test $M ./...
+   go mod tidy $M && go build $M ./... && go vet $M ./... && \
+     go test $M ./internal/... ./tools/... ./storage/... ./cmd/...
    ```
+   Never run `go test ./...` in auth: its `AGENTS.md` forbids it, because `TestSmtp` and `TestSMS`
+   send a real e-mail and text message when their credentials are in the environment. The package
+   list above is the one auth itself prescribes.
 2. Adjust auth's code **only** where common-go deprecated something, changed behavior, or now provides what auth hand-rolled (list each change in the cycle plan). Follow auth's own `CLAUDE.md` conventions.
 3. After the common-go tag exists, run `go get github.com/ti/common-go@vX.Y.Z && go mod tidy` in auth and run auth's checks. Committing in auth is a separate step with the owner's approval. Deploying is out of scope for this playbook.
 

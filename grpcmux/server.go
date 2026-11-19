@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect/v2"
@@ -28,10 +29,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	pbhealth "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/stats"
 
 	"github.com/ti/common-go/graceful"
 	"github.com/ti/common-go/grpcmux/mux"
 	"github.com/ti/common-go/log"
+	"github.com/ti/common-go/tools/ratelimit"
 )
 
 // NewServer creates a server with the default middleware. Register services
@@ -41,6 +44,7 @@ func NewServer(opts ...Option) *Server {
 	if o.logger == nil {
 		o.logger = interceptorLogger()
 	}
+	o.drain = newDrainer()
 	chains := buildInterceptors(o)
 	serverOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(chains.grpcUnary...),
@@ -53,7 +57,12 @@ func NewServer(opts ...Option) *Server {
 	}
 	serverOpts = append(serverOpts, o.grpcServerOpts...)
 	if o.tracing {
-		serverOpts = append(serverOpts, grpc.StatsHandler(otelgrpc.NewServerHandler()))
+		// Health probes are neither logged nor traced.
+		serverOpts = append(serverOpts, grpc.StatsHandler(otelgrpc.NewServerHandler(
+			otelgrpc.WithFilter(func(info *stats.RPCTagInfo) bool {
+				return !strings.HasPrefix(info.FullMethodName, "/"+pbhealth.Health_ServiceDesc.ServiceName+"/")
+			}),
+		)))
 	}
 
 	s := &Server{
@@ -61,19 +70,47 @@ func NewServer(opts ...Option) *Server {
 		opts:       o,
 		grpcServer: grpc.NewServer(serverOpts...),
 		health:     newHealthServer(o.healthCheckers),
+		drain:      o.drain,
 		ctx:        log.NewContextWithLogger(context.Background(), log.Default(false)),
 	}
 	if !o.withoutHTTPInterceptors {
 		s.httpUnary = chainUnaryInterceptors(chains.httpUnary)
+		s.httpStream = chainStreamInterceptors(chains.httpStream)
 	}
 	s.initMemConn(serverOpts...)
-	pbhealth.RegisterHealthServer(s.grpcServer, s.health)
-	pbhealth.RegisterHealthServer(s.bufServer, s.health)
+	s.registerGRPC(&pbhealth.Health_ServiceDesc, s.health)
 
 	muxOpts := []mux.Option{
 		mux.WithAuthFunc(o.authFunction),
 		mux.WithNoAuthPrefixes(o.noAuthPrefix...),
-		mux.WithMiddleWares(o.httpMiddleWares...),
+		mux.WithNoAuthMethods(o.noAuthMethods...),
+	}
+	if o.platform.rest {
+		muxOpts = append(muxOpts, mux.WithRouteResolver(s.resolveREST), mux.WithNotFoundStatus())
+	}
+	if o.platform.rest || o.platform.typedErrors {
+		// REST is a new surface, so it starts with the typed form.
+		muxOpts = append(muxOpts, mux.WithTypedErrorDetails())
+	}
+	if o.rateLimiter() != nil {
+		// Client-IP rules before authentication, subject rules after it and
+		// before the application's own middleware.
+		muxOpts = append(muxOpts,
+			mux.WithPreAuth(func(w http.ResponseWriter, r *http.Request) int {
+				return s.limitHTTP(w, r, ratelimit.PreAuth)
+			}),
+			mux.WithMiddleWares(append([]func(http.Handler) http.Handler{s.rateLimitMiddleware}, o.httpMiddleWares...)...))
+	} else {
+		muxOpts = append(muxOpts, mux.WithMiddleWares(o.httpMiddleWares...))
+	}
+	if o.protocolErrors {
+		muxOpts = append(muxOpts, mux.WithProtocolErrors())
+	}
+	if o.withoutQueryAccessToken {
+		muxOpts = append(muxOpts, mux.WithoutQueryAccessToken())
+	}
+	if o.withoutMethodOverride {
+		muxOpts = append(muxOpts, mux.WithoutMethodOverride())
 	}
 	if len(o.preHTTPMiddleWares) > 0 {
 		muxOpts = append(muxOpts, mux.WithPreMiddleWares(o.preHTTPMiddleWares...))
@@ -91,6 +128,9 @@ func NewServer(opts ...Option) *Server {
 		muxOpts = append(muxOpts, mux.WithCORS(*o.cors))
 	}
 	s.mux = mux.NewServeMux(muxOpts...)
+	if o.reflection {
+		s.registerReflection()
+	}
 	return s
 }
 
@@ -113,6 +153,25 @@ type Server struct {
 	// httpUnary is the interceptor chain run by the HTTP bridges; nil when
 	// disabled with WithoutHTTPInterceptors.
 	httpUnary grpc.UnaryServerInterceptor
+	// httpStream is the same for streaming procedures of the connect-go
+	// server.
+	httpStream grpc.StreamServerInterceptor
+	// drain is the draining signal and the registry of open streams.
+	drain *drainer
+	// managed is set by Start: the server runs under graceful and drives
+	// the process-wide drain signal.
+	managed atomic.Bool
+	// releaseDrain releases this server's hold on graceful.Draining
+	// (graceful.DeferDrain); nil when the server is not run under graceful.
+	releaseDrain atomic.Pointer[func()]
+	// restRouter matches the REST routes of WithREST; nil without any.
+	restRouter *runtime.ServeMux
+	// connectProcs are the Connect unary procedures of the HTTP port.
+	connectProcs     map[string]bool
+	connectProcsOnce sync.Once
+	// bridgedServices are the "/pkg.Service/" prefixes whose streams were
+	// registered with RegisterConnectStreams.
+	bridgedServices map[string]bool
 
 	// In-memory gRPC server and client connection (see Conn).
 	bufServer   *grpc.Server
@@ -135,9 +194,30 @@ type Server struct {
 // is asked to stop (SIGINT/SIGTERM, graceful.Close, or a server failing to
 // start). It then calls [Server.Close] and every other closer registered with
 // graceful.AddCloser, and returns.
+//
+// Start does not say whether a server failed: a main that ends with it exits
+// with status 0 even when a port could not be bound. Prefer [Server.Run].
 func (s *Server) Start() {
+	_ = s.Run()
+}
+
+// Run is [Server.Start] that reports a failure: it returns an error when a
+// server could not start or stopped serving unexpectedly (the port is in
+// use, a TLS file is missing), and nil after a requested shutdown. In both
+// cases the shutdown sequence has completed.
+//
+//	if err := gs.Run(); err != nil {
+//		log.Action("Server").Fatal(err.Error()) // exit status 1
+//	}
+func (s *Server) Run() error {
 	graceful.AddCloser(s.Close)
-	graceful.Start(s.ctx,
+	// The process-wide drain signal (graceful.Draining, which background work
+	// watches) fires together with this server's: after the PRE_STOP wait,
+	// when the server stops accepting, not when the signal arrives.
+	release := graceful.DeferDrain() // must follow AddCloser(s.Close): it is tied to that closer
+	s.releaseDrain.Store(&release)
+	s.managed.Store(true)
+	return graceful.Run(s.ctx,
 		s.startGRPC,
 		s.startMetrics,
 		s.startHTTP,
@@ -164,6 +244,8 @@ func (s *Server) RegisterService(desc *grpc.ServiceDesc, serviceImpl any) {
 
 // registerGRPC registers a service on both gRPC servers.
 func (s *Server) registerGRPC(desc *grpc.ServiceDesc, serviceImpl any) {
+	s.health.addService(desc.ServiceName)
+	s.registerREST(desc, serviceImpl)
 	s.grpcServer.RegisterService(desc, serviceImpl)
 	s.bufServer.RegisterService(desc, serviceImpl)
 }
@@ -274,26 +356,30 @@ func (s *Server) httpHandler() http.Handler {
 		// Liveness: the process is up and serving HTTP. Never fails because of
 		// dependencies or draining, so a liveness probe never restarts a pod
 		// that is merely unready.
-		s.HandleFunc(http.MethodGet, "/healthz", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
+		healthz := func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
 			_, _ = io.WriteString(w, pbhealth.HealthCheckResponse_SERVING.String())
-		})
+		}
+		s.HandleFunc(http.MethodGet, "/healthz", healthz) // HEAD is served as GET by the middleware
 		// Readiness: the gRPC health status (NOT_SERVING before start, while
 		// draining, or when a health checker fails).
-		s.HandleFunc(http.MethodGet, "/readyz", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+		readyz := func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
 			if !s.health.ready(r.Context()) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				_, _ = io.WriteString(w, pbhealth.HealthCheckResponse_NOT_SERVING.String())
 				return
 			}
 			_, _ = io.WriteString(w, pbhealth.HealthCheckResponse_SERVING.String())
-		})
+		}
+		s.HandleFunc(http.MethodGet, "/readyz", readyz)
 		s.HandleFunc(http.MethodGet, "/favicon.ico", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
 			w.Header().Set("Cache-Control", "public, max-age=31536000")
 			w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(time.RFC1123))
 		})
-		s.HandleFunc(http.MethodGet, "/debug/**", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
-			http.DefaultServeMux.ServeHTTP(w, r)
-		})
+		if s.debugHandlersEnabled() {
+			s.HandleFunc(http.MethodGet, "/debug/**", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+				http.DefaultServeMux.ServeHTTP(w, r)
+			})
+		}
 
 		if s.connectServer != nil {
 			if s.httpServerMux == nil {
@@ -302,6 +388,9 @@ func (s *Server) httpHandler() http.Handler {
 			s.mountConnect(s.httpServerMux)
 		}
 		var handler http.Handler
+		if s.restRouter != nil && s.httpServerMux == nil {
+			s.httpServerMux = http.NewServeMux()
+		}
 		if s.httpServerMux == nil {
 			handler = s.mux
 		} else {
@@ -309,7 +398,8 @@ func (s *Server) httpHandler() http.Handler {
 			// with the raw gateway mux as the fallback for every other path. The
 			// middleware chain (logging, auth, recovery, request ID, ...) wraps
 			// the combined handler exactly once.
-			s.httpServerMux.Handle("/", s.mux.ServeMux())
+			// REST routes (WithREST) are dispatched ahead of the gateway mux.
+			s.httpServerMux.Handle("/", s.restOrGateway())
 			handler = s.mux.Middleware(s.httpServerMux)
 		}
 		// WebSocket upgrades go to wsServeMux before anything else.
@@ -328,6 +418,8 @@ func (s *Server) httpHandler() http.Handler {
 		// request path (for an RPC, /pkg.Service/Method).
 		if s.opts.tracing {
 			handler = otelhttp.NewHandler(handler, "http.server",
+				// Health probes are neither logged nor traced.
+				otelhttp.WithFilter(func(r *http.Request) bool { return !probePaths[r.URL.Path] }),
 				otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
 					if r.URL != nil && r.URL.Path != "" {
 						return r.Method + " " + r.URL.Path
@@ -335,6 +427,16 @@ func (s *Server) httpHandler() http.Handler {
 					return r.Method
 				}),
 			)
+		}
+		if s.opts.drainStreams {
+			// Outside every wrapper, so the controller reaches the connection:
+			// the drain uses it to wake a stream handler that is blocked
+			// reading the request (see drainConnectInterceptor).
+			inner := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				ctx := context.WithValue(r.Context(), responseControllerKey{}, http.NewResponseController(w))
+				inner.ServeHTTP(w, r.WithContext(ctx))
+			})
 		}
 		s.handler = handler
 	})
@@ -366,6 +468,10 @@ func (s *Server) newHTTPServer(handler http.Handler, useTLS bool) *http.Server {
 		DisableClientPriority: s.opts.disableClientPriority,
 		HTTP2: &http.HTTP2Config{
 			MaxConcurrentStreams: s.opts.maxConcurrentStreams,
+		},
+		// Every request context carries the draining signal (see Draining).
+		BaseContext: func(net.Listener) context.Context {
+			return withDrainer(context.Background(), s.drain)
 		},
 	}
 }
@@ -399,6 +505,9 @@ func (s *Server) startGRPC(ctx context.Context) error {
 	if err != nil {
 		s.Logger.Log(s.ctx, logging.LevelError, "Listen grpc "+s.opts.grpcAddr+" error for "+err.Error())
 		return fmt.Errorf("start grpc: %w", err)
+	}
+	for name := range s.grpcServer.GetServiceInfo() {
+		s.health.addService(name) // services registered on GrpcServer() directly
 	}
 	go func() { _ = s.bufServer.Serve(s.bufListener) }()
 	s.health.setServing(true)
@@ -464,9 +573,12 @@ func preStopDelay() time.Duration {
 //     probes take the pod out of rotation;
 //  2. it waits PRE_STOP (see preStopDelay) while load balancers catch up;
 //     requests keep being served during the wait;
-//  3. HTTP Shutdown and gRPC GracefulStop run in parallel and wait for
+//  3. draining begins: the [Draining] signal fires, so handlers that watch it
+//     end their streams, and with [WithDrainStreams] the streams still open
+//     after the grace are canceled and end with UNAVAILABLE;
+//  4. HTTP Shutdown and gRPC GracefulStop run in parallel and wait for
 //     in-flight requests and streams;
-//  4. if ctx expires first, remaining connections are closed forcibly.
+//  5. if ctx expires first, remaining connections are closed forcibly.
 //
 // Kubernetes' terminationGracePeriodSeconds must exceed PRE_STOP plus the
 // longest request you want to let finish.
@@ -483,6 +595,22 @@ func (s *Server) Close(ctx context.Context) error {
 		select {
 		case <-time.After(d):
 		case <-ctx.Done():
+		}
+	}
+
+	s.drain.begin()
+	// Only this server's share of the process-wide signal: it fires when
+	// the last server run under graceful has released it.
+	if release := s.releaseDrain.Load(); release != nil {
+		(*release)()
+	}
+	s.drain.cancelStreams(drainAlways)
+	if s.opts.drainStreams {
+		if grace := s.opts.drainStreamsGrace; grace > 0 {
+			timer := time.AfterFunc(grace, func() { s.drain.cancelStreams(drainAll) })
+			defer timer.Stop()
+		} else {
+			s.drain.cancelStreams(drainAll)
 		}
 	}
 
@@ -572,6 +700,43 @@ type memAddr struct{}
 
 func (memAddr) Network() string { return "memory" }
 func (memAddr) String() string  { return "grpcmux-memconn" }
+
+// probePaths are the health endpoints: they are not traced (and not logged,
+// see mux).
+var probePaths = map[string]bool{"/healthz": true, "/readyz": true, "/favicon.ico": true}
+
+// debugHandlersEnabled reports whether GET /debug/** is served on the HTTP
+// port: only when asked for (WithDebugHandlers(true)). The presence of an
+// AuthFunc is not taken as protection: an AuthFunc may admit everyone (the
+// one of a nil oidc.Provider, guest mode, does).
+func (s *Server) debugHandlersEnabled() bool {
+	return s.opts.debugHandlers != nil && *s.opts.debugHandlers
+}
+
+// chainStreamInterceptors composes stream interceptors into one, outermost
+// first. It returns nil for an empty list.
+func chainStreamInterceptors(interceptors []grpc.StreamServerInterceptor) grpc.StreamServerInterceptor {
+	switch len(interceptors) {
+	case 0:
+		return nil
+	case 1:
+		return interceptors[0]
+	}
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return interceptors[0](srv, ss, info, chainedStreamHandler(interceptors, 0, info, handler))
+	}
+}
+
+func chainedStreamHandler(interceptors []grpc.StreamServerInterceptor, curr int,
+	info *grpc.StreamServerInfo, final grpc.StreamHandler,
+) grpc.StreamHandler {
+	if curr == len(interceptors)-1 {
+		return final
+	}
+	return func(srv any, ss grpc.ServerStream) error {
+		return interceptors[curr+1](srv, ss, info, chainedStreamHandler(interceptors, curr+1, info, final))
+	}
+}
 
 // chainUnaryInterceptors composes interceptors into one, outermost first.
 // Each call builds its own chain, so an interceptor may invoke its handler

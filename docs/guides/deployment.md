@@ -39,7 +39,9 @@ spec:
         - {name: GRACEFUL_TIMEOUT, value: "50s"}   # optional; shutdown deadline, below the grace period
 ```
 
-`terminationGracePeriodSeconds` must exceed `PRE_STOP` plus the time in-flight requests and streams need to finish; otherwise the kubelet sends SIGKILL in the middle of the drain. Long-lived streams (server streaming, WebSockets) end when `GRACEFUL_TIMEOUT` (default `6m`) or the grace period runs out, so clients should reconnect.
+`terminationGracePeriodSeconds` must exceed `PRE_STOP` plus the time in-flight requests and streams need to finish; otherwise the kubelet sends SIGKILL in the middle of the drain.
+
+Long-lived streams (watch streams, server-sent events) do not finish by themselves. Unless told otherwise the server waits for them until `GRACEFUL_TIMEOUT` (default `6m`) and then cuts the connection, which makes every rollout slow and ends streams without an end-of-stream. Set `drainStreams: true` (optionally `drainStreamsGrace`) so that streams end cleanly, with a retryable `UNAVAILABLE`, right after `PRE_STOP`, and the pod exits as soon as the last unary call is done; handlers can also watch `grpcmux.Draining(ctx)` and end on their own. See [server.md](server.md#long-lived-streams-and-the-drain). WebSockets registered with `HandleWebSocket` are not tracked by the HTTP server: close them from `gs.Draining()`.
 
 Add a PodDisruptionBudget and at least two replicas: PRE_STOP protects against traffic still arriving at a terminating pod, the PDB against all pods terminating at once.
 
@@ -66,5 +68,5 @@ Route `/pkg.Service/*` (Connect) and your REST prefixes with an `HTTPRoute` (or 
 ## Observability
 
 - Metrics: scrape `:9090/metrics` (gRPC server/client metrics with exemplars, HTTP client metrics, panics, Go runtime).
-- Tracing: enable `tracing: true` and install an OpenTelemetry TracerProvider (OTLP exporter) in `main`.
+- Tracing: enable `tracing: true`, call `tracing.Init(ctx)` in `main` and set `OTEL_EXPORTER_OTLP_ENDPOINT` (and `OTEL_SERVICE_NAME`) on the container ([tracing.md](tracing.md)). Request logs then carry `trace_id` and `span_id`.
 - Logs: JSON on stdout ([logging.md](logging.md)).

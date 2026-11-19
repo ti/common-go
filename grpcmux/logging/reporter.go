@@ -9,6 +9,7 @@ import (
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -98,6 +99,12 @@ func reportable(logger logging.Logger, opts *options) interceptors.CommonReporta
 			if remotePeer, ok := peer.FromContext(ctx); ok {
 				fields = append(fields, "peer", remotePeer.Addr.String())
 			}
+		}
+		// Correlate the access log line, and everything the handler logs
+		// through the request logger, with the trace (the span is set by the
+		// otelgrpc stats handler when the server runs WithTracing).
+		if sc := trace.SpanContextFromContext(ctx); sc.IsValid() && !c.IsClient {
+			log.Inject(ctx, map[string]any{"trace_id": sc.TraceID().String(), "span_id": sc.SpanID().String()})
 		}
 		if d, ok := ctx.Deadline(); ok {
 			fields = append(fields, "deadline", d.Format(time.RFC3339))

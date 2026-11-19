@@ -15,6 +15,7 @@ import (
 	"github.com/ti/common-go/config"
 	"github.com/ti/common-go/examples/internal/app"
 	"github.com/ti/common-go/log"
+	"github.com/ti/common-go/tracing"
 )
 
 func main() {
@@ -23,11 +24,21 @@ func main() {
 	if err := config.Init(ctx, "", &cfg, app.NewDependencyOptions()...); err != nil {
 		log.Action("InitConfig").Fatal(err.Error())
 	}
+	// Trace export, configured by the standard OTEL_* environment (a no-op
+	// without OTEL_EXPORTER_OTLP_ENDPOINT). The server creates the spans when
+	// apis.tracing is on and logs trace_id/span_id with every request; the
+	// last spans are flushed on shutdown.
+	if _, err := tracing.Init(ctx, tracing.WithServiceName("example-user-service")); err != nil {
+		log.Action("InitTracing").Warn("tracing disabled: " + err.Error())
+	}
 	gs, err := app.New(ctx, &cfg)
 	cancel()
 	if err != nil {
 		log.Action("InitServer").Fatal(err.Error())
 	}
 	// Blocks until SIGTERM/SIGINT, then drains (see docs/guides/server.md).
-	gs.Start()
+	// A server that could not start (port in use) is an error: exit 1.
+	if err := gs.Run(); err != nil {
+		log.Action("Server").Fatal(err.Error())
+	}
 }

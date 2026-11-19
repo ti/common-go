@@ -6,10 +6,12 @@ This is a separate Go module (`github.com/ti/common-go/examples`, with `replace 
 
 ```
 proto/example/user/v1/user.proto   API, data model and validation rules (the source of truth)
-buf.yaml, buf.gen.yaml             code generation (Go, gRPC, gateway, connect-go v2, OpenAPI, TypeScript)
+buf.yaml, buf.gen.yaml             code generation with pinned plugins (Go, gRPC, connect-go v2, OpenAPI, TypeScript)
 gen/                               generated code (committed, so `go run` works without buf)
 internal/userservice               the implementation: business logic only
+internal/reportservice             background work: StartReport submits a job, WatchReport streams its progress
 internal/app                       wiring: config, dependencies, protocols, health; integration test
+internal/notestore                 repository pattern: a domain Store interface on database.Database (PostgreSQL, MySQL, MongoDB, mock)
 cmd/server                         main: config.Init → app.New → Start
 cmd/client                         calls the server over gRPC and Connect
 cmd/httpclient                     dependencies/http client usage
@@ -30,7 +32,7 @@ go run ./cmd/server          # HTTP :8080, gRPC :8081, metrics :9090; in-memory 
 In another terminal:
 
 ```bash
-# REST (grpc-gateway, from the google.api.http annotations)
+# REST (grpcmux.WithREST, from the google.api.http annotations)
 curl -X POST localhost:8080/v1/users -H 'Content-Type: application/json' \
   -d '{"name":"Ada","email":"ada@example.com","age":36}'
 curl 'localhost:8080/v1/users?page_size=10'
@@ -46,6 +48,11 @@ curl -X POST localhost:8080/v1/users -H 'Content-Type: application/json' -d '{"n
 # Health: liveness and readiness
 curl localhost:8080/healthz; curl localhost:8080/readyz
 
+# Reflection (apis.reflection: true): no proto files needed, on either port
+grpcurl -plaintext localhost:8081 list
+buf curl --protocol grpc --http2-prior-knowledge --reflect -d '{}' \
+  http://localhost:8080/example.user.v1.UserService/ListUsers
+
 # gRPC and Connect from Go
 go run ./cmd/client
 ```
@@ -60,17 +67,19 @@ To use a real database, change `dependencies.db` in `configs/config.yaml`, for e
 
 ## How the protocols are wired
 
-`internal/app/app.go` registers the one implementation three times:
+`internal/app/app.go` registers the one implementation twice, on a server created with `grpcmux.WithREST()`:
 
 ```go
-userv1.RegisterUserServiceServer(gs, svc)                                          // native gRPC (+ gs.Conn())
-userv1.RegisterUserServiceHandlerClient(ctx, gs.ServeMux(), userv1.NewUserServiceClient(gs.Conn())) // REST
+userv1.RegisterUserServiceServer(gs, svc)                                          // native gRPC, and REST from the annotations
 userv1connect.RegisterUserServiceHandler(gs.ConnectServer(), userservice.ConnectHandler{Service: svc}) // Connect, gRPC-Web
 ```
 
-- The REST gateway calls the service through the in-memory connection (`gs.Conn()`). REST requests therefore run the same interceptor chain as gRPC, including validation, and the streaming `ExportUsers` method works over REST too. `RegisterUserServiceHandlerServer` would call the methods directly, with neither of those.
+- REST needs no generated gateway code and no call of its own: with `WithREST()` (or `apis.rest: true`) registering a service also adds a route for each `google.api.http` annotation. REST requests run the same interceptor chain as the Connect path, including validation, and the streaming `ExportUsers` method is newline-delimited JSON ([REST guide](../docs/guides/rest.md)).
 - Connect uses connect-go v2 generated handlers so streaming works. For a unary-only service you can skip connect-go codegen and use `grpcmux.RegisterConnectService(gs, &userv1.UserService_ServiceDesc, svc)` instead of the first and third lines. Use one approach or the other, not both.
-- Methods return gRPC status errors everywhere. grpcmux converts them for Connect, and the gateway maps them to HTTP statuses.
+- Methods return gRPC status errors everywhere. grpcmux converts them for Connect and maps them to HTTP statuses and a JSON error body for REST; the `google.rpc.ErrorInfo` reason reaches the client on every protocol.
+- Rate limits and deadlines come from the `rateLimit` and `timeouts` blocks of `configs/config.yaml` ([guide](../docs/guides/rate-limiting.md)). With `dependencies.redis` set, the buckets live in Redis and the limits hold across replicas.
+
+`configs/config.yaml` also turns on what a production service wants from the server ([server guide](../docs/guides/server.md)): `drainStreams` (open streams end with `UNAVAILABLE` right after `PRE_STOP` instead of holding the shutdown), `protocolErrors` (auth failures on streams in the client's protocol), `reflection`, and `tracing` (spans are exported by `tracing.Init` in `cmd/server` when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; request logs then carry `trace_id`).
 
 See [docs/guides](../docs/guides/) for each building block.
 
@@ -78,8 +87,11 @@ See [docs/guides](../docs/guides/) for each building block.
 
 ```bash
 cd examples
-buf lint && buf generate    # uses remote plugins from buf.build
+buf lint && buf generate    # buf >= 1.50; remote plugins from buf.build, each pinned to an exact version
+git diff --exit-code gen web/connect/src/gen   # an unchanged tree regenerates to identical files
 ```
+
+`buf generate` also writes the OpenAPI document of the REST API, `gen/openapi/api.swagger.json`, with the `buf.build/grpc-ecosystem/openapiv2` plugin pinned to the grpc-gateway version in `go.mod` and with snake_case field names, like the server's JSON. `TestOpenAPIMatchesServedRoutes` checks that every documented operation is served. To upgrade a generator, change its version in `buf.gen.yaml` (and the matching module in `go.mod`), regenerate and commit the diff.
 
 ## Test
 

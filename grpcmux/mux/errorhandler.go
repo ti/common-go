@@ -48,7 +48,7 @@ func httpErrorHandler(opts *options) runtime.ErrorHandlerFunc {
 		w.Header().Del("Trailer")
 		w.Header().Del("Transfer-Encoding")
 		s := convertErrorToStatus(err)
-		buf, errBytes := newErrorBytes(s, opts.errorMarshaler, opts.newErrorBody)
+		buf, errBytes := newErrorBytes(s, opts.errorMarshaler, opts.newErrorBody, opts.typedErrorDetails)
 		if errBytes != nil {
 			grpclog.Infof("Failed to marshal error message %q: %v", s, errBytes)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -94,9 +94,12 @@ func routingErrorHandler(opts *options) runtime.RoutingErrorHandlerFunc {
 	return func(ctx context.Context, mux *runtime.ServeMux, marshaler runtime.Marshaler,
 		w http.ResponseWriter, r *http.Request, httpStatus int,
 	) {
+		if httpStatus == http.StatusNotFound && ctx.Value(methodNotAllowedKey{}) != nil {
+			httpStatus = http.StatusMethodNotAllowed
+		}
 		if httpStatus == http.StatusNotFound {
 			s := convertErrorToStatus(status.Error(codes.NotFound, "API NOT FOUND"))
-			buf, errBytes := newErrorBytes(s, opts.errorMarshaler, opts.newErrorBody)
+			buf, errBytes := newErrorBytes(s, opts.errorMarshaler, opts.newErrorBody, opts.typedErrorDetails)
 			if errBytes != nil {
 				grpclog.Infof("Failed to marshal error message %q: %v", s, errBytes)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -104,6 +107,10 @@ func routingErrorHandler(opts *options) runtime.RoutingErrorHandlerFunc {
 					grpclog.Infof("Failed to write response: %v", err)
 				}
 				return
+			}
+			if opts.notFoundStatus {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
 			}
 			if _, err := w.Write(buf); err != nil {
 				grpclog.Infof("Failed to write response: %v", err)

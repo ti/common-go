@@ -11,7 +11,8 @@
 | `time`, `level`, `msg` | Standard slog fields (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
 | `action` | What happened: for requests the RPC `/pkg.Service/Method` (HTTP paths are cut to their first two segments to keep cardinality low); for your own logs, the name you pass to `Action` |
 | `request_id` | `x-request-id` from the request, or generated; propagated as gRPC metadata |
-| `ip`, `peer`, `protocol`, `status`, `method` | Added to access logs |
+| `ip`, `peer`, `protocol`, `status`, `method` | Added to access logs. `status` is the HTTP status the client received (an auth rejection logs `401` or `403`, with `code` and `error`) |
+| `trace_id`, `span_id` | The OpenTelemetry server span of the request, when the server runs with tracing ([tracing.md](tracing.md)); on the access log line and on everything logged through `log.Extract(ctx)` |
 | `project_id`, `client_id`, `user_id`, `device_id`, `organization_id` | From the `mux.AuthInfo` your auth function stored |
 | `request`, `response` | Bodies, when `logBody` is enabled |
 
@@ -30,7 +31,11 @@ ctx = log.NewContext(ctx, map[string]any{"job": "nightly"}) // for work outside 
 log.SetLevel("info") // debug (default), info, warn, error; set from config Log.Level
 ```
 
-The message argument is a format string only when extra arguments are passed; key/value pairs are not supported, use `With` for fields. `Fatal` logs the message through the standard `log` package and exits with status 1; fields such as `action` are not included on that line.
+The message argument is a format string only when extra arguments are passed; key/value pairs are not supported, use `With` for fields. `Fatal` writes the line at error level with the logger's fields and `"fatal":true`, then exits with status 1.
+
+Levels: `log.SetLevel(name)` never panics. An empty name changes nothing; an unknown name changes nothing and is reported as an error log line. Names are case-insensitive, surrounding whitespace is ignored, and `warning` means `warn`. `log.TrySetLevel(name) error` returns that error instead, `log.ParseLevel` parses a name, `log.Level()` reads the current level.
+
+`log.SetOutput(w)` sends all output of this package (and of `slog`'s default logger) to `w` instead of stdout. It is safe to call while other goroutines log; tests use it to assert on log lines.
 
 Inside a request, prefer `log.Inject` for facts about the request (they appear once, on the access log line) and `log.Extract(ctx)` for separate events.
 

@@ -32,6 +32,9 @@ func (m *Mock) Insert(ctx context.Context, tableName string, docs any) (count in
 			if err != nil {
 				return count, err
 			}
+			if err := m.checkUnique(tableName, table, row, -1); err != nil {
+				return count, err
+			}
 			table.data = append(table.data, row)
 			count++
 		}
@@ -39,6 +42,9 @@ func (m *Mock) Insert(ctx context.Context, tableName string, docs any) (count in
 		// Single document
 		row, err := structToMap(docs)
 		if err != nil {
+			return 0, err
+		}
+		if err := m.checkUnique(tableName, table, row, -1); err != nil {
 			return 0, err
 		}
 		table.data = append(table.data, row)
@@ -209,6 +215,9 @@ func (m *Mock) ReplaceOne(ctx context.Context, tableName string, condition datab
 	}
 
 	// Not found: insert (upsert semantics, matching mongo SetUpsert(true))
+	if err := m.checkUnique(tableName, table, newRow, -1); err != nil {
+		return 0, err
+	}
 	table.data = append(table.data, newRow)
 	return 1, nil
 }
@@ -407,13 +416,21 @@ func sliceToArray(matches []map[string]any, arrayPtr any) error {
 	}
 
 	elemType := v.Type().Elem()
+	pointers := elemType.Kind() == reflect.Pointer
+	if pointers {
+		elemType = elemType.Elem()
+	}
 
 	for _, match := range matches {
 		elem := reflect.New(elemType)
 		if err := mapToStruct(match, elem.Interface()); err != nil {
 			return err
 		}
-		v.Set(reflect.Append(v, elem.Elem()))
+		if pointers {
+			v.Set(reflect.Append(v, elem))
+		} else {
+			v.Set(reflect.Append(v, elem.Elem()))
+		}
 	}
 
 	return nil

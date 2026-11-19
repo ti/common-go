@@ -18,6 +18,10 @@ import (
 func StreamQuery[T any](ctx context.Context, s *SQL, table string,
 	in *database.StreamQueryRequest,
 ) (out *database.StreamResponse[T], err error) {
+	// Sort, select and filter fields usually come from the request.
+	if err = errors.Join(checkTable(table), checkConds(in.Filters), checkSelect(in.Select)); err != nil {
+		return nil, err
+	}
 	query := &Query{
 		Table:    table,
 		SelectID: true,
@@ -34,7 +38,9 @@ func StreamQuery[T any](ctx context.Context, s *SQL, table string,
 	var selectFields map[string]bool
 	fullQuery := TransformSQLQuery(&data)
 	query.Select, selectFields = ParseSelect(fullQuery, in.Select)
-	parseOrderQuery(query, s, in)
+	if err = parseOrderQuery(query, s, in); err != nil {
+		return nil, err
+	}
 	out = &database.StreamResponse[T]{}
 	var rows *sql.Rows
 	// nolint: rowserrcheck // it is checked in query data
@@ -47,7 +53,7 @@ func StreamQuery[T any](ctx context.Context, s *SQL, table string,
 		scheme:       s.scheme,
 		dataType:     reflect.TypeOf(data),
 		selectFields: selectFields,
-		timeLoc:      s.loc,
+		timeLoc:      s.location(),
 	}
 	var firstID int64
 	var lastID int64
@@ -88,12 +94,16 @@ func StreamQuery[T any](ctx context.Context, s *SQL, table string,
 	return
 }
 
-func parseOrderQuery(query *Query, s *SQL, in *database.StreamQueryRequest) {
+func parseOrderQuery(query *Query, s *SQL, in *database.StreamQueryRequest) error {
 	query.Order = "`_id`"
 	if !in.Ascending {
 		query.Order = "`_id` DESC"
 	}
-	if where, args := ParseWhere(in.Filters, s.project); where != "" {
+	where, args, err := s.whereMode(in.Filters, false)
+	if err != nil {
+		return err
+	}
+	if where != "" {
 		if query.Where != "" {
 			query.Where += queryAnd + where
 			query.Arguments = append(query.Arguments, args...)
@@ -102,6 +112,7 @@ func parseOrderQuery(query *Query, s *SQL, in *database.StreamQueryRequest) {
 			query.Arguments = args
 		}
 	}
+	return nil
 }
 
 func encodePageToken(first, last int64) string {

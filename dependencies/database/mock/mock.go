@@ -2,12 +2,14 @@
 package mock
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/url"
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ti/common-go/dependencies/database"
 )
@@ -25,6 +27,9 @@ type Mock struct {
 	tables          map[string]*table
 	defaultDatabase string
 	counters        map[string]int64
+	// unique holds, per table, the field sets declared unique with
+	// EnsureIndexes; Insert enforces them like a real unique index.
+	unique map[string][][]string
 }
 
 type table struct {
@@ -223,6 +228,11 @@ func mapToStruct(m map[string]any, dest any) error {
 			fieldValue := v.Field(i)
 			if fieldValue.CanSet() {
 				val := reflect.ValueOf(value)
+				if !val.IsValid() {
+					// A stored nil (NULL) reads back as the zero value.
+					fieldValue.SetZero()
+					continue
+				}
 				if val.Type().AssignableTo(fieldValue.Type()) {
 					fieldValue.Set(val)
 				} else if val.Type().ConvertibleTo(fieldValue.Type()) {
@@ -247,9 +257,11 @@ func matchCondition(row map[string]any, cond database.CE) bool {
 
 	switch cond.C {
 	case database.Eq:
-		return reflect.DeepEqual(value, cond.Value)
+		return valuesEqual(value, cond.Value)
 	case database.Ne:
-		return !reflect.DeepEqual(value, cond.Value)
+		return !valuesEqual(value, cond.Value)
+	case database.Contains:
+		return containsValue(cond.Value, value)
 	case database.Gt:
 		return compareValues(value, cond.Value) > 0
 	case database.Gte:
@@ -267,50 +279,71 @@ func matchCondition(row map[string]any, cond database.CE) bool {
 	}
 }
 
-// compareValues compares two values (for Gt, Gte, Lt, Lte)
+// valuesEqual is equality as a database sees it: times are equal when they
+// are the same instant (whatever the zone), numbers when they have the same
+// value (whatever the Go type).
+func valuesEqual(a, b any) bool {
+	if cmp, ok := compareOrdered(a, b); ok {
+		return cmp == 0
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+// compareValues compares two values (for Gt, Gte, Lt, Lte and sorting).
+// Values that cannot be ordered against each other compare as equal.
 func compareValues(a, b any) int {
-	switch v1 := a.(type) {
-	case int:
-		v2, ok := b.(int)
+	cmp, _ := compareOrdered(a, b)
+	return cmp
+}
+
+// compareOrdered orders strings, numbers of any kind, bools and times.
+func compareOrdered(a, b any) (int, bool) {
+	if ta, ok := a.(time.Time); ok {
+		tb, ok := b.(time.Time)
 		if !ok {
-			return 0
+			return 0, false
 		}
-		if v1 > v2 {
-			return 1
-		} else if v1 < v2 {
-			return -1
+		return ta.Compare(tb), true
+	}
+	va, vb := reflect.ValueOf(a), reflect.ValueOf(b)
+	if !va.IsValid() || !vb.IsValid() {
+		return 0, false
+	}
+	switch {
+	case va.Kind() == reflect.String && vb.Kind() == reflect.String:
+		return strings.Compare(va.String(), vb.String()), true
+	case va.Kind() == reflect.Bool && vb.Kind() == reflect.Bool:
+		switch {
+		case va.Bool() == vb.Bool():
+			return 0, true
+		case vb.Bool():
+			return -1, true
+		default:
+			return 1, true
 		}
-		return 0
-	case int64:
-		v2, ok := b.(int64)
-		if !ok {
-			return 0
-		}
-		if v1 > v2 {
-			return 1
-		} else if v1 < v2 {
-			return -1
-		}
-		return 0
-	case float64:
-		v2, ok := b.(float64)
-		if !ok {
-			return 0
-		}
-		if v1 > v2 {
-			return 1
-		} else if v1 < v2 {
-			return -1
-		}
-		return 0
-	case string:
-		v2, ok := b.(string)
-		if !ok {
-			return 0
-		}
-		return strings.Compare(v1, v2)
+	case va.CanInt() && vb.CanInt():
+		return cmp.Compare(va.Int(), vb.Int()), true
+	case va.CanUint() && vb.CanUint():
+		return cmp.Compare(va.Uint(), vb.Uint()), true
+	}
+	fa, okA := toFloat(va)
+	fb, okB := toFloat(vb)
+	if okA && okB {
+		return cmp.Compare(fa, fb), true
+	}
+	return 0, false
+}
+
+func toFloat(v reflect.Value) (float64, bool) {
+	switch {
+	case v.CanInt():
+		return float64(v.Int()), true
+	case v.CanUint():
+		return float64(v.Uint()), true
+	case v.CanFloat():
+		return v.Float(), true
 	default:
-		return 0
+		return 0, false
 	}
 }
 
@@ -322,7 +355,7 @@ func containsValue(value any, slice any) bool {
 	}
 
 	for i := range sliceValue.Len() {
-		if reflect.DeepEqual(value, sliceValue.Index(i).Interface()) {
+		if valuesEqual(value, sliceValue.Index(i).Interface()) {
 			return true
 		}
 	}

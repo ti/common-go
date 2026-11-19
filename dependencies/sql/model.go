@@ -182,9 +182,12 @@ func convertDocsToSet(scheme string, d database.D) (query string, args []any) {
 			v.Key = jsonKey
 			// for exp: UPDATE test.account SET `groups` = JSON_REMOVE(`groups`,
 			// JSON_UNQUOTE(JSON_SEARCH(JSON_EXTRACT(`groups` ,'$[*].id'), 'one', '2333'))) WHERE `sub` = 'xx_1';
-			v.Value = fmt.Sprintf("JSON_REMOVE(`%s`, JSON_UNQUOTE(JSON_SEARCH(JSON_EXTRACT(`%s` ,'$[*].%s'), 'one', '%s')))",
-				jsonKey, jsonKey, jsonSubKey, v.Value)
-			query += fmt.Sprintf("%s`%s` = %s ", cond, jsonKey, v.Value)
+			// The searched value is a bound parameter (it used to be pasted
+			// into the statement).
+			expr := fmt.Sprintf("JSON_REMOVE(`%s`, JSON_UNQUOTE(JSON_SEARCH(JSON_EXTRACT(`%s` ,'$[*].%s'), 'one', ?)))",
+				jsonKey, jsonKey, jsonSubKey)
+			query += fmt.Sprintf("%s`%s` = %s ", cond, jsonKey, expr)
+			args = append(args, fmt.Sprint(v.Value))
 			continue
 		}
 		sf := reflect.ValueOf(v.Value)

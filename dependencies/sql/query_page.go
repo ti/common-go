@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"reflect"
 
 	"github.com/ti/common-go/dependencies/database"
@@ -12,6 +13,11 @@ import (
 func PageQuery[T any](ctx context.Context, s *SQL, table string,
 	in *database.PageQueryRequest,
 ) (out *database.PageQueryResponse[T], err error) {
+	// Sort, select and filter fields usually come from the request.
+	if err = errors.Join(checkTable(table), checkConds(in.Filters), checkSelect(in.Select),
+		checkFields("sort field", in.Sort)); err != nil {
+		return nil, err
+	}
 	query := &Query{
 		Table: table,
 	}
@@ -26,7 +32,9 @@ func PageQuery[T any](ctx context.Context, s *SQL, table string,
 	query.Select, selectFields = ParseSelect(fullQuery, in.Select)
 	query.Order = ParseSort(in.Sort)
 	query.Offset = ParseOffset(in.Page, in.Limit)
-	query.Where, query.Arguments = ParseWhere(in.Filters, s.project)
+	if query.Where, query.Arguments, err = s.whereMode(in.Filters, false); err != nil {
+		return nil, err
+	}
 	out = &database.PageQueryResponse[T]{}
 	var rows *sql.Rows
 	// nolint: rowserrcheck
@@ -39,7 +47,7 @@ func PageQuery[T any](ctx context.Context, s *SQL, table string,
 		scheme:       s.scheme,
 		dataType:     reflect.TypeOf(data),
 		selectFields: selectFields,
-		timeLoc:      s.loc,
+		timeLoc:      s.location(),
 	}
 	defer func() {
 		_ = dataRows.Close()

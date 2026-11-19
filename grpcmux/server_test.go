@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,6 +31,14 @@ func runTestServer(t *testing.T, s *Server) {
 	go func() { _ = s.startHTTP(ctx) }()
 	waitForTCP(t, s.opts.grpcAddr)
 	waitForTCP(t, s.opts.httpAddr)
+	// The gRPC listener accepts a moment before the server reports SERVING;
+	// a test that probes readiness at once would see NOT_SERVING.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(time.Millisecond) {
+		resp, err := s.health.server.Check(ctx, &pbhealth.HealthCheckRequest{Service: allServices})
+		if err == nil && resp.GetStatus() == pbhealth.HealthCheckResponse_SERVING {
+			break
+		}
+	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -230,5 +239,27 @@ func TestSIGTERMDrainsInFlightRequests(t *testing.T) {
 	}
 	if !strings.Contains(out, "START_RETURNED") {
 		t.Errorf("Start did not return after shutdown:\n%s", out)
+	}
+}
+
+// A server that cannot bind its port shuts down; Run reports that, so main
+// can exit non-zero. (Start returns the same way as after a signal, which
+// made a failed start look like a clean exit.)
+func TestRunReportsAFailedStart(t *testing.T) {
+	busy, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = busy.Close() }()
+	s := NewServer(WithHTTPAddr(busy.Addr().String()), WithGrpcAddr(freeAddr(t)), WithMetricsAddr(""))
+	done := make(chan error, 1)
+	go func() { done <- s.Run() }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "start http") {
+			t.Fatalf("Run = %v, want the bind error", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run did not return after the HTTP port failed to bind")
 	}
 }

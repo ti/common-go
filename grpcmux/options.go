@@ -2,6 +2,8 @@ package grpcmux
 
 import (
 	"net/http"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
@@ -12,6 +14,8 @@ import (
 
 	muxlogging "github.com/ti/common-go/grpcmux/logging"
 	"github.com/ti/common-go/grpcmux/mux"
+	"github.com/ti/common-go/log"
+	"github.com/ti/common-go/tools/ratelimit"
 	"github.com/ti/common-go/tools/routerlimit"
 )
 
@@ -57,6 +61,15 @@ type options struct {
 	httpMiddleWares              []func(http.Handler) http.Handler
 	preHTTPMiddleWares           []func(http.Handler) http.Handler
 	noAuthPrefix                 []string
+	noAuthMethods                []string
+	reflection                   bool
+	drainStreams                 bool
+	drainStreamsGrace            time.Duration
+	protocolErrors               bool
+	withoutQueryAccessToken      bool
+	withoutMethodOverride        bool
+	debugHandlers                *bool
+	drain                        *drainer // set by NewServer
 	withOutKeepAliveOpts         bool
 	autoHTTP                     bool
 	tracing                      bool
@@ -68,6 +81,7 @@ type options struct {
 	cors                         *mux.CORSConfig
 	disableClientPriority        bool
 	withoutHTTPInterceptors      bool
+	platform                     platformOptions // REST, rate limit, deadlines
 	keepaliveParams              keepalive.ServerParameters
 	keepalivePolicy              keepalive.EnforcementPolicy
 	readHeaderTimeout            time.Duration
@@ -98,7 +112,11 @@ func WithoutKeepAliveParams() Option {
 	}
 }
 
-// WithTracing do not auto add otel tracing
+// WithTracing creates OpenTelemetry server spans for gRPC calls and HTTP
+// requests (health probes excluded) and adds trace_id and span_id to the
+// request log line. Spans go to the global TracerProvider: install one with
+// tracing.Init (package github.com/ti/common-go/tracing), otherwise they are
+// dropped.
 func WithTracing() Option {
 	return func(o *options) {
 		o.tracing = true
@@ -112,10 +130,112 @@ func WithAuthFunc(f auth.AuthFunc) Option {
 	}
 }
 
-// WithNoAuthPrefixes pluggable function that performs no authentication.
+// WithNoAuthPrefixes skips authentication for gRPC full methods and HTTP
+// paths that start with one of the prefixes (strings.HasPrefix). A prefix is
+// not aware of path segments: "/pkg.Service/Token" also exempts
+// "/pkg.Service/TokenAdmin" and "/pkg.Service/Token/anything". Use it for
+// HTTP path trees such as "/public/"; to exempt single methods or whole
+// services use [WithNoAuthMethods]. Calling it again replaces the list.
 func WithNoAuthPrefixes(prefix ...string) Option {
 	return func(o *options) {
 		o.noAuthPrefix = prefix
+	}
+}
+
+// WithNoAuthMethods skips authentication for gRPC full methods and HTTP paths
+// that match a pattern exactly or by whole segments:
+//
+//	/pkg.Service/Method   that method (or that exact HTTP path) and nothing else
+//	/pkg.Service/*        every method of the service (and any deeper HTTP path)
+//
+// Unlike [WithNoAuthPrefixes], exempting "/pkg.Service/Token" does not exempt
+// "/pkg.Service/TokenAdmin". Both options can be used together; calling this
+// one again adds to the list.
+func WithNoAuthMethods(patterns ...string) Option {
+	return func(o *options) {
+		o.noAuthMethods = append(slices.Clip(o.noAuthMethods), patterns...)
+	}
+}
+
+// WithReflection serves gRPC server reflection (grpc.reflection.v1 and
+// v1alpha) for every registered service, on the gRPC port and, over the gRPC,
+// gRPC-Web and Connect protocols, on the HTTP port, so grpcurl, buf curl
+// --reflect and similar tools work without local proto files. It is off by
+// default because it publishes the complete API schema.
+//
+// Reflection is authenticated like any other method: with [WithAuthFunc] a
+// caller needs valid credentials (grpcurl -H "authorization: Bearer ...").
+// To serve it without credentials, exempt it:
+//
+//	grpcmux.WithNoAuthMethods(grpcmux.ReflectionMethods...)
+func WithReflection() Option {
+	return func(o *options) {
+		o.reflection = true
+	}
+}
+
+// WithDrainStreams ends streaming RPCs that are still open when the server
+// drains, instead of letting them hold shutdown until GRACEFUL_TIMEOUT.
+//
+// grace after draining begins (see [Server.Draining]; that is after the
+// PRE_STOP wait) the context of every open streaming call is canceled with
+// the cause [ErrServerDraining]; a zero grace cancels at once. A handler that
+// returns because of it ends the call with UNAVAILABLE "server is draining",
+// delivered as a normal end of stream on every protocol (gRPC status
+// trailers, Connect end-of-stream envelope, gRPC-Web trailer frame), so the
+// client sees a clean, retryable end instead of a broken connection. Unary
+// calls are never canceled; they finish within GRACEFUL_TIMEOUT as before.
+//
+// Handlers that want to end a stream their own way (a last message, an OK
+// status) watch [Draining] and return before the grace expires.
+func WithDrainStreams(grace time.Duration) Option {
+	return func(o *options) {
+		o.drainStreams = true
+		o.drainStreamsGrace = max(grace, 0)
+	}
+}
+
+// WithProtocolErrors answers requests the HTTP middleware rejects itself
+// (authentication failures, recovered panics) in the client's RPC wire format
+// when the request is a Connect stream, gRPC or gRPC-Web call: HTTP 200 with
+// the error in the end-of-stream envelope or the grpc-status trailers, as the
+// handlers themselves answer. Other requests (REST, Connect unary, plain
+// HTTP) keep the JSON error body and HTTP status. See mux.WithProtocolErrors.
+func WithProtocolErrors() Option {
+	return func(o *options) {
+		o.protocolErrors = true
+	}
+}
+
+// WithoutQueryAccessToken stops the HTTP port from accepting a bearer token
+// in the URL (?access_token=...) when a request has no Authorization header.
+// See mux.WithoutQueryAccessToken.
+func WithoutQueryAccessToken() Option {
+	return func(o *options) {
+		o.withoutQueryAccessToken = true
+	}
+}
+
+// WithoutMethodOverride stops the HTTP port from honoring the
+// X-HTTP-Method-Override request header.
+func WithoutMethodOverride() Option {
+	return func(o *options) {
+		o.withoutMethodOverride = true
+	}
+}
+
+// WithDebugHandlers controls GET /debug/** on the HTTP port, which serves
+// http.DefaultServeMux (net/http/pprof and expvar register there when a
+// program imports them).
+//
+// The route is off unless WithDebugHandlers(true) (or debugHandlers: true in
+// the config) turns it on, because profiles and variables must not be
+// public. When it is on and an AuthFunc is configured, it is authenticated
+// like every other route; make sure that AuthFunc really rejects strangers
+// (the AuthFunc of a nil oidc.Provider, guest mode, admits everyone).
+func WithDebugHandlers(enabled bool) Option {
+	return func(o *options) {
+		o.debugHandlers = &enabled
 	}
 }
 
@@ -162,6 +282,35 @@ type Config struct {
 	// DisableHTTPInterceptors turns off the gRPC interceptor chain on the
 	// HTTP bridges; see [WithoutHTTPInterceptors].
 	DisableHTTPInterceptors bool `yaml:"disableHTTPInterceptors"`
+	// REST serves methods annotated with google.api.http as REST routes; see
+	// [WithREST].
+	REST bool `yaml:"rest"`
+	// TypedErrorDetails adds "@type" to the details of JSON error bodies;
+	// see [WithTypedErrorDetails]. Implied by REST.
+	TypedErrorDetails bool `yaml:"typedErrorDetails"`
+	// RateLimit are the rate-limit rules; see [WithRateLimit].
+	RateLimit *ratelimit.Config `yaml:"rateLimit"`
+	// Timeouts are server-side deadlines for unary calls; see [WithTimeouts].
+	Timeouts *TimeoutConfig `yaml:"timeouts"`
+	// NoAuthMethods are exact or whole-segment auth exemptions; see
+	// [WithNoAuthMethods].
+	NoAuthMethods []string `yaml:"noAuthMethods"`
+	// Reflection serves gRPC server reflection; see [WithReflection].
+	Reflection bool `yaml:"reflection"`
+	// DrainStreams ends open streaming RPCs when the server drains; see
+	// [WithDrainStreams]. DrainStreamsGrace is the time handlers get to end
+	// on their own first, as a Go duration ("5s"); empty means none.
+	DrainStreams      bool   `yaml:"drainStreams"`
+	DrainStreamsGrace string `yaml:"drainStreamsGrace"`
+	// ProtocolErrors: see [WithProtocolErrors].
+	ProtocolErrors bool `yaml:"protocolErrors"`
+	// DisableQueryAccessToken: see [WithoutQueryAccessToken].
+	DisableQueryAccessToken bool `yaml:"disableQueryAccessToken"`
+	// DisableMethodOverride: see [WithoutMethodOverride].
+	DisableMethodOverride bool `yaml:"disableMethodOverride"`
+	// DebugHandlers: "true" serves GET /debug/** on the HTTP port; empty or
+	// "false" does not. See [WithDebugHandlers].
+	DebugHandlers string `yaml:"debugHandlers"`
 }
 
 // WithConfig init with config
@@ -205,7 +354,46 @@ func WithConfig(c *Config) Option {
 		if c.DisableHTTPInterceptors {
 			o.withoutHTTPInterceptors = true
 		}
+		applyPlatformConfig(o, c)
+		if len(c.NoAuthMethods) > 0 {
+			WithNoAuthMethods(c.NoAuthMethods...)(o)
+		}
+		if c.Reflection {
+			o.reflection = true
+		}
+		if c.DrainStreams {
+			grace, err := parseOptionalDuration(c.DrainStreamsGrace)
+			if err != nil {
+				// Zero is the safe reading: streams end as soon as draining begins.
+				log.Action("grpcmux.Config").Error("drainStreamsGrace: " + err.Error() + "; using 0s")
+			}
+			WithDrainStreams(grace)(o)
+		}
+		if c.ProtocolErrors {
+			o.protocolErrors = true
+		}
+		if c.DisableQueryAccessToken {
+			o.withoutQueryAccessToken = true
+		}
+		if c.DisableMethodOverride {
+			o.withoutMethodOverride = true
+		}
+		if c.DebugHandlers != "" {
+			enabled, err := strconv.ParseBool(c.DebugHandlers)
+			if err != nil {
+				// Off is the safe reading of a value that is not a boolean.
+				log.Action("grpcmux.Config").Error("debugHandlers: " + err.Error() + "; using false")
+			}
+			o.debugHandlers = &enabled
+		}
 	}
+}
+
+func parseOptionalDuration(v string) (time.Duration, error) {
+	if v == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(v)
 }
 
 // WithCORS sets the CORS configuration for the HTTP server.
@@ -340,8 +528,9 @@ func WithDisableClientPriority() Option {
 }
 
 // WithoutHTTPInterceptors stops the HTTP bridges ([RegisterConnectService],
-// [WithAutoHTTP] routes and [WithConnectOptions]) from running the gRPC unary
-// interceptor chain.
+// [WithAutoHTTP] routes, and the unary and streaming handlers registered on
+// [Server.ConnectServer] or with [RegisterConnectStreams]) from running the
+// gRPC interceptor chain.
 //
 // By default those bridges run the same chain as native gRPC — validation,
 // authz policy, metrics, interceptors added with

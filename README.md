@@ -2,7 +2,7 @@
 
 `github.com/ti/common-go` is the foundation for proto-first Go services:
 
-- **One implementation, every protocol.** A gRPC service implementation is served as native gRPC, REST (grpc-gateway), ConnectRPC (no extra code generation) and plain HTTP from one `grpcmux.Server`. Validation, metrics, recovery and the rest of the interceptor chain behave the same on every protocol.
+- **One implementation, every protocol.** A gRPC service implementation is served as native gRPC, REST (from `google.api.http` annotations), ConnectRPC and plain HTTP from one `grpcmux.Server`, with no code generation beyond the gRPC stubs. Validation, metrics, recovery and the rest of the interceptor chain behave the same on every protocol.
 - **URI-driven dependencies.** Databases (MySQL, PostgreSQL, MongoDB, in-memory mock), Redis, Kafka, HTTP and gRPC clients are declared as struct fields and configured with one URI each, such as `mongodb://host/db` or `dns://svc:8081?timeout=5s`.
 - **Batteries included.** JSON logs with request context, Prometheus metrics, optional OpenTelemetry tracing, auth hooks, CORS, health and readiness endpoints, and graceful shutdown that drains in-flight requests.
 - **Small concurrency helpers.** `async.Future` for typed fan-out/await, and `graceful` for process lifecycle.
@@ -34,12 +34,12 @@ func (greeter) SayHello(_ context.Context, req *pb.SayHelloRequest) (*pb.SayHell
 }
 
 func main() {
-	gs := grpcmux.NewServer() // HTTP :8080, gRPC :8081, metrics :9090
-	impl := greeter{}
+	// HTTP :8080, gRPC :8081, metrics :9090. WithREST: methods with a
+	// google.api.http annotation are also REST routes, no generated gateway code.
+	gs := grpcmux.NewServer(grpcmux.WithREST())
 
-	pb.RegisterGreeterServiceServer(gs, impl)                                  // native gRPC
-	grpcmux.RegisterConnectService(gs, &pb.GreeterService_ServiceDesc, impl)   // ConnectRPC on :8080
-	_ = pb.RegisterGreeterServiceHandlerServer(context.Background(), gs.ServeMux(), impl) // REST on :8080
+	// One call: native gRPC on :8081, ConnectRPC and REST on :8080.
+	grpcmux.RegisterConnectService(gs, &pb.GreeterService_ServiceDesc, greeter{})
 
 	gs.Start() // blocks; drains and exits cleanly on SIGTERM
 }
@@ -105,7 +105,9 @@ Blank-import the database drivers you use (`_ "github.com/ti/common-go/dependenc
 | `dependencies/oidc` | OIDC token validation, claim access rules and OAuth calls from one `oidc://` URI; grpcmux auth function | [oidc](docs/guides/oidc.md) |
 | `dependencies/redis`, `broker` (+`kafka`), `mqlru` | Redis, message queue, cache synchronized over a queue | [dependencies](docs/guides/dependencies.md) |
 | `log` | Structured JSON logging with request context | [logging](docs/guides/logging.md) |
+| `tracing` | OpenTelemetry trace export from the standard `OTEL_*` environment | [tracing](docs/guides/tracing.md) |
 | `async`, `graceful` | Fan-out/await, process lifecycle | [server](docs/guides/server.md#graceful-shutdown) |
+| `background` | Supervised goroutines, periodic tasks, in-process job queue with observable status | [background-work](docs/guides/background-work.md) |
 | `tools/*` | Rate limiting, client IP, snowflake IDs, stack traces | |
 
 ## More

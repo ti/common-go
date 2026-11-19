@@ -155,7 +155,9 @@ if [ -f "$DOWNSTREAM/go.mod" ]; then
   (cd "$DOWNSTREAM" && go vet "$M" ./... >"$TMP/ds-vet" 2>&1); rc=$?
   echo "- Vet against local checkout: $(status $rc)"; [ $rc -ne 0 ] && fence < <(head -40 "$TMP/ds-vet")
   if [ -z "${SKIP_TESTS:-}" ]; then
-    (cd "$DOWNSTREAM" && go test "$M" -count=1 ./... >"$TMP/ds-test" 2>&1); rc=$?
+    # auth forbids `go test ./...`: TestSmtp/TestSMS send a real e-mail/SMS when their
+    # credentials are set. This is the package list auth's AGENTS.md prescribes.
+    (cd "$DOWNSTREAM" && go test "$M" -count=1 ./internal/... ./tools/... ./storage/... ./cmd/... >"$TMP/ds-test" 2>&1); rc=$?
     echo "- Tests against local checkout: $(status $rc)"
     [ $rc -ne 0 ] && fence < <(grep -E '^(FAIL|---|panic)' "$TMP/ds-test" | head -40)
   fi

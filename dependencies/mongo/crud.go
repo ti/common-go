@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"reflect"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -23,11 +24,13 @@ func (m *Mongo) GetDatabase(_ context.Context, project string) (database.Databas
 		Client:          m.Client,
 		defaultDatabase: m.defaultDatabase,
 		project:         project,
+		session:         m.session,
 	}, nil
 }
 
 // Insert insert many data
 func (m *Mongo) Insert(ctx context.Context, table string, docs any) (count int, err error) {
+	ctx = m.sessionContext(ctx)
 	data := reflect.ValueOf(docs)
 	isSlice := data.Kind() == reflect.Slice
 	if !isSlice {
@@ -65,8 +68,11 @@ func convertToStatusError(table string, err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, context.Canceled) {
-		return status.Errorf(codes.Canceled, "%s error for %s", table, err.Error())
+	if ctxErr := database.ContextError(err); ctxErr != nil {
+		return status.Errorf(status.Code(ctxErr), "%s error for %s", table, err.Error())
+	}
+	if isTransientTransactionError(err) {
+		return status.Errorf(codes.Aborted, "%s write conflict: %s", table, err.Error())
 	}
 	if IsConflictError(err) {
 		return status.Errorf(codes.AlreadyExists, "%s may already exists for %s", table, err.Error())
@@ -79,6 +85,7 @@ func convertToStatusError(table string, err error) error {
 
 // InsertOne insert one data
 func (m *Mongo) InsertOne(ctx context.Context, table string, data any) error {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	doc := m.transformData(data, false)
 	_, err := col.InsertOne(ctx, doc)
@@ -93,6 +100,7 @@ func (m *Mongo) InsertOne(ctx context.Context, table string, data any) error {
 
 // Update update data
 func (m *Mongo) Update(ctx context.Context, table string, conds database.C, data any) (int, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	doc := m.convertUpdateDoc(data)
@@ -106,6 +114,7 @@ func (m *Mongo) Update(ctx context.Context, table string, conds database.C, data
 
 // UpdateOne update one data
 func (m *Mongo) UpdateOne(ctx context.Context, table string, conds database.C, data any) (int, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	doc := m.convertUpdateDoc(data)
@@ -142,6 +151,7 @@ func (m *Mongo) convertUpdateDoc(d any) (doc any) {
 
 // ReplaceOne replace one data
 func (m *Mongo) ReplaceOne(ctx context.Context, table string, conds database.C, data any) (count int, err error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	doc := m.transformData(data, false)
 	filter := getCondition(m.project, conds)
@@ -154,6 +164,7 @@ func (m *Mongo) ReplaceOne(ctx context.Context, table string, conds database.C, 
 
 // Replace update data in bulk
 func (m *Mongo) Replace(ctx context.Context, table string, indexKeys []string, docs any) (count int, err error) {
+	ctx = m.sessionContext(ctx)
 	data := reflect.ValueOf(docs)
 	isSlice := data.Kind() == reflect.Slice
 	col := m.Collection(table)
@@ -225,6 +236,7 @@ func getBulkError(err error) (ok bool, errorBulk *database.BulkError) {
 
 // Delete delete data
 func (m *Mongo) Delete(ctx context.Context, table string, conds database.C) (int, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	ret, err := col.DeleteMany(ctx, filter)
@@ -236,6 +248,7 @@ func (m *Mongo) Delete(ctx context.Context, table string, conds database.C) (int
 
 // DeleteOne delete one
 func (m *Mongo) DeleteOne(ctx context.Context, table string, conds database.C) (int, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	ret, err := col.DeleteOne(ctx, filter)
@@ -249,22 +262,53 @@ func (m *Mongo) DeleteOne(ctx context.Context, table string, conds database.C) (
 func (m *Mongo) Find(ctx context.Context, table string, conds database.C, order []string,
 	limit int, arryPtr any,
 ) error {
-	valuePtr := reflect.ValueOf(arryPtr)
-	value := valuePtr.Elem()
-	eleType := reflect.TypeOf(arryPtr).Elem().Elem().Elem()
-	rows, err := m.findRows(ctx, table, conds, order, limit, eleType)
+	ctx = m.sessionContext(ctx)
+	eleType, _, err := sliceElem(arryPtr)
+	if err != nil {
+		return err
+	}
+	filter := getCondition(m.project, conds)
+	rows, err := m.findRows(ctx, table, filter, order, limit, eleType)
 	if err != nil {
 		return convertToStatusError(table, err)
 	}
+	return collectRows(table, rows, arryPtr)
+}
+
+// sliceElem returns the struct type of the elements of a *[]T or *[]*T.
+func sliceElem(arrayPtr any) (elem reflect.Type, pointers bool, err error) {
+	t := reflect.TypeOf(arrayPtr)
+	if t == nil || t.Kind() != reflect.Pointer || t.Elem().Kind() != reflect.Slice {
+		return nil, false, status.Errorf(codes.InvalidArgument, "result must be a pointer to a slice, got %T", arrayPtr)
+	}
+	elem = t.Elem().Elem()
+	if elem.Kind() == reflect.Pointer {
+		elem, pointers = elem.Elem(), true
+	}
+	return elem, pointers, nil
+}
+
+// collectRows decodes all rows into *[]T or *[]*T and closes them.
+func collectRows(table string, rows database.Row, arrayPtr any) error {
 	defer func() {
 		_ = rows.Close()
 	}()
+	_, pointers, err := sliceElem(arrayPtr)
+	if err != nil {
+		return err
+	}
+	valuePtr := reflect.ValueOf(arrayPtr)
+	value := valuePtr.Elem()
 	for rows.Next() {
 		rowData, err := rows.Decode()
 		if err != nil {
 			return convertToStatusError(table, err)
 		}
-		value = reflect.Append(value, reflect.ValueOf(rowData))
+		item := reflect.ValueOf(rowData)
+		if !pointers {
+			item = item.Elem()
+		}
+		value = reflect.Append(value, item)
 	}
 	valuePtr.Elem().Set(value)
 	return nil
@@ -272,6 +316,7 @@ func (m *Mongo) Find(ctx context.Context, table string, conds database.C, order 
 
 // FindOne find one
 func (m *Mongo) FindOne(ctx context.Context, table string, conds database.C, data any) error {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	result := col.FindOne(ctx, filter)
@@ -306,16 +351,16 @@ func (m *Mongo) FindOne(ctx context.Context, table string, conds database.C, dat
 func (m *Mongo) FindRows(ctx context.Context, table string, conds database.C, sortBy []string, limit int,
 	data any,
 ) (database.Row, error) {
+	ctx = m.sessionContext(ctx)
 	elemType := reflect.TypeOf(data).Elem()
-	return m.findRows(ctx, table, conds, sortBy, limit, elemType)
+	return m.findRows(ctx, table, getCondition(m.project, conds), sortBy, limit, elemType)
 }
 
 // findRows find rows
-func (m *Mongo) findRows(ctx context.Context, table string, conds database.C, sortBy []string, limit int,
+func (m *Mongo) findRows(ctx context.Context, table string, filter bson.D, sortBy []string, limit int,
 	elemType reflect.Type,
 ) (database.Row, error) {
 	col := m.Collection(table)
-	filter := getCondition(m.project, conds)
 	opts := options.Find()
 	var sortFields bson.D
 	if len(sortBy) == 0 {
@@ -355,6 +400,7 @@ func (m *Mongo) findRows(ctx context.Context, table string, conds database.C, so
 
 // Exist check if cond exist
 func (m *Mongo) Exist(ctx context.Context, table string, conds database.C) (bool, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	err := col.FindOne(ctx, filter).Err()
@@ -369,6 +415,7 @@ func (m *Mongo) Exist(ctx context.Context, table string, conds database.C) (bool
 
 // Count data.
 func (m *Mongo) Count(ctx context.Context, table string, conds database.C) (int64, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(table)
 	filter := getCondition(m.project, conds)
 	ret, err := col.CountDocuments(ctx, filter)
@@ -380,6 +427,7 @@ func (m *Mongo) Count(ctx context.Context, table string, conds database.C) (int6
 
 // IncrCounter incr counter
 func (m *Mongo) IncrCounter(ctx context.Context, counterTable, key string, start, count int64) error {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(counterTable)
 	filter := getCondition(m.project, database.C{
 		{
@@ -419,6 +467,7 @@ type counter struct {
 
 // DecrCounter Decr Counter
 func (m *Mongo) DecrCounter(ctx context.Context, counterTable, key string, count int64) error {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(counterTable)
 	filter := getCondition(m.project, database.C{
 		{
@@ -443,6 +492,7 @@ func (m *Mongo) DecrCounter(ctx context.Context, counterTable, key string, count
 
 // GetCounter Decr Counter
 func (m *Mongo) GetCounter(ctx context.Context, counterTable, key string) (int64, error) {
+	ctx = m.sessionContext(ctx)
 	col := m.Collection(counterTable)
 	doc := counter{}
 	filter := getCondition(m.project, database.C{
@@ -465,7 +515,13 @@ func (m *Mongo) GetCounter(ctx context.Context, counterTable, key string) (int64
 func (m *Mongo) StartTransaction(ctx context.Context) (database.Transaction, error) {
 	session, err := m.StartSession()
 	if err != nil {
-		return nil, err
+		return nil, convertToStatusError("transaction", err)
+	}
+	// Without this the session exists but no transaction is open: writes
+	// were applied immediately and Commit/Rollback failed.
+	if err = session.StartTransaction(); err != nil {
+		session.EndSession(ctx)
+		return nil, convertToStatusError("transaction", err)
 	}
 	return &sessionTransaction{
 		session: session,
@@ -478,26 +534,32 @@ type sessionTransaction struct {
 	ctx     context.Context
 }
 
+// endTimeout bounds the commit or abort of a transaction.
+const endTimeout = 10 * time.Second
+
+// endContext is the context for ending the transaction. It is detached from
+// the request: a transaction is usually rolled back because the request was
+// cancelled or timed out, and with the request's context the abort would
+// never reach the server, which would keep the transaction (and its locks)
+// until the server-side timeout.
+func (s *sessionTransaction) endContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(s.ctx), endTimeout)
+}
+
 // Commit implements database.Transaction
 func (s *sessionTransaction) Commit() error {
-	err := s.session.CommitTransaction(s.ctx)
-	if err != nil {
-		s.session.EndSession(s.ctx)
-		return err
-	}
-	s.session.EndSession(s.ctx)
-	return nil
+	ctx, cancel := s.endContext()
+	defer cancel()
+	defer s.session.EndSession(ctx)
+	return s.session.CommitTransaction(ctx)
 }
 
 // Rollback implements database.Transaction
 func (s *sessionTransaction) Rollback() error {
-	err := s.session.AbortTransaction(s.ctx)
-	if err != nil {
-		s.session.EndSession(s.ctx)
-		return err
-	}
-	s.session.EndSession(s.ctx)
-	return nil
+	ctx, cancel := s.endContext()
+	defer cancel()
+	defer s.session.EndSession(ctx)
+	return s.session.AbortTransaction(ctx)
 }
 
 // WithTransaction with transaction
@@ -534,6 +596,16 @@ func getCondition(projectID string, conds database.C) bson.D {
 			value = bson.D{{Key: "$nin", Value: value}}
 		case database.Ne:
 			value = bson.D{{Key: "$ne", Value: value}}
+		case database.Lt:
+			value = bson.D{{Key: "$lt", Value: value}}
+		case database.Lte:
+			value = bson.D{{Key: "$lte", Value: value}}
+		case database.Gt:
+			value = bson.D{{Key: "$gt", Value: value}}
+		case database.Gte:
+			value = bson.D{{Key: "$gte", Value: value}}
+		case database.Contains:
+			// Equality on an array field matches when any element equals the value.
 		}
 		cond = append(cond, bson.E{
 			Key:   key,

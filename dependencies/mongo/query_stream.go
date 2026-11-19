@@ -19,6 +19,7 @@ import (
 func StreamQuery[T any](ctx context.Context, mgo *Mongo, table string,
 	in *database.StreamQueryRequest,
 ) (out *database.StreamResponse[T], err error) {
+	ctx = mgo.sessionContext(ctx)
 	col := mgo.Collection(table)
 	out = &database.StreamResponse[T]{}
 	var limit int64

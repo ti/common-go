@@ -2,6 +2,7 @@ package mock
 
 import (
 	"context"
+	"maps"
 
 	"github.com/ti/common-go/dependencies/database"
 )
@@ -11,15 +12,28 @@ type mockTransaction struct {
 	mock       *Mock
 	committed  bool
 	rolledBack bool
+	// snapshot is the state at StartTransaction, restored by Rollback.
+	tables   map[string]*table
+	counters map[string]int64
 }
 
 // StartTransaction starts a new transaction
 func (m *Mock) StartTransaction(ctx context.Context) (database.Transaction, error) {
-	// For mock database, we don't really implement transactions
-	// Just return a mock transaction object
-	return &mockTransaction{
-		mock: m,
-	}, nil
+	// The mock has one copy of the data, so a transaction is a snapshot:
+	// Rollback restores the state of this moment. That gives all-or-nothing
+	// for the usual single-transaction test; it does not isolate concurrent
+	// transactions (a rollback also undoes writes made outside it since).
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	tx := &mockTransaction{mock: m, tables: make(map[string]*table, len(m.tables)), counters: maps.Clone(m.counters)}
+	for name, t := range m.tables {
+		rows := make([]map[string]any, len(t.data))
+		for i, row := range t.data {
+			rows[i] = maps.Clone(row)
+		}
+		tx.tables[name] = &table{data: rows}
+	}
+	return tx, nil
 }
 
 // WithTransaction returns a database instance with the transaction
@@ -50,5 +64,8 @@ func (t *mockTransaction) Rollback() error {
 		return NewTransactionError("rollback", "transaction already rolled back")
 	}
 	t.rolledBack = true
+	t.mock.mu.Lock()
+	defer t.mock.mu.Unlock()
+	t.mock.tables, t.mock.counters = t.tables, t.counters
 	return nil
 }

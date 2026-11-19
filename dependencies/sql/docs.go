@@ -95,8 +95,7 @@ func TransformSQLArgs(scheme string, ptrVal any, keepEmpty bool,
 		}
 		query = append(query, "`"+e.Key+"`")
 		if timeValue, ok := e.Value.(time.Time); ok {
-			timeStr := timeValue.In(loc).Format(time.DateTime)
-			args = append(args, timeStr)
+			args = append(args, formatTime(scheme, timeValue, loc))
 		} else {
 			args = append(args, e.Value)
 		}

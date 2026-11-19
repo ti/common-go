@@ -56,16 +56,20 @@ import (
 // Requests run the same unary interceptor chain as native gRPC (see
 // WithoutHTTPInterceptors), behind the HTTP middleware (CORS, request ID,
 // auth, access log). Request bodies are limited by WithMaxRequestBodyBytes.
-// Streaming methods are not bridged; serve them with connect-go v2 generated
-// handlers registered on Server.ConnectServer.
+// Streaming methods are not bridged here; add [RegisterConnectStreams] for
+// them, or register connect-go v2 generated handlers on Server.ConnectServer.
 //
 //	gs := grpcmux.NewServer(...)
 //	grpcmux.RegisterConnectService(gs, &pb.UserService_ServiceDesc, userSrv)
 //	gs.Start()
 func RegisterConnectService(s *Server, desc *grpc.ServiceDesc, serviceImpl any) {
 	s.registerGRPC(desc, serviceImpl)
+	if s.connectProcs == nil {
+		s.connectProcs = map[string]bool{}
+	}
 	for _, m := range desc.Methods {
 		fullMethod := "/" + desc.ServiceName + "/" + m.MethodName
+		s.connectProcs[fullMethod] = true
 		s.Logger.Log(s.ctx, logging.LevelDebug, "connect", "path", fullMethod)
 		h := &connectHandler{
 			s:          s,
@@ -152,6 +156,13 @@ func (h *connectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	if mux.IsHead(r) {
+		// An RPC has no HEAD form (a Connect GET carries the request in its
+		// query). Say so, rather than running or half-parsing the call.
+		w.Header().Set("Allow", h.allowHeader())
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	req, st := h.parse(r)
 	if st != nil {
 		if st.Code() == codes.Unimplemented && r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -475,9 +486,9 @@ func RegisterConnectHandler(s *Server, pattern string, handler http.Handler) {
 //
 // Its procedures are served on the HTTP port over the Connect, gRPC and
 // gRPC-Web protocols (connecthttp), behind the HTTP middleware (CORS, request
-// ID, auth, access log). Unary calls run the same interceptor chain as native
-// gRPC (see WithoutHTTPInterceptors), JSON follows the server's
-// snake_case/camelCase setting, and request size is limited by
+// ID, auth, access log). Unary and streaming calls run the same interceptor
+// chain as native gRPC (see WithoutHTTPInterceptors), JSON follows the
+// server's snake_case/camelCase setting, and request size is limited by
 // WithMaxRequestBodyBytes. Register handlers before Start.
 func (s *Server) ConnectServer() *connect.Server {
 	s.connectOnce.Do(func() {
@@ -486,6 +497,14 @@ func (s *Server) ConnectServer() *connect.Server {
 		interceptors := []connect.ServerInterceptor{statusErrorInterceptor}
 		if s.httpUnary != nil {
 			interceptors = append(interceptors, connectUnaryInterceptor(s.httpUnary))
+		}
+		if s.httpStream != nil {
+			interceptors = append(interceptors, connectStreamInterceptor(s.httpStream))
+		}
+		if s.opts.drainStreams {
+			// Innermost, as on the gRPC port: metrics and custom interceptors
+			// see the status a drained stream ends with.
+			interceptors = append(interceptors, drainConnectInterceptor(s.drain))
 		}
 		s.connectServer = connect.NewServer(interceptors...)
 	})
@@ -498,10 +517,26 @@ func (s *Server) mountConnect(mux *http.ServeMux) {
 		marshal:   protojson.MarshalOptions{UseProtoNames: !s.opts.useCamelCase},
 		unmarshal: connectUnmarshalOptions,
 	}
-	connecthttp.Mount(mux, s.connectServer,
+	connecthttp.Mount(connectMux{mux: mux, skip: s.bridgedServices}, s.connectServer,
 		connecthttp.WithCodecs(connectproto.NewBinaryCodec(), jsonCodec),
 		connecthttp.WithReadMaxBytes(int(s.opts.maxRequestBodyBytes)),
 	)
+}
+
+// connectMux mounts connect-go's routes, except the per-service catch-all
+// ("/pkg.Service/") of services whose streams were bridged with
+// RegisterConnectStreams: their unary methods and custom routes under the same
+// prefix are served by other handlers, which the catch-all would shadow.
+type connectMux struct {
+	mux  *http.ServeMux
+	skip map[string]bool
+}
+
+func (m connectMux) Handle(pattern string, handler http.Handler) {
+	if m.skip[pattern] {
+		return
+	}
+	m.mux.Handle(pattern, handler)
 }
 
 // protoJSONCodec is the "json" codec for connect-go v2 handlers.
@@ -577,10 +612,12 @@ func connectUnaryInterceptor(chain grpc.UnaryServerInterceptor) connect.ServerIn
 			if err := stream.Receive(req); err != nil {
 				return err
 			}
+			ts := newConnectTransportStream(ctx, spec.Procedure)
 			if info, ok := connect.CallInfoForServerContext(ctx); ok {
 				ctx = withHTTPPeer(ctx, &http.Request{RemoteAddr: info.PeerAddr})
 			}
-			ctx = grpc.NewContextWithServerTransportStream(ctx, &transportStream{method: spec.Procedure})
+			// grpc.SetHeader / grpc.SetTrailer write the response metadata.
+			ctx = grpc.NewContextWithServerTransportStream(ctx, ts)
 			replay := &replayStream{ServerStream: stream, first: req}
 			var handlerErr error
 			_, err = chain(ctx, req, &grpc.UnaryServerInfo{FullMethod: spec.Procedure},

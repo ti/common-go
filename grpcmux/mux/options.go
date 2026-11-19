@@ -3,6 +3,8 @@ package mux
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc/status"
@@ -11,10 +13,12 @@ import (
 )
 
 var defaultOptions = &options{
-	recovery:     true,
-	runTimeOpts:  nil,
-	middleWares:  nil,
-	bodyReWriter: nil,
+	recovery:         true,
+	queryAccessToken: true,
+	methodOverride:   true,
+	runTimeOpts:      nil,
+	middleWares:      nil,
+	bodyReWriter:     nil,
 	cors: CORSConfig{
 		AllowedOrigins: []string{"*"},
 	},
@@ -47,22 +51,26 @@ var defaultMarshalOptions = protojson.MarshalOptions{
 	EmitUnpopulated: false,
 }
 
-// CORSConfig holds CORS (Cross-Origin Resource Sharing) configuration.
+// CORSConfig holds CORS (Cross-Origin Resource Sharing) configuration. It can
+// be bound from a config file (the cors key of grpcmux.Config).
 type CORSConfig struct {
 	// Disabled completely disables CORS header injection.
 	// Use this when CORS is handled by a reverse proxy (e.g. Envoy, Nginx).
-	Disabled bool
+	Disabled bool `yaml:"disabled"`
 	// AllowedOrigins is the list of allowed origins.
 	// Use ["*"] to allow all origins (default).
 	// When set to ["*"], the response mirrors the request Origin.
 	// Otherwise only origins in this list are allowed.
-	AllowedOrigins []string
+	AllowedOrigins []string `yaml:"allowedOrigins"`
 	// AllowedHeaders is the list of extra allowed request headers
-	// appended to the built-in set.
-	AllowedHeaders []string
-	// ExposeHeaders is the list of response headers the browser is
-	// allowed to access from JavaScript.
-	ExposeHeaders []string
+	// appended to the built-in set (Authorization, Content-Type, the
+	// Connect, gRPC and gRPC-Web protocol headers, X-Request-Id, ...).
+	AllowedHeaders []string `yaml:"allowedHeaders"`
+	// ExposeHeaders is the list of extra response headers the browser is
+	// allowed to access from JavaScript, appended to the built-in set
+	// (Grpc-Status, Grpc-Message, Grpc-Status-Details-Bin, the encoding
+	// headers and X-Request-Id).
+	ExposeHeaders []string `yaml:"exposeHeaders"`
 }
 
 type options struct {
@@ -75,6 +83,14 @@ type options struct {
 	cors              CORSConfig
 	authFunc          func(context.Context) (context.Context, error)
 	noAuthPrefix      []string
+	noAuthMethods     []string
+	queryAccessToken  bool
+	methodOverride    bool
+	protocolErrors    bool
+	routeResolver     func(*http.Request) (*http.Request, string)  // see WithRouteResolver
+	preAuth           func(http.ResponseWriter, *http.Request) int // see WithPreAuth
+	notFoundStatus    bool                                         // see WithNotFoundStatus
+	typedErrorDetails bool                                         // see WithTypedErrorDetails
 	marshalOptions    protojson.MarshalOptions
 	bodyMarshaler     runtime.Marshaler
 	errorMarshaler    runtime.Marshaler
@@ -95,11 +111,96 @@ func WithAuthFunc(fn func(context.Context) (context.Context, error)) Option {
 	}
 }
 
-// WithNoAuthPrefixes pluggable function that performs no authentication.
-// WithNoAuthPrefixes pluggable function that performs no authentication.
+// WithNoAuthPrefixes skips authentication for every path that starts with one
+// of the prefixes (strings.HasPrefix). A prefix is not aware of path
+// segments: "/pkg.Service/Token" also exempts "/pkg.Service/TokenAdmin".
+// Use it for path trees ("/public/"); for single methods and whole services
+// use [WithNoAuthMethods]. Calling it again replaces the list.
 func WithNoAuthPrefixes(prefix ...string) Option {
 	return func(o *options) {
 		o.noAuthPrefix = prefix
+	}
+}
+
+// WithNoAuthMethods skips authentication for paths that match a pattern
+// exactly or by whole segments (see [MatchPath]):
+//
+//	/pkg.Service/Method   that method (or that exact HTTP path) only
+//	/pkg.Service/*        every method of the service, and any deeper path
+//
+// Calling it again adds to the list.
+func WithNoAuthMethods(patterns ...string) Option {
+	return func(o *options) {
+		o.noAuthMethods = append(slices.Clip(o.noAuthMethods), patterns...)
+	}
+}
+
+// MatchPath reports whether path matches one of the patterns. A pattern is an
+// exact path ("/pkg.Service/Method", "/healthz"), or ends in "/*" and matches
+// everything below that segment ("/pkg.Service/*" matches
+// "/pkg.Service/Method" and "/pkg.Service/Method/42", but not
+// "/pkg.ServiceAdmin/Method"). gRPC full methods and HTTP paths have the same
+// shape, so one list serves both.
+func MatchPath(patterns []string, path string) bool {
+	for _, p := range patterns {
+		if p == path {
+			return true
+		}
+		if tree, ok := strings.CutSuffix(p, "*"); ok && strings.HasSuffix(tree, "/") &&
+			len(path) > len(tree) && strings.HasPrefix(path, tree) {
+			return true
+		}
+	}
+	return false
+}
+
+// noAuth reports whether path is exempt from authentication.
+func (o *options) noAuth(path string) bool {
+	for _, v := range o.noAuthPrefix {
+		if strings.HasPrefix(path, v) {
+			return true
+		}
+	}
+	return MatchPath(o.noAuthMethods, path)
+}
+
+// WithoutQueryAccessToken stops the middleware from accepting a bearer token
+// in the URL (?access_token=...). By default a request without an
+// Authorization header may carry it there, which browsers need for requests
+// that cannot set headers (EventSource, <img>, downloads); the price is that
+// URLs end up in proxy logs, browser history and Referer headers. Turn it off
+// when every client can send the header.
+func WithoutQueryAccessToken() Option {
+	return func(o *options) {
+		o.queryAccessToken = false
+	}
+}
+
+// WithoutMethodOverride stops the middleware from honoring the
+// X-HTTP-Method-Override request header (by default a POST may be turned into
+// GET, PUT, PATCH or DELETE with it).
+func WithoutMethodOverride() Option {
+	return func(o *options) {
+		o.methodOverride = false
+	}
+}
+
+// WithProtocolErrors makes the middleware answer the requests it rejects
+// itself (authentication failures, recovered panics) in the wire format of
+// the RPC protocol the client speaks, when the request is unambiguously an
+// RPC stream or gRPC call:
+//
+//	Content-Type application/connect+*   HTTP 200 + Connect end-of-stream error
+//	Content-Type application/grpc*       HTTP 200 + grpc-status trailers
+//	Content-Type application/grpc-web*   HTTP 200 + grpc-status headers
+//
+// Every other request (REST, Connect unary, plain HTTP) keeps the JSON error
+// body with its HTTP status, so existing clients are not affected. Without
+// this option all rejections use that JSON body, which protocol clients can
+// only map back to a code through the HTTP status.
+func WithProtocolErrors() Option {
+	return func(o *options) {
+		o.protocolErrors = true
 	}
 }
 

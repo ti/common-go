@@ -56,6 +56,10 @@ const (
 	In
 	// Nin Not in [a,b,c]
 	Nin
+	// Contains: the field is an array that holds the value, for example
+	// {Key: "labels", Value: "work", C: Contains}. Arrays are native arrays
+	// on PostgreSQL (text[], ...), JSON on MySQL, arrays in MongoDB.
+	Contains
 )
 
 // BulkError error for bulk update

@@ -2,9 +2,11 @@ package log
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"sort"
+	"sync/atomic"
 )
 
 var (
@@ -16,15 +18,35 @@ const actionKey = "action"
 func init() {
 	lvl := new(slog.LevelVar)
 	lvl.Set(slog.LevelDebug)
-	logHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: lvl,
-	})
-	logger := slog.New(logHandler)
+	output.w.Store(&writerBox{w: os.Stdout})
+	logger := slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: lvl}))
 	slog.SetDefault(logger)
 	std = &sLogger{
 		logger: logger,
 		level:  lvl,
 	}
+}
+
+// output is where every logger of this package writes.
+var output swapWriter
+
+type writerBox struct{ w io.Writer }
+
+// swapWriter is an io.Writer whose destination can be replaced atomically.
+type swapWriter struct {
+	w atomic.Pointer[writerBox]
+}
+
+func (s *swapWriter) Write(p []byte) (int, error) {
+	return s.w.Load().w.Write(p)
+}
+
+// SetOutput makes this package's loggers (and slog's default) write their
+// JSON lines to w instead of os.Stdout. It applies to loggers that already
+// exist, too, and is safe to call while other goroutines log. Use it at
+// startup, or in tests that assert on log output.
+func SetOutput(w io.Writer) {
+	output.w.Store(&writerBox{w: w})
 }
 
 type sLogger struct {

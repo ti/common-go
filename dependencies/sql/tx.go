@@ -11,21 +11,16 @@ import (
 func (s *SQL) StartTransaction(ctx context.Context) (tx database.Transaction, err error) {
 	dbTx, err := s.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, convertSQLError(s.scheme, err)
 	}
 	return dbTx, err
 }
 
-// WithTransaction with database transaction
+// WithTransaction returns a handle whose reads and writes run inside tx.
 func (s *SQL) WithTransaction(_ context.Context, tx database.Transaction) database.Database {
-	return &SQL{
-		DB:          s.DB,
-		uri:         s.uri,
-		compactMode: s.compactMode,
-		bustedIndex: s.bustedIndex,
-		tx:          tx.(*sql.Tx),
-		dbName:      s.dbName,
-		scheme:      s.scheme,
-		project:     s.project,
-	}
+	c := *s
+	c.tx = tx.(*sql.Tx)
+	// See GetDatabase: updateTime= applies to the root handle only.
+	c.updateDifferent = false
+	return &c
 }

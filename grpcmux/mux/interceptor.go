@@ -19,6 +19,7 @@ import (
 
 	"github.com/ti/common-go/tools/ip"
 
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/genproto/googleapis/api/httpbody"
 	grpcMetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -36,7 +37,6 @@ var noLogMethod = map[string]bool{
 	http.MethodConnect: true,
 	http.MethodOptions: true,
 	http.MethodTrace:   true,
-	http.MethodHead:    true,
 }
 
 var noLogPath = map[string]bool{
@@ -55,56 +55,78 @@ func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
 					return
 				}
 			}
-			if overrideMethod := r.Header.Get("X-HTTP-Method-Override"); overrideMethod != "" {
-				r.Method = overrideMethod
+			if opts.methodOverride {
+				overrideMethod(r)
+			}
+			logMethod := r.Method
+			if r.Method == http.MethodHead {
+				// HEAD is GET without a body (RFC 9110): route, authenticate
+				// and run it as the GET it mirrors, so it answers with that
+				// GET's status and headers: 200 for a page, the auth error
+				// for a protected route, whatever an unrouted GET answers for
+				// an unrouted path. The copy leaves the server's own request
+				// a HEAD, so net/http sends no body. Handlers that must tell
+				// the two apart use IsHead.
+				r = r.WithContext(context.WithValue(r.Context(), headKey{}, true))
+				r.Method = http.MethodGet
 			}
 			if noLogMethod[r.Method] || noLogPath[r.URL.Path] {
 				h.ServeHTTP(w, r)
 				return
+			}
+			// A route that serves an RPC under another path (REST) is
+			// resolved once, here: authentication exemptions and the log's
+			// action follow the RPC, not the path it happens to be bound to.
+			var rpcMethod string
+			if opts.routeResolver != nil {
+				r, rpcMethod = opts.routeResolver(r)
 			}
 			logger := log.Default(false)
 			var responseStatus int
 			defer func() {
 				if opts.recovery {
 					if rec := recover(); rec != nil {
-						err := recoverRequest(logger, rec, r.Method)
-						WriteHTTPErrorResponseWithMarshaler(w, err, opts.errorMarshaler, opts.newErrorBody)
+						err := recoverRequest(logger, rec, logMethod)
+						opts.writeError(w, r, err)
 						return
 					}
 				}
-				logRequest(logger, responseStatus, r.Method)
+				logRequest(logger, responseStatus, logMethod)
 			}()
+			// reject answers a request the middleware itself refuses (in
+			// practice: authentication) and records what the access log shows.
+			reject := func(err error) {
+				st := convertErrorToStatus(err)
+				logger.Inject(map[string]any{"code": int(st.Code()), "error": st.Message()})
+				responseStatus = opts.writeError(w, r, err)
+			}
 			var err error
 			ctx := log.NewContextWithLogger(r.Context(), logger)
-			queryHeaderAdapter(r)
+			queryHeaderAdapter(r, opts.queryAccessToken)
 			if opts.httpAuthFunc != nil {
 				ctx, err = opts.httpAuthFunc(ctx, r)
 				if err != nil {
-					responseStatus = http.StatusUnauthorized
-					WriteHTTPErrorResponseWithMarshaler(w, err, opts.errorMarshaler, opts.newErrorBody)
+					reject(err)
 					return
 				}
 			}
 			ctx = medataCtx(ctx, r)
 			// Inject request-derived log fields (action/ip/peer/protocol/request_id)
-			// BEFORE auth so that auth rejections (401) still produce a full log
-			// line. Auth-derived fields (user_id/client_id/...) are added after a
-			// successful auth by injectAuthInfo below.
-			ctx = injectRequestInfo(ctx, r, logger)
-			if opts.authFunc != nil {
-				var noAuth bool
-				for _, v := range opts.noAuthPrefix {
-					if strings.HasPrefix(r.URL.Path, v) {
-						noAuth = true
-					}
+			// BEFORE auth so that auth rejections (401/403) still produce a full
+			// log line. Auth-derived fields (user_id/client_id/...) are added after
+			// a successful auth by injectAuthInfo below.
+			ctx = injectRequestInfo(ctx, r, logger, rpcMethod)
+			if opts.preAuth != nil {
+				if st := opts.preAuth(w, r.WithContext(ctx)); st != 0 {
+					responseStatus = st
+					return
 				}
-				if !noAuth {
-					ctx, err = opts.authFunc(ctx)
-					if err != nil {
-						responseStatus = http.StatusUnauthorized
-						WriteHTTPErrorResponseWithMarshaler(w, err, opts.errorMarshaler, opts.newErrorBody)
-						return
-					}
+			}
+			if opts.authFunc != nil && !opts.noAuth(r.URL.Path) && (rpcMethod == "" || !opts.noAuth(rpcMethod)) {
+				ctx, err = opts.authFunc(ctx)
+				if err != nil {
+					reject(err)
+					return
 				}
 			}
 			ctx = injectAuthInfo(ctx, logger)
@@ -121,9 +143,22 @@ func defaultInterceptor(opts *options) func(http.Handler) http.Handler {
 	}
 }
 
+// defaultAllowHeaders are the request headers a cross-origin browser client
+// may send: the library's own, plus what Connect, gRPC-Web and their
+// compression negotiation use (the set connectrpc.com/cors recommends:
+// X-Grpc-Web and X-User-Agent are sent by every gRPC-Web client).
 var defaultAllowHeaders = "Authorization, Content-Type, Accept, " +
 	"X-Project-Id, X-Device-Id, X-Request-Id, X-Request-Timestamp, " +
-	"Connect-Protocol-Version, Connect-Timeout-Ms, Grpc-Timeout"
+	"Connect-Protocol-Version, Connect-Timeout-Ms, Connect-Accept-Encoding, Connect-Content-Encoding, " +
+	"Grpc-Timeout, Grpc-Accept-Encoding, Grpc-Encoding, X-Grpc-Web, X-User-Agent, " +
+	"Accept-Encoding, Content-Encoding"
+
+// defaultExposeHeaders are the response headers browser JavaScript may read.
+// Without Grpc-Status, Grpc-Message and Grpc-Status-Details-Bin a gRPC-Web
+// client cannot see the status of a trailers-only (error) response; the
+// encoding headers let a client decompress Connect and gRPC-Web bodies.
+var defaultExposeHeaders = "Grpc-Status, Grpc-Message, Grpc-Status-Details-Bin, " +
+	"Grpc-Encoding, Connect-Content-Encoding, Content-Encoding, X-Request-Id"
 
 // newCORSHandler builds a CORS handler function from the given config.
 // Returns nil when CORS is disabled.
@@ -150,9 +185,9 @@ func newCORSHandler(cfg *CORSConfig) func(http.ResponseWriter, *http.Request) bo
 	}
 
 	// Pre-compute the Expose-Headers value.
-	exposeHeaders := ""
+	exposeHeaders := defaultExposeHeaders
 	if len(cfg.ExposeHeaders) > 0 {
-		exposeHeaders = strings.Join(cfg.ExposeHeaders, ", ")
+		exposeHeaders = exposeHeaders + ", " + strings.Join(cfg.ExposeHeaders, ", ")
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) bool {
@@ -170,9 +205,7 @@ func newCORSHandler(cfg *CORSConfig) func(http.ResponseWriter, *http.Request) bo
 						w.Header().Set("Access-Control-Allow-Origin", origin)
 						w.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, PATCH, OPTIONS")
 						w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
-						if exposeHeaders != "" {
-							w.Header().Set("Access-Control-Expose-Headers", exposeHeaders)
-						}
+						w.Header().Set("Access-Control-Expose-Headers", exposeHeaders)
 						w.Header().Set("Vary", "Origin, Accept-Encoding")
 						w.Header().Set("Access-Control-Max-Age", "86400")
 					}
@@ -180,7 +213,9 @@ func newCORSHandler(cfg *CORSConfig) func(http.ResponseWriter, *http.Request) bo
 			}
 		}
 
-		if r.Method == http.MethodHead || r.Method == http.MethodOptions {
+		// A preflight is answered here. HEAD is not: it is served as the
+		// GET it mirrors (see defaultInterceptor), not with a blanket 200.
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return true
 		}
@@ -188,9 +223,40 @@ func newCORSHandler(cfg *CORSConfig) func(http.ResponseWriter, *http.Request) bo
 	}
 }
 
-func queryHeaderAdapter(r *http.Request) {
+type headKey struct{}
+
+// IsHead reports whether the request was sent as HEAD. The middleware hands
+// a HEAD to the handlers as a GET (the response body is discarded by
+// net/http), so r.Method does not tell.
+func IsHead(r *http.Request) bool {
+	head, _ := r.Context().Value(headKey{}).(bool)
+	return head || r.Method == http.MethodHead
+}
+
+// overridableMethods are the methods X-HTTP-Method-Override may select.
+var overridableMethods = map[string]bool{
+	http.MethodGet:    true,
+	http.MethodPut:    true,
+	http.MethodPatch:  true,
+	http.MethodDelete: true,
+}
+
+// overrideMethod applies X-HTTP-Method-Override, the convention for clients
+// that can only send POST. It is honored on POST requests only, and only for
+// GET, PUT, PATCH and DELETE: a GET (which a cross-site page can trigger with
+// a plain link or image) must never be turned into a write.
+func overrideMethod(r *http.Request) {
+	if r.Method != http.MethodPost {
+		return
+	}
+	if m := strings.ToUpper(r.Header.Get("X-HTTP-Method-Override")); overridableMethods[m] {
+		r.Method = m
+	}
+}
+
+func queryHeaderAdapter(r *http.Request, accessToken bool) {
 	query := r.URL.Query()
-	if auth := r.Header.Get("Authorization"); auth == "" {
+	if auth := r.Header.Get("Authorization"); auth == "" && accessToken {
 		if accessToken := query.Get("access_token"); accessToken != "" {
 			r.Header.Set("Authorization", "Bearer "+accessToken)
 		}
@@ -241,9 +307,17 @@ func rpcAction(path string) string {
 // action is the request path reduced to its first two segments (rpcAction), so a
 // hand-mounted HTTP route with dynamic trailing parameters logs the same
 // low-cardinality "/{Service}/{Method}" shape the gRPC reporter emits.
-func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger) context.Context {
+//
+// rpcMethod is the full method of a request the route resolver matched (a REST
+// route); it is then the action, so a call logs the same action on every
+// protocol and path variables never reach it.
+func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger, rpcMethod string) context.Context {
+	action := rpcMethod
+	if action == "" {
+		action = rpcAction(r.URL.Path)
+	}
 	logData := map[string]any{
-		"action":   rpcAction(r.URL.Path),
+		"action":   action,
 		"ip":       ip.GetIPFromHTTPRequest(r),
 		"protocol": r.Proto,
 		"peer":     r.RemoteAddr,
@@ -255,11 +329,27 @@ func injectRequestInfo(ctx context.Context, r *http.Request, logger log.Logger) 
 	}
 	logData[requestIDTag] = requestID
 	logger.Inject(logData)
+	logger.Inject(TraceFields(ctx))
 	md := metadata.ExtractIncoming(ctx)
 	for k, v := range logData {
 		md.Set(k, v.(string))
 	}
 	return md.ToIncoming(ctx)
+}
+
+// TraceFields returns the log fields that correlate a log line with its
+// OpenTelemetry trace: trace_id and span_id of the span in ctx. It returns
+// nil when there is no valid span context (tracing off, or no tracer provider
+// installed), so nothing empty is ever logged.
+func TraceFields(ctx context.Context) map[string]any {
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return nil
+	}
+	return map[string]any{
+		"trace_id": sc.TraceID().String(),
+		"span_id":  sc.SpanID().String(),
+	}
 }
 
 // injectAuthInfo injects identity fields (project_id/client_id/device_id/user_id/
@@ -355,11 +445,19 @@ func medaGetter(opts *options) func(ctx context.Context, r *http.Request) grpcMe
 		}
 		if opts.logBody {
 			if r.Method == http.MethodPost || r.Method == http.MethodPatch {
-				buf, err := io.ReadAll(io.LimitReader(r.Body, 1024000))
-				if err == nil && len(buf) > 0 {
+				// Log at most logBodyLimit bytes, and hand the handler the
+				// whole body: what was read for the log, then the rest of the
+				// stream. Logging must never change the request.
+				body := r.Body
+				buf, err := io.ReadAll(io.LimitReader(body, logBodyLimit))
+				if len(buf) > 0 {
 					logData[requestTag] = string(buf)
-					r.Body = io.NopCloser(bytes.NewBuffer(buf))
 				}
+				var rest io.Reader = body
+				if err != nil {
+					rest = errReader{err} // the handler sees the read error too
+				}
+				r.Body = bodyReader{Reader: io.MultiReader(bytes.NewReader(buf), rest), Closer: body}
 			} else if r.URL.RawQuery != "" {
 				logData[requestTag] = r.URL.RawQuery
 			}
@@ -368,6 +466,19 @@ func medaGetter(opts *options) func(ctx context.Context, r *http.Request) grpcMe
 		return data
 	}
 }
+
+// logBodyLimit is how much of a request body is copied into the access log.
+const logBodyLimit = 1024000
+
+// bodyReader reads from Reader and closes the original body.
+type bodyReader struct {
+	io.Reader
+	io.Closer
+}
+
+type errReader struct{ err error }
+
+func (e errReader) Read([]byte) (int, error) { return 0, e.err }
 
 func forwardResponser(opts *options) func(ctx context.Context, w http.ResponseWriter, message proto.Message) error {
 	return func(ctx context.Context, w http.ResponseWriter, message proto.Message) error {

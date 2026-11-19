@@ -21,6 +21,7 @@ import (
 func PageQuery[T any](ctx context.Context, s *Mongo, table string,
 	in *database.PageQueryRequest,
 ) (out *database.PageQueryResponse[T], err error) {
+	ctx = s.sessionContext(ctx)
 	out = &database.PageQueryResponse[T]{}
 	col := s.Collection(table)
 	var limit int64

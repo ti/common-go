@@ -17,8 +17,13 @@ func ConvertError(err error) error {
 		switch mySQLError.Number {
 		case 1049:
 			code = codes.NotFound
-		case 1602:
+		// ER_DUP_ENTRY: a unique key is already taken
+		case 1062, 1602:
 			code = codes.AlreadyExists
+		// ER_LOCK_DEADLOCK, ER_LOCK_WAIT_TIMEOUT: lost against another
+		// transaction; the caller may retry
+		case 1213, 1205:
+			code = codes.Aborted
 		case 1690:
 			code = codes.OutOfRange
 		case 2000:

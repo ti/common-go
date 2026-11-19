@@ -62,6 +62,12 @@ func waitHTTP(t *testing.T, url string) {
 // in-memory database.
 func start(t *testing.T) *env {
 	t.Helper()
+	return startWith(t, nil)
+}
+
+// startWith is start with a changed configuration and extra server options.
+func startWith(t *testing.T, configure func(*app.Config), opts ...grpcmux.Option) *env {
+	t.Helper()
 	ctx := context.Background()
 	db, err := database.New(ctx, "mock://local/"+strings.ReplaceAll(t.Name(), "/", "_"))
 	if err != nil {
@@ -69,15 +75,33 @@ func start(t *testing.T) *env {
 	}
 	cfg := &app.Config{Apis: grpcmux.Config{HTTPAddr: freeAddr(t), GrpcAddr: freeAddr(t)}}
 	cfg.Dependencies.DB = db
-	gs, err := app.New(ctx, cfg, grpcmux.WithMetricsAddr(""))
+	if configure != nil {
+		configure(cfg)
+	}
+	gs, err := app.New(ctx, cfg, append([]grpcmux.Option{grpcmux.WithMetricsAddr("")}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
 	go func() { gs.Start(); close(done) }()
 	t.Cleanup(func() {
-		graceful.Close()
-		<-done
+		// graceful is process-wide: when a test runs two servers, one Close
+		// request stops only one Start loop (its closers stop both servers),
+		// so ask until this server's Start has returned, and never leave a
+		// request behind for the next test.
+		for {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			graceful.Close()
+			select {
+			case <-done:
+				return
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
 	})
 	base := "http://" + cfg.Apis.HTTPAddr
 	waitHTTP(t, base+"/readyz")

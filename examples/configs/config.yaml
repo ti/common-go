@@ -7,6 +7,40 @@ apis:
   useCamelCase: false
   cors:
     allowedOrigins: ["http://localhost:5173"]
+  # Server spans and trace_id/span_id on request logs. Spans are exported
+  # when OTEL_EXPORTER_OTLP_ENDPOINT is set (see cmd/server).
+  tracing: true
+  # gRPC server reflection, so `grpcurl -plaintext localhost:8081 list` and
+  # `buf curl --reflect` work without the proto files. It publishes the API
+  # schema: leave it off, or behind authentication, on public servers.
+  reflection: true
+  # When the server drains (after PRE_STOP), give stream handlers 2s to end
+  # on their own, then end the remaining streams with UNAVAILABLE instead of
+  # letting them hold the shutdown until GRACEFUL_TIMEOUT.
+  drainStreams: true
+  drainStreamsGrace: 2s
+  # Auth failures on Connect streams, gRPC and gRPC-Web calls are answered in
+  # that protocol instead of an HTTP 401 JSON body.
+  protocolErrors: true
+  # REST routes from the google.api.http annotations (the example also sets
+  # this in code with grpcmux.WithREST()).
+  rest: true
+  # Rate limits, on every protocol. A bucket belongs to the authenticated
+  # subject, or to the client IP for anonymous callers; `key: ip` rules are
+  # checked before authentication. Buckets are in memory unless
+  # dependencies.redis is set, then they are shared by all replicas.
+  rateLimit:
+    # The client IP is the connection's peer unless the peer is listed here;
+    # only then is X-Forwarded-For believed. Behind an L7 proxy, set it to the
+    # proxy's addresses (or "private"), or all clients share the proxy's bucket.
+    # trustedProxies: [10.42.0.0/16]
+    default: {rate: 50/s, burst: 100}
+    rules:
+      # Opening export streams is expensive: one per second, five at once.
+      - {match: "/example.user.v1.UserService/ExportUsers", rate: 1/s, burst: 5}
+  # Server-side deadline for unary calls; streams are never bounded.
+  timeouts:
+    default: 10s
 log:
   level: info
 dependencies:
@@ -15,3 +49,5 @@ dependencies:
   #   postgres://user:pass@localhost:5432/app?sslmode=disable
   #   mysql://user:pass@tcp(localhost:3306)/app?charset=utf8mb4&parseTime=true
   db: "mock://local/users"
+  # Optional. Shares the rate-limit buckets across replicas.
+  # redis: "redis://localhost:6379"

@@ -28,7 +28,7 @@ func NewLimiter(redisCli rueidis.Client) *Limiter {
 
 // Reset resets the rate limit for the name in the given rate limit period.
 func (l *Limiter) Reset(ctx context.Context, name string, period time.Duration) error {
-	secs := int64(period / time.Second)
+	secs := max(int64(period/time.Second), 1)
 	slot := time.Now().Unix() / secs
 	name = allowName(name, slot)
 	return l.redisCli.Do(ctx, l.redisCli.B().Del().Key(name).Build()).Error()
@@ -56,7 +56,8 @@ func (l *Limiter) ResetRate(ctx context.Context, name string, rateLimit rate.Lim
 func (l *Limiter) AllowN(ctx context.Context,
 	name string, maxn int, period time.Duration, n int,
 ) (remaining int, delay time.Duration, allow bool, err error) {
-	secs := int64(period / time.Second)
+	// Windows are whole seconds; a shorter period would divide by zero below.
+	secs := max(int64(period/time.Second), 1)
 	utime := time.Now().Unix()
 	slot := utime / secs
 	delayInt := ((slot+1)*secs - utime) * int64(time.Second)

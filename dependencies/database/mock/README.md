@@ -453,6 +453,19 @@ Although the system supports mixed naming styles, it is recommended to stay cons
 - **Acceptable**: Uniformly use `camelCase` JSON tags (frontend-friendly)
 - **Avoid**: Mixing both styles in the same project
 
+## Parity with the real engines
+
+The mock passes the same conformance suite (`dependencies/database/dbtest`) as PostgreSQL, MySQL and MongoDB:
+
+- `Find` fills `*[]T` and `*[]*T`.
+- `Eq`/`Ne`/`In` compare times as instants and numbers by value; `Lt`/`Lte`/`Gt`/`Gte` and sorting work for strings, numbers, bools and `time.Time`; `Contains` matches an element of a slice field.
+- `database.EnsureIndexes(ctx, db, table, database.Index{Fields: ..., Unique: true})` makes duplicate inserts fail with `AlreadyExists`. Without it the mock has no unique constraints.
+- `FindAfter` / `Repo.List` keyset paging.
+- `Rollback` restores the state at `StartTransaction` (one transaction at a time; concurrent transactions are not isolated).
+- `HealthCheck` fails after `Close`.
+
+Not modelled: the `project` of `GetDatabase` (the handle is returned unchanged), `UpdateOne` returning `NotFound` like MongoDB (it returns `0, nil` like SQL; `database.Repo` hides the difference), JSON sub-field conditions.
+
 ## Notes
 
 1. **Data Persistence**: Mock database data is stored in memory; data is lost after program restart

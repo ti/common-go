@@ -40,13 +40,63 @@ func Init(ctx context.Context, configURI string, configPtr any, opts ...dependen
 		return fmt.Errorf(" error for start config for %s is %w ", configURI, err)
 	}
 	configValue := reflect.Indirect(reflect.ValueOf(configPtr))
-	// set the log level
-	if configValue.FieldByName("Log").IsValid() {
-		binder.BindField("Log.Level", func(value, _ any) {
-			log.SetLevel(value.(string))
+	// Apply Log.Level now and on every reload. Log may be a struct or a
+	// pointer to one, Level a string or a named string type. The level is optional: an empty value keeps the current
+	// level. An unknown name fails Init, and on a reload it is logged and the
+	// previous level stays in force. A Log field that has no string Level is
+	// not this package's business and is left alone.
+	if hasLogLevel(configValue) {
+		if err := log.TrySetLevel(logLevel(configValue.FieldByName("Log"))); err != nil {
+			return fmt.Errorf("config %s: log.level: %w", configURI, err)
+		}
+		// Bound on Log, not Log.Level: that works when Log is a nil pointer
+		// (it is left nil; nothing in the caller's struct is allocated) and
+		// for a Level of any string type.
+		binder.BindField("Log", func(value, _ any) {
+			log.SetLevel(logLevel(reflect.ValueOf(value)))
 		})
 	}
 	return initDeps(ctx, configURI, configPtr, opts...)
+}
+
+// hasLogLevel reports whether the config struct has a Log field (a struct or
+// a pointer to one) with a Level field of a string kind.
+func hasLogLevel(config reflect.Value) bool {
+	if config.Kind() != reflect.Struct {
+		return false
+	}
+	field, ok := config.Type().FieldByName("Log")
+	if !ok {
+		return false
+	}
+	t := field.Type
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	level, ok := t.FieldByName("Level")
+	return ok && level.Type.Kind() == reflect.String
+}
+
+// logLevel reads Level from a Log value (struct, or pointer to struct). A
+// nil pointer has no level: the empty string, which changes nothing.
+func logLevel(logValue reflect.Value) string {
+	for logValue.IsValid() && (logValue.Kind() == reflect.Pointer || logValue.Kind() == reflect.Interface) {
+		if logValue.IsNil() {
+			return ""
+		}
+		logValue = logValue.Elem()
+	}
+	if !logValue.IsValid() || logValue.Kind() != reflect.Struct {
+		return ""
+	}
+	level := logValue.FieldByName("Level")
+	if !level.IsValid() || level.Kind() != reflect.String {
+		return ""
+	}
+	return level.String()
 }
 
 var binder *objectbind.Binder

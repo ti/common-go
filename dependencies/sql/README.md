@@ -50,10 +50,36 @@ type User struct {
 | `(*SQL).EnsureIndex(ctx, table, fields, unique, reverse)` | Create an index if needed (array and JSON-key indexes on PostgreSQL) |
 | `(*SQL).AutoExpirieData(ctx, table, expiresAtField)` | Delete rows after the time in `expiresAtField` |
 
-Keep schema migrations under your own control in production; these helpers are best for tests and prototypes.
+These helpers are best for tests and prototypes. For production schemas use migrations.
+
+## Migrations
+
+```go
+//go:embed migrations/*.sql
+var migrations embed.FS
+
+err := db.(*sql.SQL).Migrate(ctx, migrations, migrate.WithDir("migrations"))
+```
+
+[`migrate`](migrate/migrate.go) applies `NNNN_name.sql` files (or `NNNN_name.postgres.sql` / `NNNN_name.mysql.sql`) in order, once, forward only. Applied files are recorded with a checksum in `schema_migrations` and may not be edited afterwards. The run holds a session lock (`pg_advisory_lock` / `GET_LOCK`), so every replica can call it at startup. Files are split at semicolons; an object whose body contains semicolons (MySQL `BEGIN ... END`, PostgreSQL `BEGIN ATOMIC`) goes alone into a file that starts with `-- migrate:no-split`. `migrate.Up(ctx, *sql.DB, dialect, fsys)` works with any `database/sql` pool.
+
+## Column types
+
+| Go field | PostgreSQL | MySQL |
+|---|---|---|
+| `string`, numbers, `bool` | `text`/`varchar`, `bigint`, `boolean` | `varchar`, `bigint`, `tinyint(1)` |
+| `time.Time`, `*timestamppb.Timestamp` | `timestamptz(6)` | `datetime(6)` |
+| `[]string`, `[]int64` (scalars) | `text[]`, `bigint[]` | `json` |
+| structs, maps, slices of structs | `jsonb` / `json` | `json` |
+
+Times are written with microseconds in the `loc` zone (PostgreSQL also gets the UTC offset); set `loc=UTC`. `database.Contains` is `? = ANY(col)` on PostgreSQL and `? MEMBER OF(col)` on MySQL 8.0.17+.
 
 ## Queries
 
 Everything else is the shared interface ([docs/guides/database.md](../../docs/guides/database.md)): `Insert`/`InsertOne` (a slice becomes one multi-row INSERT), `Find`/`FindOne`/`FindRows`, `Update`/`UpdateOne` with `database.D`, `Replace`, `Delete`, `Count`, `Exist`, counters, transactions, and `query.PageQuery` / `query.StreamQuery` for paging.
 
-Errors are gRPC statuses: no rows is `NotFound`, a duplicate key `AlreadyExists`, a canceled context `Canceled`.
+Errors are gRPC statuses: no rows is `NotFound`, a duplicate key `AlreadyExists`, a deadlock, lock timeout or serialization failure `Aborted`, a canceled context `Canceled`, an expired one `DeadlineExceeded`.
+
+Table names, condition and update keys, and sort and select fields are checked against a strict grammar (letters, digits, underscores, plus the JSON key forms) and are `InvalidArgument` otherwise; values are always bound parameters.
+
+A handle from `WithTransaction` runs its reads and writes in the transaction. `Update`, `UpdateOne` and `Delete` refuse an empty condition (`InvalidArgument`). The adapter also implements `FindAfter` (keyset), `EnsureIndexes` and `HealthCheck`; see the guide.

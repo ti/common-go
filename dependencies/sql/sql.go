@@ -203,17 +203,13 @@ func (s *SQL) AutoExpirieData(ctx context.Context, table, expiriedAtField string
 
 // GetDatabase get client instance by project id.
 func (s *SQL) GetDatabase(_ context.Context, project string) (database.Database, error) {
-	return &SQL{
-		DB:          s.DB,
-		loc:         s.loc,
-		uri:         s.uri,
-		compactMode: s.compactMode,
-		bustedIndex: s.bustedIndex,
-		tx:          s.tx,
-		dbName:      s.dbName,
-		scheme:      s.scheme,
-		project:     project,
-	}, nil
+	c := *s
+	c.project = project
+	// As before this cycle, updateTime= applies to the root handle only. On a
+	// view it would turn ReplaceOne into update-then-insert, which can insert
+	// a duplicate where MySQL reports 0 rows for an unchanged match.
+	c.updateDifferent = false
+	return &c, nil
 }
 
 // TODO: bustedIndex the bustedIndex mode for the mysql 5.6 or lower version

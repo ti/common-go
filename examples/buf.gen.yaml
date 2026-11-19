@@ -1,4 +1,9 @@
-# Generate with: cd examples && buf generate
+# Generate with: cd examples && buf generate   (buf >= 1.50; see README "Regenerate code")
+#
+# Every plugin is pinned to an exact version, so the generated files do not
+# change until a pin is changed: regenerating an unchanged tree must produce
+# no diff. Keep the Go pins in step with go.mod (protobuf, grpc, connect and
+# grpc-gateway, whose runtime serves what the OpenAPI document describes).
 version: v2
 managed:
   enabled: true
@@ -11,29 +16,30 @@ managed:
 clean: true
 plugins:
   # Messages
-  - remote: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go:v1.36.12
     out: gen/go
     opt: paths=source_relative
-  # Native gRPC server/client stubs
-  - remote: buf.build/grpc/go
-    out: gen/go
-    opt: paths=source_relative
-  # REST (grpc-gateway) handlers
-  - remote: buf.build/grpc-ecosystem/gateway
+  # Native gRPC server/client stubs. REST needs no generated code: grpcmux
+  # builds the routes from the google.api.http annotations (grpcmux.WithREST).
+  - remote: buf.build/grpc/go:v1.6.2
     out: gen/go
     opt: paths=source_relative
   # connect-go handlers/clients (used for the streaming method and the client example)
-  - remote: buf.build/connectrpc/go
+  - remote: buf.build/connectrpc/go:v2.0.2
     out: gen/go
     opt: paths=source_relative
-  # OpenAPI v2 description of the REST API
-  - remote: buf.build/grpc-ecosystem/openapiv2
+  # OpenAPI v2 description of the REST API (gen/openapi/api.swagger.json),
+  # from the same annotations the server routes by. Field names are the proto
+  # names (snake_case), the server's default JSON naming; drop
+  # json_names_for_fields=false for a server that runs with useCamelCase.
+  - remote: buf.build/grpc-ecosystem/openapiv2:v2.33.0
     out: gen/openapi
     opt:
       - allow_merge=true
       - merge_file_name=api
+      - json_names_for_fields=false
   # TypeScript messages and service descriptors for the web example
-  - remote: buf.build/bufbuild/es
+  - remote: buf.build/bufbuild/es:v2.16.0
     out: web/connect/src/gen
     include_imports: true
     opt: target=ts

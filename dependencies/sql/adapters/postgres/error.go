@@ -17,6 +17,10 @@ func ConvertError(err error) error {
 		// unique_violation
 		case "23505":
 			code = codes.AlreadyExists
+		// serialization_failure, deadlock_detected: lost against another
+		// transaction; the caller may retry
+		case "40001", "40P01":
+			code = codes.Aborted
 		// not_null_violation
 		case "23502":
 			code = codes.InvalidArgument

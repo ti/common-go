@@ -26,6 +26,7 @@ import (
 const (
 	queryProject      = "project = ? AND "
 	queryAnd          = "AND "
+	queryJoinAnd      = " AND "
 	queryKey          = "`key` = ?"
 	queryAppendValues = ") VALUES ("
 	queryFieldProject = "`project`,"
@@ -41,23 +42,21 @@ var (
 
 // InsertOne insert one data
 func (s *SQL) InsertOne(ctx context.Context, table string, data any) (err error) {
+	if err = checkTable(table); err != nil {
+		return err
+	}
 	var query strings.Builder
 	fmt.Fprintf(&query, "INSERT INTO `%s` (", table)
 	if s.project != "" {
 		query.WriteString(queryFieldProject)
 	}
-	querys, args := TransformSQLArgs(s.scheme, data, false, s.loc)
+	querys, args := TransformSQLArgs(s.scheme, data, false, s.location())
 	query.WriteString(strings.Join(querys, ","))
 	query.WriteString(queryAppendValues)
 	if s.project != "" {
-		fmt.Fprintf(&query, "'%s',", s.project)
+		args = append([]any{s.project}, args...)
 	}
-	for i := range len(args) {
-		if i > 0 {
-			query.WriteString(",")
-		}
-		query.WriteString("?")
-	}
+	query.WriteString(strings.TrimSuffix(strings.Repeat("?,", len(args)), ","))
 	query.WriteString(`)`)
 	_, err = s.ExecQuery(ctx, query.String(), args...)
 	return
@@ -75,8 +74,11 @@ func (s *SQL) Insert(ctx context.Context, table string, docs any) (count int, er
 	if data.Len() == 0 {
 		return 0, errors.New("no insert data found")
 	}
+	if err = checkTable(table); err != nil {
+		return 0, err
+	}
 	querys, args := TransformSQLArgs(s.scheme, data.Index(0).Interface(),
-		false, s.loc)
+		false, s.location())
 	var query strings.Builder
 	fmt.Fprintf(&query, "INSERT INTO `%s` (", table)
 	if s.project != "" {
@@ -87,7 +89,7 @@ func (s *SQL) Insert(ctx context.Context, table string, docs any) (count int, er
 	var values strings.Builder
 	values.WriteString("(")
 	if s.project != "" {
-		fmt.Fprintf(&values, `'%s',`, s.project)
+		values.WriteString("?,")
 	}
 	for i := range len(args) {
 		if i > 0 {
@@ -96,11 +98,17 @@ func (s *SQL) Insert(ctx context.Context, table string, docs any) (count int, er
 		values.WriteString("?")
 	}
 	values.WriteString(")")
+	if s.project != "" {
+		args = append([]any{s.project}, args...)
+	}
 	queryValues := values.String()
 	query.WriteString(queryValues)
 	for i := 1; i < data.Len(); i++ {
 		_, dataArgs := TransformSQLArgs(s.scheme, data.Index(i).Interface(),
-			false, s.loc)
+			false, s.location())
+		if s.project != "" {
+			args = append(args, s.project)
+		}
 		args = append(args, dataArgs...)
 		query.WriteString("," + queryValues)
 	}
@@ -135,20 +143,22 @@ func (s *SQL) update(ctx context.Context, table string, conds database.C, d any,
 	} else {
 		doc = TransformDocument(s.scheme, d, keepEmpty)
 	}
+	if err := errors.Join(checkTable(table), checkSet(doc)); err != nil {
+		return 0, err
+	}
 	querySet, args := convertDocsToSet(s.scheme, doc)
-	query += querySet
-	query += "WHERE "
-	if s.project != "" {
-		query += fmt.Sprintf("`project` = '%s' ", s.project)
+	if querySet == "" {
+		return 0, status.Errorf(codes.InvalidArgument, "update %s: nothing to set", table)
 	}
-	conQuery, conArgs := tidySQLConds(conds, s.compactMode)
-	if conQuery != "" {
-		if s.project != "" {
-			query += queryAnd
-		}
-		query += conQuery
+	where, conArgs, err := s.where(conds)
+	if err != nil {
+		return 0, err
 	}
-	args = append(args, conArgs...)
+	if where == "" {
+		return 0, status.Errorf(codes.InvalidArgument, "update %s: empty condition", table)
+	}
+	query += querySet + "WHERE " + where
+	args = append(s.timeArgs(args), conArgs...)
 	return s.ExecQuery(ctx, query, args...)
 }
 
@@ -224,6 +234,7 @@ func (s *SQL) getFilterByIndexKeys(indexKeysMap map[string]int, data any) (datab
 	for _, field := range doc {
 		if iDoc, ok := indexKeysMap[field.Key]; ok {
 			indexValues[iDoc] = field.Value
+			conds[iDoc] = database.CE{Key: field.Key, Value: field.Value}
 		}
 	}
 	return conds, doc
@@ -233,16 +244,13 @@ func (s *SQL) getFilterByIndexKeys(indexKeysMap map[string]int, data any) (datab
 func (s *SQL) FindOne(ctx context.Context, table string, conds database.C, data any) error {
 	exs, querys, args := TransformSQLDocument(data, true, map[string]bool{})
 	query := "SELECT " + strings.Join(querys, ",")
-	query += fmt.Sprintf(" FROM `%s` WHERE ", table)
-	if s.project != "" {
-		query += fmt.Sprintf("`project` = '%s' ", s.project)
+	query += fmt.Sprintf(" FROM `%s`", table)
+	where, conArgs, err := s.where(conds)
+	if err = errors.Join(checkTable(table), err); err != nil {
+		return err
 	}
-	conQuery, conArgs := tidySQLConds(conds, s.compactMode)
-	if conQuery != "" {
-		if s.project != "" {
-			query += queryAnd
-		}
-		query += conQuery
+	if where != "" {
+		query += " WHERE " + where
 	}
 	query += limit1
 	row := s.QueryRowContext(ctx, query, conArgs...)
@@ -254,27 +262,59 @@ func (s *SQL) FindOne(ctx context.Context, table string, conds database.C, data 
 		return convertSQLError(s.scheme, err)
 	}
 
-	return decodeExs(s.scheme, exs, s.loc)
+	return decodeExs(s.scheme, exs, s.location())
 }
 
 // Find all data
 func (s *SQL) Find(ctx context.Context, table string, conds database.C, order []string, limit int, arryPtr any) error {
-	valuePtr := reflect.ValueOf(arryPtr)
-	value := valuePtr.Elem()
-	eleType := reflect.TypeOf(arryPtr).Elem().Elem().Elem()
+	eleType, _, err := sliceElem(arryPtr)
+	if err != nil {
+		return err
+	}
 	rows, err := s.findRows(ctx, table, conds, order, limit, eleType)
 	if err != nil {
 		return err
 	}
+	return collectRows(rows, arryPtr)
+}
+
+// sliceElem returns the struct type of the elements of a *[]T or *[]*T.
+func sliceElem(arrayPtr any) (elem reflect.Type, pointers bool, err error) {
+	t := reflect.TypeOf(arrayPtr)
+	if t == nil || t.Kind() != reflect.Pointer || t.Elem().Kind() != reflect.Slice {
+		return nil, false, status.Errorf(codes.InvalidArgument, "result must be a pointer to a slice, got %T", arrayPtr)
+	}
+	elem = t.Elem().Elem()
+	if elem.Kind() == reflect.Pointer {
+		elem, pointers = elem.Elem(), true
+	}
+	if elem.Kind() != reflect.Struct {
+		return nil, false, status.Errorf(codes.InvalidArgument, "result must be a slice of structs, got %T", arrayPtr)
+	}
+	return elem, pointers, nil
+}
+
+// collectRows decodes all rows into *[]T or *[]*T and closes them.
+func collectRows(rows database.Row, arrayPtr any) error {
 	defer func() {
 		_ = rows.Close()
 	}()
+	_, pointers, err := sliceElem(arrayPtr)
+	if err != nil {
+		return err
+	}
+	valuePtr := reflect.ValueOf(arrayPtr)
+	value := valuePtr.Elem()
 	for rows.Next() {
 		rowData, err := rows.Decode()
 		if err != nil {
 			return err
 		}
-		value = reflect.Append(value, reflect.ValueOf(rowData))
+		item := reflect.ValueOf(rowData)
+		if !pointers {
+			item = item.Elem()
+		}
+		value = reflect.Append(value, item)
 	}
 	valuePtr.Elem().Set(value)
 	return nil
@@ -284,22 +324,15 @@ func (s *SQL) Find(ctx context.Context, table string, conds database.C, order []
 func (s *SQL) Count(ctx context.Context, table string, conds database.C) (int64, error) {
 	query := "SELECT count(*)"
 	query += fmt.Sprintf(" FROM `%s` ", table)
-	var whereQuery string
-	if s.project != "" {
-		whereQuery += fmt.Sprintf("`project` = '%s' ", s.project)
-	}
-	conQuery, conArgs := tidySQLConds(conds, s.compactMode)
-	if conQuery != "" {
-		if s.project != "" {
-			whereQuery += queryAnd
-		}
-		whereQuery += conQuery
+	whereQuery, conArgs, err := s.where(conds)
+	if err = errors.Join(checkTable(table), err); err != nil {
+		return 0, err
 	}
 	if whereQuery != "" {
 		query += "WHERE " + whereQuery
 	}
 	var count int64
-	err := s.QueryRowContext(ctx, query, conArgs...).Scan(&count)
+	err = s.QueryRowContext(ctx, query, conArgs...).Scan(&count)
 	if err != nil {
 		return 0, convertSQLError(s.scheme, err)
 	}
@@ -318,19 +351,27 @@ func (s *SQL) FindRows(ctx context.Context, table string, conds database.C, sort
 func (s *SQL) findRows(ctx context.Context, table string, conds database.C,
 	sortBy []string, limit int, eleType reflect.Type,
 ) (database.Row, error) {
+	where, conArgs, err := s.where(conds)
+	if err != nil {
+		return nil, err
+	}
+	return s.selectRows(ctx, table, where, conArgs, sortBy, limit, eleType)
+}
+
+// selectRows runs SELECT <fields of eleType> FROM table [WHERE where]
+// [ORDER BY sortBy] [LIMIT limit].
+func (s *SQL) selectRows(ctx context.Context, table, where string, conArgs []any,
+	sortBy []string, limit int, eleType reflect.Type,
+) (database.Row, error) {
+	if err := errors.Join(checkTable(table), checkFields("sort field", sortBy)); err != nil {
+		return nil, err
+	}
 	querys := TransformSQLQuery(reflect.New(eleType).Interface())
 	var query strings.Builder
 	query.WriteString("SELECT " + strings.Join(querys, ","))
-	fmt.Fprintf(&query, " FROM `%s` WHERE ", table)
-	if s.project != "" {
-		fmt.Fprintf(&query, "`project` = '%s' ", s.project)
-	}
-	conQuery, conArgs := tidySQLConds(conds, s.compactMode)
-	if conQuery != "" {
-		if s.project != "" {
-			query.WriteString(queryAnd)
-		}
-		query.WriteString(conQuery)
+	fmt.Fprintf(&query, " FROM `%s`", table)
+	if where != "" {
+		query.WriteString(" WHERE " + where)
 	}
 	if len(sortBy) > 0 {
 		query.WriteString(" ORDER BY " + getSortValue(sortBy[0]))
@@ -346,7 +387,8 @@ func (s *SQL) findRows(ctx context.Context, table string, conds database.C,
 	if err != nil {
 		return nil, convertSQLError(s.scheme, err)
 	}
-	if rows.Err() != nil {
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
 		return nil, convertSQLError(s.scheme, err)
 	}
 	return &DataRows{
@@ -354,7 +396,7 @@ func (s *SQL) findRows(ctx context.Context, table string, conds database.C,
 		scheme:       s.scheme,
 		dataType:     eleType,
 		selectFields: make(map[string]bool),
-		timeLoc:      s.loc,
+		timeLoc:      s.location(),
 	}, nil
 }
 
@@ -364,6 +406,9 @@ func (s *SQL) QueryContext(ctx context.Context, query string, args ...any) (*sql
 	if s.scheme == schemePostgres {
 		query = postgres.ConvertSQL(query)
 	}
+	if s.tx != nil {
+		return s.tx.QueryContext(ctx, query, args...)
+	}
 	return s.DB.QueryContext(ctx, query, args...)
 }
 
@@ -371,6 +416,9 @@ func (s *SQL) QueryContext(ctx context.Context, query string, args ...any) (*sql
 func (s *SQL) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	if s.scheme == schemePostgres {
 		query = postgres.ConvertSQL(query)
+	}
+	if s.tx != nil {
+		return s.tx.QueryRowContext(ctx, query, args...)
 	}
 	return s.DB.QueryRowContext(ctx, query, args...)
 }
@@ -386,12 +434,15 @@ func getSortValue(src string) string {
 
 // Exist check if cond exist
 func (s *SQL) Exist(ctx context.Context, table string, conds database.C) (bool, error) {
-	query := fmt.Sprintf("SELECT `_id` FROM `%s` WHERE ", table)
-	if s.project != "" {
-		query += fmt.Sprintf("`project` = '%s' AND ", s.project)
+	// SELECT 1 rather than an id column: tables need no `_id` column for it.
+	query := fmt.Sprintf("SELECT 1 FROM `%s`", table)
+	where, conArgs, errWhere := s.where(conds)
+	if errWhere = errors.Join(checkTable(table), errWhere); errWhere != nil {
+		return false, errWhere
 	}
-	conQuery, conArgs := tidySQLConds(conds, s.compactMode)
-	query += conQuery
+	if where != "" {
+		query += " WHERE " + where
+	}
 	query = fmt.Sprintf("SELECT EXISTS(%s);", query)
 	var (
 		row   = s.QueryRowContext(ctx, query, conArgs...)
@@ -428,7 +479,7 @@ func (s *SQL) Run(ctx context.Context, query string, args []any, arrayPtr any) e
 		dataType:     eleType,
 		scheme:       s.scheme,
 		selectFields: make(map[string]bool),
-		timeLoc:      s.loc,
+		timeLoc:      s.location(),
 	}
 	defer func() {
 		_ = rows.Close()
@@ -539,7 +590,9 @@ func decodeExs(scheme string, exs []*EX, timeLoc *time.Location) error {
 }
 
 func parseSQLTime(src string, timeLoc *time.Location) (t time.Time, err error) {
-	if lenSrc := len(src); lenSrc == lenLayoutDateTime {
+	// "2006-01-02 15:04:05" with optional fractional seconds (the parser
+	// accepts a fraction after the seconds even though the layout has none).
+	if lenSrc := len(src); lenSrc >= lenLayoutDateTime && src[10] == ' ' {
 		t, err = time.ParseInLocation(time.DateTime, src, timeLoc)
 	} else if lenSrc < lenLayoutDateTime {
 		t, err = time.ParseInLocation(time.DateOnly, src, timeLoc)
@@ -566,17 +619,14 @@ func DecodeRow(scheme string, row *sql.Rows, selectFields map[string]bool, id *i
 
 // Delete delete data
 func (s *SQL) Delete(ctx context.Context, table string, conds database.C) (int, error) {
-	query := fmt.Sprintf("DELETE FROM `%s` WHERE ", table)
-	if s.project != "" {
-		query += fmt.Sprintf("`project` = '%s' ", s.project)
+	where, args, err := s.where(conds)
+	if err = errors.Join(checkTable(table), err); err != nil {
+		return 0, err
 	}
-	conQuery, args := tidySQLConds(conds, s.compactMode)
-	if conQuery != "" {
-		if s.project != "" {
-			query += queryAnd
-		}
-		query += conQuery
+	if where == "" {
+		return 0, status.Errorf(codes.InvalidArgument, "delete %s: empty condition", table)
 	}
+	query := fmt.Sprintf("DELETE FROM `%s` WHERE ", table) + where
 	return s.ExecQuery(ctx, query, args...)
 }
 
@@ -603,11 +653,11 @@ func (s *SQL) ExecQuery(ctx context.Context, query string, args ...any) (int, er
 func convertSQLError(scheme string, err error) error {
 	code := codes.Unknown
 	var msg string
-	if errors.Is(err, context.Canceled) {
-		msg = fmt.Sprintf("db %s", err.Error())
-		code = codes.Canceled
+	if ctxErr := database.ContextError(err); ctxErr != nil {
+		return ctxErr
 	} else if errors.Is(err, sql.ErrNoRows) {
 		code = codes.NotFound
+		msg = "record not found"
 	} else {
 		switch scheme {
 		case schemeMysql:
@@ -626,6 +676,9 @@ func (s *SQL) DeleteOne(ctx context.Context, table string, conds database.C) (co
 
 // IncrCounter +1 a value
 func (s *SQL) IncrCounter(ctx context.Context, counterTable, key string, start int64, count int64) error {
+	if err := checkTable(counterTable); err != nil {
+		return err
+	}
 	query := "UPDATE " + counterTable + fmt.Sprintf(" SET count = count + %d WHERE ", count)
 	var args []any
 	if s.project != "" {
@@ -659,6 +712,9 @@ func (s *SQL) IncrCounter(ctx context.Context, counterTable, key string, start i
 
 // DecrCounter decr the counter of a table
 func (s *SQL) DecrCounter(ctx context.Context, counterTable, key string, count int64) error {
+	if err := checkTable(counterTable); err != nil {
+		return err
+	}
 	query := "UPDATE " + counterTable + fmt.Sprintf(" SET count = count - %d WHERE ", count)
 	var args []any
 	if s.project != "" {
@@ -679,13 +735,19 @@ func (s *SQL) DecrCounter(ctx context.Context, counterTable, key string, count i
 // ```create table counter (`_id` bigint unsigned auto_increment, `project` CHAR(64) not null, `key` CHAR(12),
 // `count` int, KEY (`project`), UNIQUE KEY (`project`,`key`), constraint counter_pk primary key (_id));```
 func (s *SQL) GetCounter(ctx context.Context, counterTable, key string) (int64, error) {
-	query := fmt.Sprintf("SELECT count FROM `%s` WHERE ", counterTable)
-	if s.project != "" {
-		query += fmt.Sprintf("`project` = '%s' AND ", s.project)
+	if err := checkTable(counterTable); err != nil {
+		return 0, err
 	}
-	query += fmt.Sprintf("`key` = '%s'", key)
+	query := fmt.Sprintf("SELECT count FROM `%s` WHERE ", counterTable)
+	var args []any
+	if s.project != "" {
+		query += queryProject
+		args = append(args, s.project)
+	}
+	query += queryKey
+	args = append(args, key)
 	var count int64
-	err := s.QueryRowContext(ctx, query).Scan(&count)
+	err := s.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return 0, convertSQLError(s.scheme, err)
 	}

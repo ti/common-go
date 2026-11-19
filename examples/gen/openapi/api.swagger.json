@@ -1,10 +1,14 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "example/user/v1/user.proto",
+    "title": "example/report/v1/report.proto",
     "version": "version not set"
   },
   "tags": [
+    {
+      "name": "ReportService",
+      "description": "ReportService shows background work with observable status: StartReport\nreturns at once with a job that runs in the server process (package\nbackground), WatchReport streams its state and progress until it is done."
+    },
     {
       "name": "UserService",
       "description": "UserService is served by one implementation over native gRPC, REST\n(grpc-gateway, from the google.api.http annotations) and ConnectRPC."
@@ -17,6 +21,150 @@
     "application/json"
   ],
   "paths": {
+    "/v1/reports": {
+      "post": {
+        "summary": "Starts building a report and returns immediately. Calling it again with\nthe same request_id returns the report that request started.",
+        "description": "Errors: RESOURCE_EXHAUSTED when too many reports are waiting,\nUNAVAILABLE while the server is shutting down (retry).",
+        "operationId": "ReportService_StartReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StartReportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1StartReportRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ReportService"
+        ]
+      }
+    },
+    "/v1/reports/{report_id}": {
+      "get": {
+        "summary": "Gets the current state of a report. NOT_FOUND once it has expired.",
+        "operationId": "ReportService_GetReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetReportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ReportService"
+        ]
+      }
+    },
+    "/v1/reports/{report_id}:cancel": {
+      "post": {
+        "summary": "Asks a report to stop. A queued report is cancelled at once; a running\none becomes CANCELLED shortly after. Cancelling a report that is done\nchanges nothing.",
+        "operationId": "ReportService_CancelReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CancelReportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReportServiceCancelReportBody"
+            }
+          }
+        ],
+        "tags": [
+          "ReportService"
+        ]
+      }
+    },
+    "/v1/reports/{report_id}:watch": {
+      "get": {
+        "summary": "Streams the report's state: the current state first, then every change,\nending after a state that is done (SUCCEEDED, FAILED, CANCELLED,\nINTERRUPTED). The stream ends with UNAVAILABLE when the server starts\nshutting down; call it again to continue.",
+        "operationId": "ReportService_WatchReport",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1WatchReportResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1WatchReportResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ReportService"
+        ]
+      }
+    },
     "/v1/users": {
       "get": {
         "summary": "Lists users, newest first, with cursor pagination.",
@@ -37,7 +185,7 @@
         },
         "parameters": [
           {
-            "name": "pageSize",
+            "name": "page_size",
             "description": "At most 100; 0 means the default of 20.",
             "in": "query",
             "required": false,
@@ -45,7 +193,7 @@
             "format": "int32"
           },
           {
-            "name": "pageToken",
+            "name": "page_token",
             "description": "next_page_token of the previous response.",
             "in": "query",
             "required": false,
@@ -88,7 +236,7 @@
         ]
       }
     },
-    "/v1/users/{user.userId}": {
+    "/v1/users/{user.user_id}": {
       "patch": {
         "summary": "Updates the fields named in update_mask (all mutable fields when empty).",
         "operationId": "UserService_UpdateUser",
@@ -108,7 +256,7 @@
         },
         "parameters": [
           {
-            "name": "user.userId",
+            "name": "user.user_id",
             "in": "path",
             "required": true,
             "type": "string"
@@ -132,12 +280,12 @@
                   "format": "int32",
                   "description": "Unset means unknown (proto3 optional, no wrapper types needed)."
                 },
-                "createTime": {
+                "create_time": {
                   "type": "string",
                   "format": "date-time",
                   "readOnly": true
                 },
-                "updateTime": {
+                "update_time": {
                   "type": "string",
                   "format": "date-time",
                   "readOnly": true
@@ -155,7 +303,7 @@
         ]
       }
     },
-    "/v1/users/{userId}": {
+    "/v1/users/{user_id}": {
       "get": {
         "summary": "Gets a user by ID.",
         "operationId": "UserService_GetUser",
@@ -175,7 +323,7 @@
         },
         "parameters": [
           {
-            "name": "userId",
+            "name": "user_id",
             "in": "path",
             "required": true,
             "type": "string"
@@ -204,7 +352,7 @@
         },
         "parameters": [
           {
-            "name": "userId",
+            "name": "user_id",
             "in": "path",
             "required": true,
             "type": "string"
@@ -249,6 +397,9 @@
     }
   },
   "definitions": {
+    "ReportServiceCancelReportBody": {
+      "type": "object"
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -277,6 +428,14 @@
         }
       }
     },
+    "v1CancelReportResponse": {
+      "type": "object",
+      "properties": {
+        "report": {
+          "$ref": "#/definitions/v1Report"
+        }
+      }
+    },
     "v1CreateUserResponse": {
       "type": "object",
       "properties": {
@@ -293,6 +452,14 @@
       "properties": {
         "user": {
           "$ref": "#/definitions/v1User"
+        }
+      }
+    },
+    "v1GetReportResponse": {
+      "type": "object",
+      "properties": {
+        "report": {
+          "$ref": "#/definitions/v1Report"
         }
       }
     },
@@ -314,11 +481,96 @@
             "$ref": "#/definitions/v1User"
           }
         },
-        "nextPageToken": {
+        "next_page_token": {
           "type": "string",
           "description": "Empty when there are no more pages."
         }
       }
+    },
+    "v1Report": {
+      "type": "object",
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "readOnly": true
+        },
+        "state": {
+          "$ref": "#/definitions/v1State",
+          "readOnly": true
+        },
+        "done_sections": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Progress in sections; total_sections is what was requested.",
+          "readOnly": true
+        },
+        "total_sections": {
+          "type": "integer",
+          "format": "int32",
+          "readOnly": true
+        },
+        "error": {
+          "type": "string",
+          "description": "Why the report failed, was cancelled or was interrupted.",
+          "readOnly": true
+        },
+        "summary": {
+          "type": "string",
+          "description": "The finished report, set when state is SUCCEEDED.",
+          "readOnly": true
+        },
+        "create_time": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true
+        },
+        "finish_time": {
+          "type": "string",
+          "format": "date-time",
+          "readOnly": true
+        }
+      }
+    },
+    "v1StartReportRequest": {
+      "type": "object",
+      "properties": {
+        "sections": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Number of sections to build (the example's unit of work)."
+        },
+        "section_millis": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Time spent on each section, in milliseconds (simulated work)."
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Optional client-generated ID that makes the call idempotent."
+        }
+      }
+    },
+    "v1StartReportResponse": {
+      "type": "object",
+      "properties": {
+        "report": {
+          "$ref": "#/definitions/v1Report"
+        }
+      }
+    },
+    "v1State": {
+      "type": "string",
+      "enum": [
+        "STATE_UNSPECIFIED",
+        "STATE_QUEUED",
+        "STATE_RUNNING",
+        "STATE_SUCCEEDED",
+        "STATE_FAILED",
+        "STATE_CANCELLED",
+        "STATE_INTERRUPTED"
+      ],
+      "default": "STATE_UNSPECIFIED",
+      "description": "State of a report.\n\n - STATE_QUEUED: Accepted, waiting for a worker (or for a retry).\n - STATE_CANCELLED: Stopped by CancelReport.\n - STATE_INTERRUPTED: Stopped because the server shut down before the report was finished."
     },
     "v1UpdateUserResponse": {
       "type": "object",
@@ -331,7 +583,7 @@
     "v1User": {
       "type": "object",
       "properties": {
-        "userId": {
+        "user_id": {
           "type": "string",
           "readOnly": true
         },
@@ -347,12 +599,12 @@
           "format": "int32",
           "description": "Unset means unknown (proto3 optional, no wrapper types needed)."
         },
-        "createTime": {
+        "create_time": {
           "type": "string",
           "format": "date-time",
           "readOnly": true
         },
-        "updateTime": {
+        "update_time": {
           "type": "string",
           "format": "date-time",
           "readOnly": true
@@ -362,6 +614,14 @@
         "name",
         "email"
       ]
+    },
+    "v1WatchReportResponse": {
+      "type": "object",
+      "properties": {
+        "report": {
+          "$ref": "#/definitions/v1Report"
+        }
+      }
     }
   }
 }

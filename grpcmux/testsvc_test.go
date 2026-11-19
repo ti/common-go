@@ -35,6 +35,7 @@ import (
 //	"fail"     → returns NOT_FOUND with an ErrorInfo detail
 //	"panic"    → panics (exercises recovery)
 //	"slow"     → blocks until the context is done (exercises timeouts)
+//	"sleep"    → takes 400ms, then succeeds (a unary call in flight during a drain)
 //	"header"   → sets a response header and trailer via grpc.SetHeader/SetTrailer
 //	"metadata" → echoes incoming metadata key "x-test" into the response status string
 const (
@@ -110,6 +111,9 @@ func (s *testService) Check(ctx context.Context, in *validatedRequest) (*pbhealt
 		return nil, st.Err()
 	case "panic":
 		panic("boom")
+	case "sleep":
+		// A unary call that is in flight for a while and then succeeds.
+		time.Sleep(400 * time.Millisecond)
 	case "slow":
 		<-ctx.Done()
 		return nil, status.FromContextError(ctx.Err()).Err()
@@ -151,6 +155,9 @@ var testServiceDesc = grpc.ServiceDesc{
 	Methods: []grpc.MethodDesc{
 		{MethodName: "Check", Handler: testUnaryHandler("Check", testServiceServer.Check)},
 		{MethodName: "Mutate", Handler: testUnaryHandler("Mutate", testServiceServer.Mutate)},
+		// Not in the proto descriptor; its name has "Check" as a prefix, for
+		// the auth-exemption tests.
+		{MethodName: "CheckAdmin", Handler: testUnaryHandler("CheckAdmin", testServiceServer.Check)},
 	},
 	Metadata: "grpcmux/test/v1/test.proto",
 }

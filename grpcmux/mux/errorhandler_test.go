@@ -1,7 +1,9 @@
 package mux
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -60,5 +62,86 @@ func TestErrorDoesNotLeakGRPCTrailers(t *testing.T) {
 	}
 	if resp.Header.Get("X-Trace-Note") != "kept" {
 		t.Errorf("x- trailer metadata not forwarded: %v", resp.Header)
+	}
+}
+
+func errorWithDetails(t *testing.T) error {
+	t.Helper()
+	st, err := status.New(codes.AlreadyExists, "email taken").WithDetails(
+		&errdetails.ErrorInfo{Reason: "EMAIL_ALREADY_IN_USE", Domain: "example.user.v1", Metadata: map[string]string{"email": "a@b.c"}},
+		&errdetails.RetryInfo{}, // no set fields
+		&errdetails.QuotaFailure{Violations: []*errdetails.QuotaFailure_Violation{{Subject: "user:1", Description: "3 left"}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st.Err()
+}
+
+// compact removes the insignificant whitespace protojson adds (deliberately
+// not the same in every build), so bodies can be compared byte for byte.
+func compact(t *testing.T, b []byte) string {
+	t.Helper()
+	var out bytes.Buffer
+	if err := json.Compact(&out, b); err != nil {
+		t.Fatalf("%v: %s", err, b)
+	}
+	return out.String()
+}
+
+// The default error body is a published wire format: details are the bare
+// JSON of each message, without "@type", and a detail with no set fields is
+// left out. It must not change without an opt-in.
+func TestErrorBodyDefaultDetailsAreUnchanged(t *testing.T) {
+	const want = `{"error":"already_exists","error_code":6,"error_description":"email taken","details":[` +
+		`{"reason":"EMAIL_ALREADY_IN_USE","domain":"example.user.v1","metadata":{"email":"a@b.c"}},` +
+		`{"violations":[{"subject":"user:1","description":"3 left"}]}]}`
+
+	// Written by a handler.
+	rec := httptest.NewRecorder()
+	WriteHTTPErrorResponse(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/users", nil), errorWithDetails(t))
+	if got := compact(t, rec.Body.Bytes()); rec.Code != http.StatusConflict || got != want {
+		t.Fatalf("WriteHTTPErrorResponse: %d\n got %s\nwant %s", rec.Code, got, want)
+	}
+
+	// Written by the gateway error handler of a mux with default options.
+	m := NewServeMux()
+	m.Handle(http.MethodGet, "/fail", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+		_, outbound := runtime.MarshalerForRequest(m.ServeMux(), r)
+		runtime.HTTPError(r.Context(), m.ServeMux(), outbound, w, r, errorWithDetails(t))
+	})
+	rec = httptest.NewRecorder()
+	m.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/fail", nil))
+	if got := compact(t, rec.Body.Bytes()); rec.Code != http.StatusConflict || got != want {
+		t.Fatalf("gateway error handler: %d\n got %s\nwant %s", rec.Code, got, want)
+	}
+}
+
+// With WithTypedErrorDetails the body carries the same machine-readable
+// information as the Connect error: every detail with its type, none left
+// out for being empty.
+func TestErrorBodyTypedDetails(t *testing.T) {
+	const want = `{"error":"already_exists","error_code":6,"error_description":"email taken","details":[` +
+		`{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"EMAIL_ALREADY_IN_USE","domain":"example.user.v1","metadata":{"email":"a@b.c"}},` +
+		`{"@type":"type.googleapis.com/google.rpc.RetryInfo"},` +
+		`{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"subject":"user:1","description":"3 left"}]}]}`
+	m := NewServeMux(WithTypedErrorDetails())
+	m.Handle(http.MethodGet, "/fail", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+		_, outbound := runtime.MarshalerForRequest(m.ServeMux(), r)
+		runtime.HTTPError(r.Context(), m.ServeMux(), outbound, w, r, errorWithDetails(t))
+	})
+	rec := httptest.NewRecorder()
+	m.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/fail", nil))
+	if got := compact(t, rec.Body.Bytes()); rec.Code != http.StatusConflict || got != want {
+		t.Fatalf("typed: %d\n got %s\nwant %s", rec.Code, got, want)
+	}
+	// The middleware's own rejections (authentication) follow the option too.
+	denied := NewServeMux(WithTypedErrorDetails(), WithAuthFunc(func(ctx context.Context) (context.Context, error) {
+		return ctx, errorWithDetails(t)
+	}))
+	rec = httptest.NewRecorder()
+	denied.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/anything", nil))
+	if got := compact(t, rec.Body.Bytes()); got != want {
+		t.Fatalf("middleware rejection:\n got %s\nwant %s", got, want)
 	}
 }

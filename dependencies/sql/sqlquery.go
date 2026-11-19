@@ -104,16 +104,18 @@ func ParseOffset(page, limit int) int {
 	return limit * (page - 1)
 }
 
-// ParseWhere prase where from query
+// ParseWhere builds the body of a WHERE clause from a project and conditions
+// (MySQL forms). It has no error result, so a condition list that is not
+// valid (an identifier outside the grammar, In with a non-slice) yields a
+// clause that matches nothing rather than a broken or injectable statement.
+// PageQuery and StreamQuery do not use it: they report such input as
+// InvalidArgument.
 func ParseWhere(filterData database.C, project string) (query string, args []any) {
-	if project != "" {
-		args = append(args, project)
-		query = "`project`=? AND "
+	query, args, err := buildWhere(schemeMysql, project, filterData, false)
+	if err != nil {
+		return "1 = 0", nil
 	}
-	condsQuery, condsArgs := tidySQLConds(filterData, false)
-	query += condsQuery
-	args = append(args, condsArgs...)
-	return
+	return query, args
 }
 
 // Filter the k, v filters

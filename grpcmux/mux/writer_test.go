@@ -113,11 +113,11 @@ func TestWriteDeadlineThroughTheInterceptorCutsAStalledWrite(t *testing.T) {
 	})))
 	t.Cleanup(srv.Close)
 
-	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", srv.Listener.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// A request whose response is never read.
 	if _, err := conn.Write([]byte("POST /svc.v1.Service/Method HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n")); err != nil {

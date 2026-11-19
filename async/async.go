@@ -30,7 +30,8 @@ func New(ctx context.Context) *Future {
 // If O is a pointer type, Async allocates the pointee immediately and
 // returns the pointer before fn has finished running; the pointee is
 // populated once fn completes, so callers should only read it after
-// Await returns. For non-pointer O (e.g. a sentinel struct{}), the
+// Await returns. If fn returns a nil pointer and a nil error, the pointee
+// keeps its zero value (the returned pointer is never nil). For non-pointer O (e.g. a sentinel struct{}), the
 // returned value carries no meaning and should be ignored.
 //
 // Requires generic methods (Go 1.27, https://go.dev/issue/77273).
@@ -47,13 +48,26 @@ func (f *Future) Async[I, O any](fn func(ctx context.Context, in I) (O, error), 
 			return err
 		}
 		if isPtr {
-			if outValue := reflect.ValueOf(o); outValue.IsValid() && !outValue.IsNil() {
-				outValue.Elem().Set(reflect.ValueOf(fnOut).Elem())
+			// fn may return a nil pointer with a nil error ("nothing found");
+			// the pre-allocated result then keeps its zero value.
+			if result := reflect.ValueOf(fnOut); result.IsValid() && !result.IsNil() {
+				reflect.ValueOf(o).Elem().Set(result.Elem())
 			}
 		}
 		return nil
 	})
 	return out
+}
+
+// Limit bounds the number of functions this Future runs at the same time to
+// n; further Go and Async calls block until a slot is free. A negative n
+// removes the limit. Call it before starting any function (it panics
+// otherwise, like errgroup.Group.SetLimit). It returns f for chaining:
+//
+//	f := async.New(ctx).Limit(8)
+func (f *Future) Limit(n int) *Future {
+	f.eg.SetLimit(n)
+	return f
 }
 
 // Go runs fn asynchronously on the Future's errgroup. Use it instead of
@@ -71,8 +85,10 @@ func (f *Future) Go(fn func(ctx context.Context) error) {
 	f.eg.Go(func() error { return fn(f.ctx) })
 }
 
-// Await wait for all pipeline functions done or context.Done()
-// Await returns the first error from any pipeline function, or ctx.Err() or nil.
+// Await waits until every function started on this Future has returned, and
+// returns the first non-nil error (nil if there was none). It does not return
+// early when the context is canceled: the functions receive that context and
+// are expected to stop on their own.
 func (f *Future) Await() (err error) {
 	return f.eg.Wait()
 }
