@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/ti/objectbind"
@@ -18,6 +19,17 @@ import (
 // Init initialize config from uri address. For exp: configURI ./conf/config.yaml
 // etcd://127.0.0.1:6379/config consul://127.0.0.1:6379/config if configURI is
 // empty the configURI from flag c.
+//
+// Concurrency. The configuration source is watched, and a change is applied
+// to *configPtr while the process runs. The watcher never touches the struct
+// before Init has returned, and it never reads or writes the dependency
+// fields (the structs that embed dependencies.Dependency): those are set
+// once, by Init. On a change it assigns only the top-level fields whose value
+// changed, each as a fresh value (maps, slices and pointers are not shared
+// with the previous one), while holding the lock that [RLock] takes. So:
+// dependencies and fields that never change in the source are safe to read
+// without synchronization; a field that is edited while the process runs is
+// read under [RLock], or observed with a hook on [Binder] instead.
 func Init(ctx context.Context, configURI string, configPtr any, opts ...dependencies.Option) error {
 	if configURI == "" {
 		configURI = os.Getenv("CONFIG_PATH")
@@ -34,19 +46,50 @@ func Init(ctx context.Context, configURI string, configPtr any, opts ...dependen
 	if cc != nil {
 		defer cc()
 	}
+	target := reflect.ValueOf(configPtr)
+	if target.Kind() != reflect.Pointer || target.IsNil() || target.Elem().Kind() != reflect.Struct {
+		return fmt.Errorf("config %s: the config must be a pointer to a struct, got %T", configURI, configPtr)
+	}
+	configValue := target.Elem()
+
+	// The watcher works on a private copy of the struct, never on the
+	// caller's: it re-reads and rewrites its whole instance on every change
+	// (and compares and clones it by walking every field), which must not
+	// happen to a struct that holds live dependency clients and is read by
+	// request handlers. The copy starts with the caller's values, so
+	// defaults set before Init survive for keys the source does not have.
+	shadow := reflect.New(configValue.Type())
+	synced := syncedFields(configValue.Type())
+	for _, i := range synced {
+		shadow.Elem().Field(i).Set(deepCopy(configValue.Field(i)))
+	}
 	var err error
-	binder, err = objectbind.Bind(ctx, configPtr, configURI)
+	binder, err = objectbind.Bind(ctx, shadow.Interface(), configURI)
 	if err != nil {
 		return fmt.Errorf(" error for start config for %s is %w ", configURI, err)
 	}
-	configValue := reflect.Indirect(reflect.ValueOf(configPtr))
+	for _, i := range synced {
+		// The hook runs now (the initial value) and, from the watcher, on
+		// every change of this field. It runs under the binder's lock, which
+		// is what makes reading the shadow here safe, and takes the config
+		// lock to write the caller's struct.
+		binder.BindField(configValue.Type().Field(i).Name, func(_, _ any) {
+			mu.Lock()
+			defer mu.Unlock()
+			configValue.Field(i).Set(deepCopy(shadow.Elem().Field(i)))
+		})
+	}
 	// Apply Log.Level now and on every reload. Log may be a struct or a
-	// pointer to one, Level a string or a named string type. The level is optional: an empty value keeps the current
-	// level. An unknown name fails Init, and on a reload it is logged and the
-	// previous level stays in force. A Log field that has no string Level is
-	// not this package's business and is left alone.
+	// pointer to one, Level a string or a named string type. The level is
+	// optional: an empty value keeps the current level. An unknown name fails
+	// Init, and on a reload it is logged and the previous level stays in
+	// force. A Log field that has no string Level is not this package's
+	// business and is left alone.
 	if hasLogLevel(configValue) {
-		if err := log.TrySetLevel(logLevel(configValue.FieldByName("Log"))); err != nil {
+		mu.RLock()
+		level := logLevel(configValue.FieldByName("Log"))
+		mu.RUnlock()
+		if err := log.TrySetLevel(level); err != nil {
 			return fmt.Errorf("config %s: log.level: %w", configURI, err)
 		}
 		// Bound on Log, not Log.Level: that works when Log is a nil pointer
@@ -56,7 +99,105 @@ func Init(ctx context.Context, configURI string, configPtr any, opts ...dependen
 			log.SetLevel(logLevel(reflect.ValueOf(value)))
 		})
 	}
+	// From here until Init returns, a change in the source waits: the
+	// caller's struct is written by this goroutine only. (No binder call
+	// below this line: the watcher holds the binder's lock while it waits.)
+	mu.Lock()
+	defer mu.Unlock()
 	return initDeps(ctx, configURI, configPtr, opts...)
+}
+
+// mu guards the caller's config struct against the watcher: Init holds it
+// while it runs, a reload holds it while it assigns changed fields.
+var mu sync.RWMutex
+
+// RLock locks the configuration for reading: while it is held, a change in
+// the configuration source is not applied to the struct given to [Init].
+// Use it around reads of fields that may be edited while the process runs
+// (see Init); keep the section short and call [RUnlock] when done.
+//
+//	config.RLock()
+//	greeting := cfg.Service.Greeting
+//	config.RUnlock()
+func RLock() { mu.RLock() }
+
+// RUnlock undoes one [RLock].
+func RUnlock() { mu.RUnlock() }
+
+// syncedFields returns the indexes of the top-level fields the configuration
+// source owns: the exported ones, except the dependency structs, which Init
+// fills once and the watcher must leave alone.
+func syncedFields(t reflect.Type) []int {
+	var out []int
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if f.IsExported() && !isDependencyStruct(f.Type) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// isDependencyStruct reports whether t is a struct whose first field embeds
+// dependencies.Dependency, which is what initDeps initializes.
+func isDependencyStruct(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct || t.NumField() < 2 {
+		return false
+	}
+	first := t.Field(0)
+	return first.Anonymous && reflect.TypeFor[dependencies.Dependency]().AssignableTo(first.Type)
+}
+
+// deepCopy returns a copy of v that shares no map, slice or pointer with it,
+// so that a later rewrite of the original does not reach the copy. A struct
+// with unexported fields (time.Time, for example) is copied as a value.
+func deepCopy(v reflect.Value) reflect.Value {
+	out := reflect.New(v.Type()).Elem()
+	switch v.Kind() {
+	case reflect.Pointer:
+		if !v.IsNil() {
+			p := reflect.New(v.Type().Elem())
+			p.Elem().Set(deepCopy(v.Elem()))
+			out.Set(p)
+		}
+	case reflect.Interface:
+		if !v.IsNil() {
+			out.Set(deepCopy(v.Elem()))
+		}
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if !v.Type().Field(i).IsExported() {
+				out.Set(v)
+				return out
+			}
+		}
+		for i := range v.NumField() {
+			out.Field(i).Set(deepCopy(v.Field(i)))
+		}
+	case reflect.Slice:
+		if !v.IsNil() {
+			s := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+			for i := range v.Len() {
+				s.Index(i).Set(deepCopy(v.Index(i)))
+			}
+			out.Set(s)
+		}
+	case reflect.Array:
+		for i := range v.Len() {
+			out.Index(i).Set(deepCopy(v.Index(i)))
+		}
+	case reflect.Map:
+		if !v.IsNil() {
+			m := reflect.MakeMapWithSize(v.Type(), v.Len())
+			for iter := v.MapRange(); iter.Next(); {
+				m.SetMapIndex(deepCopy(iter.Key()), deepCopy(iter.Value()))
+			}
+			out.Set(m)
+		}
+	default:
+		out.Set(v)
+	}
+	return out
 }
 
 // hasLogLevel reports whether the config struct has a Log field (a struct or
@@ -114,20 +255,12 @@ func initDeps(ctx context.Context, configURI string, configPtr any,
 	opts ...dependencies.Option,
 ) error {
 	configType := reflect.TypeOf(configPtr).Elem()
-	depType := reflect.TypeFor[dependencies.Dependency]()
 	for field := range configType.Fields() {
-		fieldType := field.Type
-		if fieldType.Kind() != reflect.Struct {
+		if !isDependencyStruct(field.Type) {
 			continue
 		}
-		if fieldType.NumField() > 1 {
-			fieldTypeFirstField := fieldType.Field(0)
-			if fieldTypeFirstField.Anonymous && depType.AssignableTo(fieldTypeFirstField.Type) {
-				err := initDepsFiled(ctx, configPtr, configURI, field.Name, field.Tag, opts...)
-				if err != nil {
-					return err
-				}
-			}
+		if err := initDepsFiled(ctx, configPtr, configURI, field.Name, field.Tag, opts...); err != nil {
+			return err
 		}
 	}
 	return nil

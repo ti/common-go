@@ -21,6 +21,16 @@ It also does two things for you:
 - If the struct has a `Log` field with a `Level` string, `Log.Level` is applied with `log.SetLevel` (`debug`, `info`, `warn`, `error`) at startup and on every change. The key is optional: an absent or empty value keeps the current level (`debug` unless the program set another). An unknown name makes `Init` return an error; on a reload it is logged and the previous level stays. `Log` may also be a pointer to such a struct (it stays nil when the source has no `log` key), and `Level` a named string type. A `Log` field without a string `Level` is ignored.
 - Every top-level struct field whose **first field is an embedded `dependencies.Dependency`** is initialized from its section of the config with `dependencies.Init`, using `opts` (for example `dependencies.WithNewFns(database.New)`). If that struct's second field is itself a struct, the section is treated as groups and initialized with `dependencies.InitMulti`. See [dependencies.md](dependencies.md).
 
+**Live reload and concurrency.** The watcher works on a private copy of your struct. It does not touch your struct before `Init` has returned, and it never reads or writes the dependency fields: those are set once by `Init`, so handlers use `cfg.Dependencies.DB` without synchronization, and editing the `dependencies:` block of a running process has no effect (restart to change a dependency). When the source changes, only the top-level fields whose value changed are assigned, each as a fresh value, while a lock is held. Read a field that you expect to edit at runtime under that lock, or react to it with a `Binder` hook:
+
+```go
+config.RLock()
+greeting := cfg.Service.Greeting
+config.RUnlock()
+```
+
+Fields that never change in the source need no lock. Values set in the struct before `Init` are kept for keys the source does not have.
+
 Use `config.Binder()` after `Init` to add your own hooks on fields (the returned `*objectbind.Binder` has `BindField(path, func(value, old any))`).
 
 ```go
